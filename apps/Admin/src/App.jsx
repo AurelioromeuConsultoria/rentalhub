@@ -10,9 +10,9 @@ import { FinanceiroPage } from '@/pages/Financeiro/FinanceiroPage';
 import { Login } from '@/pages/Login/Login';
 import { ModulePlaceholder } from '@/pages/Placeholder/ModulePlaceholder';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
+import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 
 const moduleRoutes = [
-  ['repasses', 'Repasses', 'Cálculo e controle de pagamentos aos proprietários.'],
   ['limpeza', 'Limpeza', 'Agenda operacional e status das limpezas.'],
   ['manutencao', 'Manutenção', 'Ocorrências, responsáveis e custos de manutenção.'],
   ['relatorios', 'Relatórios', 'Relatórios de reservas, financeiro, imóveis e proprietários.'],
@@ -42,6 +42,7 @@ export default function App() {
             <Route path="proprietarios" element={<ProprietariosPage />} />
             <Route path="hospedes" element={<HospedesPage />} />
             <Route path="financeiro" element={<FinanceiroPage />} />
+            <Route path="repasses" element={<RepassesPage />} />
             {moduleRoutes.map(([path, title, description]) => (
               <Route
                 key={path}

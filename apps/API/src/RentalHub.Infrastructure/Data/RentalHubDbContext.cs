@@ -34,6 +34,8 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<BloqueioCalendario> BloqueiosCalendario => Set<BloqueioCalendario>();
     public DbSet<CategoriaFinanceira> CategoriasFinanceiras => Set<CategoriaFinanceira>();
     public DbSet<MovimentacaoFinanceira> MovimentacoesFinanceiras => Set<MovimentacaoFinanceira>();
+    public DbSet<RepasseProprietario> RepassesProprietarios => Set<RepasseProprietario>();
+    public DbSet<RepasseItem> RepasseItens => Set<RepasseItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -313,6 +315,51 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Reserva).WithMany().HasForeignKey(e => e.ReservaId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Proprietario).WithMany().HasForeignKey(e => e.ProprietarioId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<RepasseProprietario>(entity =>
+        {
+            entity.ToTable("RepassesProprietarios");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ProprietarioId).IsRequired();
+            entity.Property(e => e.PeriodoInicio).IsRequired();
+            entity.Property(e => e.PeriodoFim).IsRequired();
+            entity.Property(e => e.ReceitaReservas).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.TaxasPlataforma).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.CustosVinculados).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ComissaoAdministradora).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ValorRepassar).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ValorPago).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.ProprietarioId, e.PeriodoInicio, e.PeriodoFim });
+            entity.HasIndex(e => new { e.TenantId, e.Status });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Proprietario).WithMany().HasForeignKey(e => e.ProprietarioId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<RepasseItem>(entity =>
+        {
+            entity.ToTable("RepasseItens");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.Descricao).IsRequired().HasMaxLength(260);
+            entity.Property(e => e.Receita).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Taxas).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Custos).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Comissao).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ValorLiquido).HasPrecision(12, 2).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.RepasseProprietarioId });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.RepasseProprietario)
+                .WithMany(r => r.Itens)
+                .HasForeignKey(e => e.RepasseProprietarioId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Reserva).WithMany().HasForeignKey(e => e.ReservaId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.MovimentacaoFinanceira).WithMany().HasForeignKey(e => e.MovimentacaoFinanceiraId).OnDelete(DeleteBehavior.SetNull);
         });
 
         SeedSecurity(modelBuilder);
