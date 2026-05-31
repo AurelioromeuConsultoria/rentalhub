@@ -7,9 +7,9 @@ import { HospedesPage, ImoveisPage, ProprietariosPage } from '@/pages/Cadastros/
 import { Dashboard } from '@/pages/Dashboard/Dashboard';
 import { Login } from '@/pages/Login/Login';
 import { ModulePlaceholder } from '@/pages/Placeholder/ModulePlaceholder';
+import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 
 const moduleRoutes = [
-  ['reservas', 'Reservas', 'Gestão de reservas, status, origem e valores.'],
   ['calendario', 'Calendário', 'Visão operacional de reservas, bloqueios e manutenções.'],
   ['financeiro', 'Financeiro', 'Receitas, despesas, categorias e fluxo de caixa.'],
   ['repasses', 'Repasses', 'Cálculo e controle de pagamentos aos proprietários.'],
@@ -36,6 +36,7 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="reservas" element={<ReservasPage />} />
             <Route path="imoveis" element={<ImoveisPage />} />
             <Route path="proprietarios" element={<ProprietariosPage />} />
             <Route path="hospedes" element={<HospedesPage />} />

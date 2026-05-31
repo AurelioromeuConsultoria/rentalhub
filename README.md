@@ -100,6 +100,7 @@ npm run build
 - [Execução da Sprint 0](docs/SPRINT0_EXECUCAO.md)
 - [Execução da Sprint 1](docs/SPRINT1_EXECUCAO.md)
 - [Execução da Sprint 2](docs/SPRINT2_EXECUCAO.md)
+- [Execução da Sprint 3](docs/SPRINT3_EXECUCAO.md)
 
 ## Inspiração Técnica
 

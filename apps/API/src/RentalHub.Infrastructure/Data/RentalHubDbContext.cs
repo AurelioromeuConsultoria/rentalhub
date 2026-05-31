@@ -30,6 +30,7 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<ImovelComodidade> ImovelComodidades => Set<ImovelComodidade>();
     public DbSet<ImovelFoto> ImovelFotos => Set<ImovelFoto>();
     public DbSet<Hospede> Hospedes => Set<Hospede>();
+    public DbSet<Reserva> Reservas => Set<Reserva>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -229,6 +230,32 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.Nome });
             entity.HasIndex(e => new { e.TenantId, e.Email });
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Reserva>(entity =>
+        {
+            entity.ToTable("Reservas");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ImovelId).IsRequired();
+            entity.Property(e => e.HospedeId).IsRequired();
+            entity.Property(e => e.Origem).IsRequired();
+            entity.Property(e => e.CheckIn).IsRequired();
+            entity.Property(e => e.CheckOut).IsRequired();
+            entity.Property(e => e.NumeroHospedes).IsRequired();
+            entity.Property(e => e.ValorHospedagem).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.TaxaLimpeza).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.TaxaPlataforma).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ComissaoAdministradora).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ValorLiquido).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.CheckIn, e.CheckOut });
+            entity.HasIndex(e => new { e.TenantId, e.ImovelId, e.CheckIn, e.CheckOut });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Hospede).WithMany().HasForeignKey(e => e.HospedeId).OnDelete(DeleteBehavior.Restrict);
         });
 
         SeedSecurity(modelBuilder);
