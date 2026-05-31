@@ -104,6 +104,7 @@ npm run build
 - [Execução da Sprint 4](docs/SPRINT4_EXECUCAO.md)
 - [Execução da Sprint 5](docs/SPRINT5_EXECUCAO.md)
 - [Execução da Sprint 6](docs/SPRINT6_EXECUCAO.md)
+- [Execução da Sprint 7](docs/SPRINT7_EXECUCAO.md)
 
 ## Inspiração Técnica
 

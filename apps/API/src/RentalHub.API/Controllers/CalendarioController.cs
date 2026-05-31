@@ -44,10 +44,24 @@ public sealed class CalendarioController : ControllerBase
             .Include(b => b.Imovel)
             .Where(b => b.Fim > start && b.Inicio < end);
 
+        var limpezasQuery = _dbContext.Limpezas
+            .AsNoTracking()
+            .Include(l => l.Imovel)
+            .Where(l => l.Status != LimpezaStatus.Cancelada && l.DataPrevista >= start && l.DataPrevista < end);
+
+        var manutencoesQuery = _dbContext.Manutencoes
+            .AsNoTracking()
+            .Include(m => m.Imovel)
+            .Where(m => m.Status != ManutencaoStatus.Cancelada &&
+                ((m.DataPrevista.HasValue && m.DataPrevista.Value >= start && m.DataPrevista.Value < end) ||
+                 (!m.DataPrevista.HasValue && m.DataAbertura >= start && m.DataAbertura < end)));
+
         if (imovelId.HasValue)
         {
             reservasQuery = reservasQuery.Where(r => r.ImovelId == imovelId.Value);
             bloqueiosQuery = bloqueiosQuery.Where(b => b.ImovelId == imovelId.Value);
+            limpezasQuery = limpezasQuery.Where(l => l.ImovelId == imovelId.Value);
+            manutencoesQuery = manutencoesQuery.Where(m => m.ImovelId == imovelId.Value);
         }
 
         var reservas = await reservasQuery
@@ -78,8 +92,38 @@ public sealed class CalendarioController : ControllerBase
                 (int)b.Tipo))
             .ToListAsync(cancellationToken);
 
+        var limpezas = await limpezasQuery
+            .Select(l => new CalendarioEventoResponse(
+                $"limpeza-{l.Id}",
+                l.Id,
+                "limpeza",
+                "Limpeza",
+                l.ImovelId,
+                l.Imovel == null ? string.Empty : l.Imovel.Nome,
+                l.DataPrevista,
+                l.DataPrevista.AddDays(1),
+                l.Responsavel,
+                (int)l.Status))
+            .ToListAsync(cancellationToken);
+
+        var manutencoes = await manutencoesQuery
+            .Select(m => new CalendarioEventoResponse(
+                $"ocorrencia-manutencao-{m.Id}",
+                m.Id,
+                "manutencao",
+                m.Categoria,
+                m.ImovelId,
+                m.Imovel == null ? string.Empty : m.Imovel.Nome,
+                m.DataPrevista ?? m.DataAbertura,
+                (m.DataPrevista ?? m.DataAbertura).AddDays(1),
+                m.Descricao,
+                (int)m.Status))
+            .ToListAsync(cancellationToken);
+
         return Ok(reservas
             .Concat(bloqueios)
+            .Concat(limpezas)
+            .Concat(manutencoes)
             .OrderBy(e => e.Inicio)
             .ThenBy(e => e.ImovelNome)
             .ToArray());

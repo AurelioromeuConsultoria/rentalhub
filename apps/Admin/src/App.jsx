@@ -7,14 +7,14 @@ import { CalendarioPage } from '@/pages/Calendario/CalendarioPage';
 import { HospedesPage, ImoveisPage, ProprietariosPage } from '@/pages/Cadastros/CadastroPages';
 import { Dashboard } from '@/pages/Dashboard/Dashboard';
 import { FinanceiroPage } from '@/pages/Financeiro/FinanceiroPage';
+import { LimpezaPage } from '@/pages/Limpeza/LimpezaPage';
 import { Login } from '@/pages/Login/Login';
+import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
 import { ModulePlaceholder } from '@/pages/Placeholder/ModulePlaceholder';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 
 const moduleRoutes = [
-  ['limpeza', 'Limpeza', 'Agenda operacional e status das limpezas.'],
-  ['manutencao', 'Manutenção', 'Ocorrências, responsáveis e custos de manutenção.'],
   ['relatorios', 'Relatórios', 'Relatórios de reservas, financeiro, imóveis e proprietários.'],
   ['usuarios', 'Usuários', 'Controle de acessos e usuários do tenant.'],
   ['empresas', 'Empresas', 'Gestão de tenants da plataforma.'],
@@ -43,6 +43,8 @@ export default function App() {
             <Route path="hospedes" element={<HospedesPage />} />
             <Route path="financeiro" element={<FinanceiroPage />} />
             <Route path="repasses" element={<RepassesPage />} />
+            <Route path="limpeza" element={<LimpezaPage />} />
+            <Route path="manutencao" element={<ManutencaoPage />} />
             {moduleRoutes.map(([path, title, description]) => (
               <Route
                 key={path}

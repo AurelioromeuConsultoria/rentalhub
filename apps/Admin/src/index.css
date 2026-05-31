@@ -1354,6 +1354,11 @@ button:disabled {
   background: rgba(185, 28, 28, 0.1);
 }
 
+.calendar-event.limpeza {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.12);
+}
+
 .calendar-event.manutencao {
   border-color: rgba(180, 83, 9, 0.28);
   background: rgba(180, 83, 9, 0.12);
@@ -1419,6 +1424,11 @@ button:disabled {
 .calendar-legend .bloqueio {
   background: var(--danger-background);
   color: var(--danger);
+}
+
+.calendar-legend .limpeza {
+  background: var(--success-background);
+  color: var(--success);
 }
 
 .calendar-legend .manutencao {

@@ -220,8 +220,8 @@ export function CalendarioPage() {
                 >
                   <div className="calendar-day-header">
                     <strong>{day.date.getDate()}</strong>
-                    {dayEvents.some((event) => event.inicio.slice(0, 10) === day.key) && <span>Check-in</span>}
-                    {dayEvents.some((event) => event.fim.slice(0, 10) === day.key) && <span>Check-out</span>}
+                    {dayEvents.some((event) => event.tipo === 'reserva' && event.inicio.slice(0, 10) === day.key) && <span>Check-in</span>}
+                    {dayEvents.some((event) => event.tipo === 'reserva' && event.fim.slice(0, 10) === day.key) && <span>Check-out</span>}
                   </div>
 
                   {loading ? (
@@ -235,7 +235,7 @@ export function CalendarioPage() {
                             <span>{event.imovelNome}</span>
                             {event.descricao && <small>{event.descricao}</small>}
                           </div>
-                          {event.tipo !== 'reserva' && event.inicio.slice(0, 10) === day.key && (
+                          {event.id.startsWith('bloqueio-') && event.inicio.slice(0, 10) === day.key && (
                             <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
                               <Trash2 size={13} />
                             </button>
@@ -318,6 +318,7 @@ export function CalendarioPage() {
           <div className="calendar-legend">
             <span className="reserva">Reserva</span>
             <span className="bloqueio">Bloqueio</span>
+            <span className="limpeza">Limpeza</span>
             <span className="manutencao">Manutenção</span>
           </div>
         </form>

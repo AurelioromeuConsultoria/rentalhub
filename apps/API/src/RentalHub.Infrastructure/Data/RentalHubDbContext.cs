@@ -36,6 +36,8 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<MovimentacaoFinanceira> MovimentacoesFinanceiras => Set<MovimentacaoFinanceira>();
     public DbSet<RepasseProprietario> RepassesProprietarios => Set<RepasseProprietario>();
     public DbSet<RepasseItem> RepasseItens => Set<RepasseItem>();
+    public DbSet<Limpeza> Limpezas => Set<Limpeza>();
+    public DbSet<Manutencao> Manutencoes => Set<Manutencao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -360,6 +362,48 @@ public sealed class RentalHubDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(e => e.Reserva).WithMany().HasForeignKey(e => e.ReservaId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.MovimentacaoFinanceira).WithMany().HasForeignKey(e => e.MovimentacaoFinanceiraId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Limpeza>(entity =>
+        {
+            entity.ToTable("Limpezas");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ImovelId).IsRequired();
+            entity.Property(e => e.DataPrevista).IsRequired();
+            entity.Property(e => e.Responsavel).IsRequired().HasMaxLength(140);
+            entity.Property(e => e.Valor).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.DataPrevista });
+            entity.HasIndex(e => new { e.TenantId, e.Status, e.DataPrevista });
+            entity.HasIndex(e => new { e.TenantId, e.ImovelId, e.DataPrevista });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Reserva).WithMany().HasForeignKey(e => e.ReservaId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Manutencao>(entity =>
+        {
+            entity.ToTable("Manutencoes");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ImovelId).IsRequired();
+            entity.Property(e => e.Categoria).IsRequired().HasMaxLength(120);
+            entity.Property(e => e.Descricao).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.Responsavel).HasMaxLength(140);
+            entity.Property(e => e.DataAbertura).IsRequired();
+            entity.Property(e => e.ValorEstimado).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.ValorRealizado).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.Status, e.DataAbertura });
+            entity.HasIndex(e => new { e.TenantId, e.ImovelId, e.DataAbertura });
+            entity.HasIndex(e => new { e.TenantId, e.DataPrevista });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.Restrict);
         });
 
         SeedSecurity(modelBuilder);
