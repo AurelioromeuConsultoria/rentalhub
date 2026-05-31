@@ -31,6 +31,7 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<ImovelFoto> ImovelFotos => Set<ImovelFoto>();
     public DbSet<Hospede> Hospedes => Set<Hospede>();
     public DbSet<Reserva> Reservas => Set<Reserva>();
+    public DbSet<BloqueioCalendario> BloqueiosCalendario => Set<BloqueioCalendario>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -256,6 +257,23 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Hospede).WithMany().HasForeignKey(e => e.HospedeId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BloqueioCalendario>(entity =>
+        {
+            entity.ToTable("BloqueiosCalendario");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ImovelId).IsRequired();
+            entity.Property(e => e.Inicio).IsRequired();
+            entity.Property(e => e.Fim).IsRequired();
+            entity.Property(e => e.Tipo).IsRequired();
+            entity.Property(e => e.Motivo).IsRequired().HasMaxLength(240);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.Inicio, e.Fim });
+            entity.HasIndex(e => new { e.TenantId, e.ImovelId, e.Inicio, e.Fim });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel).WithMany().HasForeignKey(e => e.ImovelId).OnDelete(DeleteBehavior.Restrict);
         });
 
         SeedSecurity(modelBuilder);
