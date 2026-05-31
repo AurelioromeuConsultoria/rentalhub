@@ -1157,6 +1157,37 @@ button:disabled {
   max-width: 360px;
 }
 
+.financial-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.financial-layout {
+  grid-template-columns: minmax(0, 1.25fr) minmax(380px, 0.75fr);
+}
+
+.financial-side {
+  display: grid;
+  gap: 16px;
+}
+
+.resource-panel-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.resource-panel-heading strong {
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.resource-panel-heading small {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
 .calendar-page {
   display: grid;
   gap: 24px;
@@ -1385,7 +1416,8 @@ button:disabled {
   .kpi-grid,
   .content-grid,
   .resource-layout,
-  .calendar-layout {
+  .calendar-layout,
+  .financial-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1456,6 +1488,7 @@ button:disabled {
   .content-grid,
   .resource-layout,
   .calendar-layout,
+  .financial-filters,
   .form-grid,
   .login-feature-row {
     grid-template-columns: 1fr;
