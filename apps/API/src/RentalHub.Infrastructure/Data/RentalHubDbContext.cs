@@ -25,6 +25,11 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<PerfilAcesso> PerfisAcesso => Set<PerfilAcesso>();
     public DbSet<PerfilAcessoPermissao> PerfisAcessoPermissoes => Set<PerfilAcessoPermissao>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Proprietario> Proprietarios => Set<Proprietario>();
+    public DbSet<Imovel> Imoveis => Set<Imovel>();
+    public DbSet<ImovelComodidade> ImovelComodidades => Set<ImovelComodidade>();
+    public DbSet<ImovelFoto> ImovelFotos => Set<ImovelFoto>();
+    public DbSet<Hospede> Hospedes => Set<Hospede>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +134,100 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.IpAddress).HasMaxLength(60);
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Proprietario>(entity =>
+        {
+            entity.ToTable("Proprietarios");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.Nome).IsRequired().HasMaxLength(180);
+            entity.Property(e => e.Documento).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.Telefone).HasMaxLength(40);
+            entity.Property(e => e.Email).HasMaxLength(180);
+            entity.Property(e => e.DadosBancarios).HasMaxLength(500);
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.Ativo).IsRequired();
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.Documento }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.Nome });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Imovel>(entity =>
+        {
+            entity.ToTable("Imoveis");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ProprietarioId).IsRequired();
+            entity.Property(e => e.Nome).IsRequired().HasMaxLength(180);
+            entity.Property(e => e.CodigoInterno).IsRequired().HasMaxLength(60);
+            entity.Property(e => e.Descricao).HasMaxLength(2000);
+            entity.Property(e => e.Endereco).HasMaxLength(260);
+            entity.Property(e => e.Cidade).HasMaxLength(120);
+            entity.Property(e => e.Estado).HasMaxLength(2);
+            entity.Property(e => e.Cep).HasMaxLength(12);
+            entity.Property(e => e.QuantidadeHospedes).IsRequired();
+            entity.Property(e => e.QuantidadeQuartos).IsRequired();
+            entity.Property(e => e.QuantidadeBanheiros).IsRequired();
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.CodigoInterno }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.Nome });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Proprietario)
+                .WithMany(p => p.Imoveis)
+                .HasForeignKey(e => e.ProprietarioId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ImovelComodidade>(entity =>
+        {
+            entity.ToTable("ImovelComodidades");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.Nome).IsRequired().HasMaxLength(90);
+            entity.HasIndex(e => new { e.TenantId, e.ImovelId, e.Nome }).IsUnique();
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel)
+                .WithMany(i => i.Comodidades)
+                .HasForeignKey(e => e.ImovelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ImovelFoto>(entity =>
+        {
+            entity.ToTable("ImovelFotos");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.Url).IsRequired().HasMaxLength(800);
+            entity.Property(e => e.Descricao).HasMaxLength(200);
+            entity.Property(e => e.Ordem).IsRequired();
+            entity.Property(e => e.Principal).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.ImovelId, e.Ordem });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Imovel)
+                .WithMany(i => i.Fotos)
+                .HasForeignKey(e => e.ImovelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Hospede>(entity =>
+        {
+            entity.ToTable("Hospedes");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.Nome).IsRequired().HasMaxLength(180);
+            entity.Property(e => e.Email).HasMaxLength(180);
+            entity.Property(e => e.Telefone).HasMaxLength(40);
+            entity.Property(e => e.Documento).HasMaxLength(40);
+            entity.Property(e => e.Nacionalidade).HasMaxLength(80);
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.Ativo).IsRequired();
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.Nome });
+            entity.HasIndex(e => new { e.TenantId, e.Email });
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
