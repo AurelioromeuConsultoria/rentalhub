@@ -1254,6 +1254,30 @@ button:disabled {
   color: var(--foreground);
 }
 
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+}
+
+.report-tabs button {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.report-tabs button.active,
+.report-tabs button:hover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary);
+}
+
 .resource-panel-heading div {
   display: grid;
   gap: 3px;

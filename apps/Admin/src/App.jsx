@@ -11,11 +11,11 @@ import { LimpezaPage } from '@/pages/Limpeza/LimpezaPage';
 import { Login } from '@/pages/Login/Login';
 import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
 import { ModulePlaceholder } from '@/pages/Placeholder/ModulePlaceholder';
+import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 
 const moduleRoutes = [
-  ['relatorios', 'Relatórios', 'Relatórios de reservas, financeiro, imóveis e proprietários.'],
   ['usuarios', 'Usuários', 'Controle de acessos e usuários do tenant.'],
   ['empresas', 'Empresas', 'Gestão de tenants da plataforma.'],
   ['configuracoes', 'Configurações', 'Preferências administrativas do RentalHub.'],
@@ -45,6 +45,7 @@ export default function App() {
             <Route path="repasses" element={<RepassesPage />} />
             <Route path="limpeza" element={<LimpezaPage />} />
             <Route path="manutencao" element={<ManutencaoPage />} />
+            <Route path="relatorios" element={<RelatoriosPage />} />
             {moduleRoutes.map(([path, title, description]) => (
               <Route
                 key={path}
