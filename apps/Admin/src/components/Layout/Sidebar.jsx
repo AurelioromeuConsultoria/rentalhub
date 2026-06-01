@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Home,
   Hotel,
+  History,
   KeyRound,
   Menu,
   PanelLeftClose,
@@ -52,6 +53,7 @@ const menuGroups = [
       { label: 'Usuários', href: '/usuarios', icon: KeyRound, resource: 'usuarios' },
       { label: 'Empresas', href: '/empresas', icon: Building2, resource: 'tenants' },
       { label: 'Configurações', href: '/configuracoes', icon: Settings, resource: 'tenants' },
+      { label: 'Auditoria', href: '/auditoria', icon: History, resource: 'auditoria' },
     ],
   },
 ];

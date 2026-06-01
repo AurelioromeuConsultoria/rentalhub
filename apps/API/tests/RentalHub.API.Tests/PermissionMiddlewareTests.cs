@@ -13,6 +13,7 @@ public sealed class PermissionMiddlewareTests
     [InlineData("/api/categoriasfinanceiras", "PUT", Resources.Financeiro, PermissionAccess.Edit)]
     [InlineData("/api/perfis-acesso", "GET", Resources.PerfisAcesso, PermissionAccess.View)]
     [InlineData("/api/configuracoes/tenant", "PUT", Resources.Tenants, PermissionAccess.Edit)]
+    [InlineData("/api/auditoria", "GET", Resources.Auditoria, PermissionAccess.View)]
     public void TryCreateCheck_ShouldResolveKnownApiResources(
         string path,
         string method,

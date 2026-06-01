@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using RentalHub.Application.Services;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Enums;
@@ -10,11 +11,16 @@ namespace RentalHub.Infrastructure.Data;
 public sealed class RentalHubDbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
+    private readonly ICurrentUserContext _currentUserContext;
 
-    public RentalHubDbContext(DbContextOptions<RentalHubDbContext> options, ITenantContext tenantContext)
+    public RentalHubDbContext(
+        DbContextOptions<RentalHubDbContext> options,
+        ITenantContext tenantContext,
+        ICurrentUserContext currentUserContext)
         : base(options)
     {
         _tenantContext = tenantContext;
+        _currentUserContext = currentUserContext;
     }
 
     public int CurrentTenantId => _tenantContext.TenantId ?? Tenant.InitialTenantId;
@@ -472,4 +478,124 @@ public sealed class RentalHubDbContext : DbContext
         Expression<Func<TEntity, bool>> filter = entity => entity.TenantId == CurrentTenantId;
         modelBuilder.Entity<TEntity>().HasQueryFilter(filter);
     }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        var entries = CaptureAuditEntries();
+        var result = base.SaveChanges(acceptAllChangesOnSuccess);
+        SaveAuditEntries(entries);
+
+        return result;
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        var entries = CaptureAuditEntries();
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        await SaveAuditEntriesAsync(entries, cancellationToken);
+
+        return result;
+    }
+
+    private List<PendingAuditEntry> CaptureAuditEntries()
+    {
+        ChangeTracker.DetectChanges();
+
+        return ChangeTracker
+            .Entries<ITenantEntity>()
+            .Where(entry =>
+                entry.Entity is not AuditLog &&
+                entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
+                HasMeaningfulChange(entry))
+            .Select(entry => new PendingAuditEntry(
+                entry,
+                entry.Metadata.ClrType.Name,
+                GetAction(entry.State),
+                entry.State == EntityState.Added ? string.Empty : GetPrimaryKeyValue(entry),
+                entry.Entity.TenantId == 0 ? CurrentTenantId : entry.Entity.TenantId,
+                DateTime.UtcNow))
+            .ToList();
+    }
+
+    private void SaveAuditEntries(IReadOnlyCollection<PendingAuditEntry> entries)
+    {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        AuditLogs.AddRange(entries.Select(ToAuditLog));
+        base.SaveChanges();
+    }
+
+    private async Task SaveAuditEntriesAsync(
+        IReadOnlyCollection<PendingAuditEntry> entries,
+        CancellationToken cancellationToken)
+    {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        AuditLogs.AddRange(entries.Select(ToAuditLog));
+        await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private AuditLog ToAuditLog(PendingAuditEntry entry)
+    {
+        return new AuditLog
+        {
+            TenantId = entry.TenantId,
+            EntityName = entry.EntityName,
+            EntityId = string.IsNullOrWhiteSpace(entry.EntityId)
+                ? GetPrimaryKeyValue(entry.Entry)
+                : entry.EntityId,
+            Action = entry.Action,
+            UserName = _currentUserContext.UserName,
+            UserEmail = _currentUserContext.UserEmail,
+            CreatedAt = entry.CreatedAt
+        };
+    }
+
+    private static bool HasMeaningfulChange(EntityEntry<ITenantEntity> entry)
+    {
+        return entry.State != EntityState.Modified ||
+               entry.Properties.Any(property => property.IsModified);
+    }
+
+    private static string GetAction(EntityState state)
+    {
+        return state switch
+        {
+            EntityState.Added => "Criado",
+            EntityState.Modified => "Atualizado",
+            EntityState.Deleted => "Excluido",
+            _ => state.ToString()
+        };
+    }
+
+    private static string GetPrimaryKeyValue(EntityEntry entry)
+    {
+        var primaryKey = entry.Metadata.FindPrimaryKey();
+        if (primaryKey is null)
+        {
+            return string.Empty;
+        }
+
+        var values = primaryKey.Properties
+            .Select(property => entry.Property(property.Name).CurrentValue?.ToString())
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(",", values);
+    }
 }
+
+internal sealed record PendingAuditEntry(
+    EntityEntry<ITenantEntity> Entry,
+    string EntityName,
+    string Action,
+    string EntityId,
+    int TenantId,
+    DateTime CreatedAt);

@@ -24,3 +24,7 @@ export const tenantsApi = {
   update: (id, payload) => api.put(`/tenants/${id}`, payload),
   deactivate: (id) => api.delete(`/tenants/${id}`),
 };
+
+export const auditoriaApi = {
+  list: (params = {}) => api.get('/auditoria', { params: { ...defaultParams, pageSize: 30, ...params } }),
+};

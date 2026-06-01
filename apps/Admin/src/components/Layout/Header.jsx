@@ -23,6 +23,7 @@ const routeLabels = {
   usuarios: 'Usuários',
   empresas: 'Empresas',
   configuracoes: 'Configurações',
+  auditoria: 'Auditoria',
 };
 
 function getBreadcrumbs(pathname) {

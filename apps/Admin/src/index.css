@@ -1415,6 +1415,29 @@ button:disabled {
   padding: 16px;
 }
 
+.audit-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.pagination-row span {
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .financial-layout {
   grid-template-columns: minmax(0, 1.25fr) minmax(380px, 0.75fr);
 }
@@ -1716,7 +1739,8 @@ button:disabled {
   .content-grid,
   .resource-layout,
   .calendar-layout,
-  .financial-filters {
+  .financial-filters,
+  .audit-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1792,6 +1816,7 @@ button:disabled {
   .resource-layout,
   .calendar-layout,
   .financial-filters,
+  .audit-filters,
   .form-grid,
   .login-feature-row {
     grid-template-columns: 1fr;

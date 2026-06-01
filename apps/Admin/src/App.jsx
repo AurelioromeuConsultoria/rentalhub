@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { AuditoriaPage } from '@/pages/Auditoria/AuditoriaPage';
 import { CalendarioPage } from '@/pages/Calendario/CalendarioPage';
 import { HospedesPage, ImoveisPage, ProprietariosPage } from '@/pages/Cadastros/CadastroPages';
 import { Dashboard } from '@/pages/Dashboard/Dashboard';
@@ -31,6 +32,7 @@ const internalRoutes = [
   { path: '/usuarios', resource: 'usuarios' },
   { path: '/empresas', resource: 'tenants' },
   { path: '/configuracoes', resource: 'tenants' },
+  { path: '/auditoria', resource: 'auditoria' },
 ];
 
 function HomeRoute() {
@@ -85,6 +87,7 @@ export default function App() {
             <Route path="usuarios" element={<ProtectedRoute resource="usuarios"><UsuariosPage /></ProtectedRoute>} />
             <Route path="empresas" element={<ProtectedRoute resource="tenants"><EmpresasPage /></ProtectedRoute>} />
             <Route path="configuracoes" element={<ProtectedRoute resource="tenants"><ConfiguracoesPage /></ProtectedRoute>} />
+            <Route path="auditoria" element={<ProtectedRoute resource="auditoria"><AuditoriaPage /></ProtectedRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
