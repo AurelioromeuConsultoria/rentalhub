@@ -14,4 +14,5 @@ export const relatoriosApi = {
   proprietarios: (params = {}) => api.get('/relatorios/proprietarios', { params }),
   proprietariosCsv: (params = {}) => exportCsv('/relatorios/proprietarios.csv', params),
   demonstrativoRepasse: (id) => api.get(`/relatorios/repasses/${id}/demonstrativo`),
+  demonstrativoRepassePdf: (id) => api.get(`/relatorios/repasses/${id}/demonstrativo.pdf`, { responseType: 'blob' }),
 };

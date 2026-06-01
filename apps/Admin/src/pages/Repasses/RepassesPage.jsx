@@ -1,6 +1,7 @@
-import { Banknote, CheckCircle2, FileText, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { Banknote, CheckCircle2, Download, FileText, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
+import { relatoriosApi } from '@/api/relatorios';
 import { repassesApi } from '@/api/repasses';
 
 const statusOptions = [
@@ -232,6 +233,24 @@ export function RepassesPage() {
     }
   };
 
+  const downloadPdf = async (repasse) => {
+    setError('');
+    try {
+      const response = await relatoriosApi.demonstrativoRepassePdf(repasse.id);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `demonstrativo-repasse-${repasse.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      setError(getErrorMessage(downloadError));
+    }
+  };
+
   return (
     <div className="resource-page">
       <section className="page-heading">
@@ -368,6 +387,9 @@ export function RepassesPage() {
                         <StatusPill status={repasse.status} />
                       </td>
                       <td className="table-actions">
+                        <button type="button" aria-label="Baixar demonstrativo PDF" onClick={() => downloadPdf(repasse)}>
+                          <Download size={16} />
+                        </button>
                         <button type="button" aria-label="Registrar pagamento" onClick={() => startPayment(repasse)}>
                           <CheckCircle2 size={16} />
                         </button>
