@@ -208,7 +208,7 @@ export function Header() {
           className="icon-button"
           type="button"
           aria-label={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
-          title={isDark ? 'Tema claro' : 'Tema escuro'}
+          title={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
           onClick={toggleTheme}
         >
           {isDark ? <Sun size={18} /> : <Moon size={18} />}

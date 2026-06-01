@@ -7,9 +7,20 @@ const LIGHT = 'light';
 const DARK = 'dark';
 
 function getInitialTheme() {
-  const savedTheme = localStorage.getItem(THEME_KEY);
+  let savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem(THEME_KEY);
+  } catch {
+    savedTheme = null;
+  }
+
   if (savedTheme === LIGHT || savedTheme === DARK) {
     return savedTheme;
+  }
+
+  const currentTheme = document.documentElement.dataset.theme;
+  if (currentTheme === LIGHT || currentTheme === DARK) {
+    return currentTheme;
   }
 
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? DARK : LIGHT;
@@ -20,7 +31,11 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Persistência de tema é opcional; o atributo no HTML continua funcionando.
+    }
   }, [theme]);
 
   const value = useMemo(

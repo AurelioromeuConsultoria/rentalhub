@@ -25,6 +25,16 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
+const SIDEBAR_COLLAPSED_KEY = 'rentalhub-sidebar-collapsed';
+
+function getInitialCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 const menuGroups = [
   {
     title: 'Operação',
@@ -61,7 +71,7 @@ const menuGroups = [
 export function Sidebar() {
   const { usuario, canView } = useAuth();
   const isOwner = Number(usuario?.tipoUsuario) === 4;
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [openGroups, setOpenGroups] = useState({
     Operação: true,
     Gestão: true,
@@ -91,12 +101,24 @@ export function Sidebar() {
     setOpenGroups((current) => ({ ...current, [groupTitle]: !current[groupTitle] }));
   };
 
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // O estado visual ainda funciona mesmo sem persistência local.
+      }
+      return next;
+    });
+  };
+
   return (
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       <div className="sidebar-logo-row">
         <div className="brand-block">
           <div className="brand-mark">
-            <Home size={20} />
+            <Hotel size={20} />
           </div>
           <div className="brand-copy">
             <strong>RentalHub</strong>
@@ -108,7 +130,7 @@ export function Sidebar() {
           className="sidebar-collapse"
           type="button"
           aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          onClick={() => setCollapsed((current) => !current)}
+          onClick={toggleCollapsed}
         >
           {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>
