@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { tenantsApi } from '@/api/administracao';
 import { buscaGlobalApi, notificacoesApi } from '@/api/operacao';
 import { useAuth } from '@/context/AuthContext';
+import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
 import { useTheme } from '@/context/ThemeContext';
 
 const routeLabels = {
@@ -58,7 +59,7 @@ export function Header() {
   const [showSearch, setShowSearch] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [showTenants, setShowTenants] = useState(false);
-  const [selectedTenantId, setSelectedTenantId] = useState(() => localStorage.getItem('selectedTenantId'));
+  const [selectedTenantId, setSelectedTenantId] = useState(() => localStorage.getItem(SELECTED_TENANT_ID_KEY));
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const highPriorityCount = useMemo(
     () => notifications.filter((item) => item.prioridade === 'alta').length,
@@ -140,12 +141,12 @@ export function Header() {
 
   const selectTenant = (tenant) => {
     if (!tenant) {
-      localStorage.removeItem('selectedTenantId');
-      localStorage.removeItem('selectedTenantSlug');
+      localStorage.removeItem(SELECTED_TENANT_ID_KEY);
+      localStorage.removeItem(SELECTED_TENANT_SLUG_KEY);
       setSelectedTenantId(null);
     } else {
-      localStorage.setItem('selectedTenantId', String(tenant.id));
-      localStorage.setItem('selectedTenantSlug', tenant.slug);
+      localStorage.setItem(SELECTED_TENANT_ID_KEY, String(tenant.id));
+      localStorage.setItem(SELECTED_TENANT_SLUG_KEY, tenant.slug);
       setSelectedTenantId(String(tenant.id));
     }
 

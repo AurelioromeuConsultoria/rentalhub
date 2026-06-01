@@ -1,4 +1,12 @@
 import axios from 'axios';
+import {
+  clearAuthStorage,
+  REFRESH_TOKEN_KEY,
+  SELECTED_TENANT_ID_KEY,
+  SELECTED_TENANT_SLUG_KEY,
+  TOKEN_KEY,
+  USER_KEY,
+} from './authStorage';
 import { API_BASE_URL_WITH_API } from './env';
 
 export const api = axios.create({
@@ -11,16 +19,14 @@ export const api = axios.create({
 let refreshPromise = null;
 
 function clearAuthSession() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('usuario');
+  clearAuthStorage();
 }
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
-  const selectedTenantId = localStorage.getItem('selectedTenantId');
-  const selectedTenantSlug = localStorage.getItem('selectedTenantSlug');
+  const token = localStorage.getItem(TOKEN_KEY);
+  const usuario = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+  const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
+  const selectedTenantSlug = localStorage.getItem(SELECTED_TENANT_SLUG_KEY);
   const requestUrl = String(config.url || '').toLowerCase();
   const isAuthRequest =
     requestUrl.includes('/auth/login') ||
@@ -52,14 +58,14 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isLoginRequest) {
       if (isRefreshRequest || originalRequest._retry) {
         clearAuthSession();
-        window.location.href = '/login';
+        window.location.assign('/login');
         return Promise.reject(error);
       }
 
-      const refreshToken = localStorage.getItem('refreshToken');
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
       if (!refreshToken) {
         clearAuthSession();
-        window.location.href = '/login';
+        window.location.assign('/login');
         return Promise.reject(error);
       }
 
@@ -76,16 +82,16 @@ api.interceptors.response.use(
         }
 
         const result = await refreshPromise;
-        localStorage.setItem('token', result.token);
-        localStorage.setItem('refreshToken', result.refreshToken);
-        localStorage.setItem('usuario', JSON.stringify(result.usuario));
+        localStorage.setItem(TOKEN_KEY, result.token);
+        localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
+        localStorage.setItem(USER_KEY, JSON.stringify(result.usuario));
 
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${result.token}`;
         return api(originalRequest);
       } catch (refreshError) {
         clearAuthSession();
-        window.location.href = '/login';
+        window.location.assign('/login');
         return Promise.reject(refreshError);
       }
     }

@@ -1,27 +1,26 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '@/api/auth';
+import {
+  clearAuthStorage,
+  clearLegacyAuthStorage,
+  REFRESH_TOKEN_KEY,
+  TOKEN_KEY,
+  USER_KEY,
+} from '@/lib/authStorage';
 
 const AuthContext = createContext(null);
-const TOKEN_KEY = 'token';
-const REFRESH_TOKEN_KEY = 'refreshToken';
-const USER_KEY = 'usuario';
-
-function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-}
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(() => {
     const savedUser = localStorage.getItem(USER_KEY);
+    clearLegacyAuthStorage();
     if (!savedUser) return null;
 
     try {
       return JSON.parse(savedUser);
     } catch {
-      clearSession();
+      clearAuthStorage();
       return null;
     }
   });
@@ -41,7 +40,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem(USER_KEY, JSON.stringify(response.data));
       })
       .catch(() => {
-        clearSession();
+        clearAuthStorage();
         setUsuario(null);
       })
       .finally(() => setLoading(false));
@@ -70,7 +69,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    clearSession();
+    clearAuthStorage();
     setUsuario(null);
   };
 

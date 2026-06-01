@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { configuracoesApi, perfisAcessoApi, tenantsApi, usuariosApi } from '@/api/administracao';
 import { proprietariosApi } from '@/api/cadastros';
+import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
 
 const tipoUsuarioOptions = [
   { value: 1, label: 'Administrador' },
@@ -363,7 +364,7 @@ export function EmpresasPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const selectedTenantId = localStorage.getItem('selectedTenantId');
+  const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
 
   const load = async () => {
     setLoading(true);
@@ -403,14 +404,14 @@ export function EmpresasPage() {
   };
 
   const selectTenant = (empresa) => {
-    localStorage.setItem('selectedTenantId', String(empresa.id));
-    localStorage.setItem('selectedTenantSlug', empresa.slug);
+    localStorage.setItem(SELECTED_TENANT_ID_KEY, String(empresa.id));
+    localStorage.setItem(SELECTED_TENANT_SLUG_KEY, empresa.slug);
     window.location.assign('/');
   };
 
   const clearTenantSelection = () => {
-    localStorage.removeItem('selectedTenantId');
-    localStorage.removeItem('selectedTenantSlug');
+    localStorage.removeItem(SELECTED_TENANT_ID_KEY);
+    localStorage.removeItem(SELECTED_TENANT_SLUG_KEY);
     window.location.assign('/');
   };
 
@@ -450,8 +451,8 @@ export function EmpresasPage() {
     try {
       await tenantsApi.deactivate(empresa.id);
       if (selectedTenantId === String(empresa.id)) {
-        localStorage.removeItem('selectedTenantId');
-        localStorage.removeItem('selectedTenantSlug');
+        localStorage.removeItem(SELECTED_TENANT_ID_KEY);
+        localStorage.removeItem(SELECTED_TENANT_SLUG_KEY);
       }
       await load();
     } catch (deactivateError) {
