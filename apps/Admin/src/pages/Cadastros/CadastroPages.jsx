@@ -1,13 +1,17 @@
 import {
   Building2,
   Edit3,
+  Image as ImageIcon,
   Plus,
   RotateCcw,
   Save,
   Search,
+  Star,
   Trash2,
+  UploadCloud,
   UserRound,
   Users,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { hospedesApi, imoveisApi, proprietariosApi } from '@/api/cadastros';
@@ -52,7 +56,7 @@ const emptyImovel = {
   quantidadeBanheiros: 1,
   status: 1,
   comodidadesTexto: '',
-  fotosTexto: '',
+  fotos: [],
 };
 
 function normalizeText(value) {
@@ -65,6 +69,28 @@ function extractItems(response) {
 
 function getErrorMessage(error) {
   return error.response?.data?.message || 'Não foi possível concluir a operação.';
+}
+
+function normalizeFoto(foto, index) {
+  return {
+    id: foto.id || `local-${index}-${Date.now()}`,
+    url: foto.url || '',
+    descricao: foto.descricao || '',
+    ordem: foto.ordem || index + 1,
+    principal: Boolean(foto.principal || index === 0),
+  };
+}
+
+function normalizeFotos(fotos = []) {
+  const normalized = fotos
+    .filter((foto) => foto?.url)
+    .map((foto, index) => normalizeFoto(foto, index));
+
+  if (normalized.length > 0 && !normalized.some((foto) => foto.principal)) {
+    normalized[0].principal = true;
+  }
+
+  return normalized.map((foto, index) => ({ ...foto, ordem: index + 1 }));
 }
 
 function StatusPill({ active, label }) {
@@ -141,6 +167,66 @@ function CheckboxField({ label, checked, onChange }) {
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
+  );
+}
+
+function FotosField({ fotos, uploading, onUpload, onChange }) {
+  const updateFoto = (id, patch) => {
+    onChange(fotos.map((foto) => (foto.id === id ? { ...foto, ...patch } : foto)));
+  };
+
+  const removeFoto = (id) => {
+    onChange(normalizeFotos(fotos.filter((foto) => foto.id !== id)));
+  };
+
+  const setPrincipal = (id) => {
+    onChange(fotos.map((foto) => ({ ...foto, principal: foto.id === id })));
+  };
+
+  return (
+    <div className="form-field span-2">
+      <span>Fotos</span>
+      <label className="photo-upload-dropzone">
+        <UploadCloud size={20} />
+        <strong>{uploading ? 'Enviando foto...' : 'Enviar fotos do imóvel'}</strong>
+        <small>JPG, PNG ou WebP até 8MB</small>
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploading} onChange={onUpload} />
+      </label>
+
+      {fotos.length === 0 ? (
+        <div className="inline-empty compact">
+          <ImageIcon size={24} />
+          <strong>Nenhuma foto adicionada</strong>
+          <span>Adicione imagens reais do imóvel para facilitar a operação e conferência.</span>
+        </div>
+      ) : (
+        <div className="photo-grid">
+          {fotos.map((foto) => (
+            <article className="photo-card" key={foto.id}>
+              <img src={foto.url} alt={foto.descricao || 'Foto do imóvel'} />
+              <div className="photo-card-actions">
+                <button
+                  type="button"
+                  className={foto.principal ? 'active' : ''}
+                  title="Definir como capa"
+                  onClick={() => setPrincipal(foto.id)}
+                >
+                  <Star size={15} />
+                </button>
+                <button type="button" title="Remover foto" onClick={() => removeFoto(foto.id)}>
+                  <X size={15} />
+                </button>
+              </div>
+              <input
+                value={foto.descricao}
+                placeholder="Descrição da foto"
+                onChange={(event) => updateFoto(foto.id, { descricao: event.target.value })}
+              />
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -527,6 +613,7 @@ export function ImoveisPage() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [error, setError] = useState('');
 
   const proprietarioOptions = useMemo(() => proprietarios.filter((proprietario) => proprietario.ativo), [proprietarios]);
@@ -578,8 +665,39 @@ export function ImoveisPage() {
       quantidadeBanheiros: item.quantidadeBanheiros || 0,
       status: item.status || 1,
       comodidadesTexto: (item.comodidades || []).join(', '),
-      fotosTexto: (item.fotos || []).map((foto) => foto.url).join('\n'),
+      fotos: normalizeFotos(item.fotos || []),
     });
+  };
+
+  const uploadFotos = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) {
+      return;
+    }
+
+    setPhotoUploading(true);
+    setError('');
+
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        const response = await imoveisApi.uploadFoto(file);
+        uploaded.push({
+          url: response.data.url,
+          descricao: file.name.replace(/\.[^/.]+$/, ''),
+        });
+      }
+
+      setForm((current) => ({
+        ...current,
+        fotos: normalizeFotos([...current.fotos, ...uploaded]),
+      }));
+    } catch (uploadError) {
+      setError(getErrorMessage(uploadError));
+    } finally {
+      setPhotoUploading(false);
+      event.target.value = '';
+    }
   };
 
   const save = async (event) => {
@@ -604,10 +722,12 @@ export function ImoveisPage() {
         .split(',')
         .map((comodidade) => comodidade.trim())
         .filter(Boolean),
-      fotos: form.fotosTexto
-        .split('\n')
-        .map((url, index) => ({ url: url.trim(), descricao: '', ordem: index + 1, principal: index === 0 }))
-        .filter((foto) => foto.url),
+      fotos: normalizeFotos(form.fotos).map((foto, index) => ({
+        url: foto.url,
+        descricao: normalizeText(foto.descricao),
+        ordem: index + 1,
+        principal: foto.principal || index === 0,
+      })),
     };
 
     try {
@@ -676,11 +796,21 @@ export function ImoveisPage() {
                 <tbody>
                   {items.map((item) => {
                     const statusLabel = imovelStatusOptions.find((option) => option.value === item.status)?.label || 'Status';
+                    const cover = item.fotos?.find((foto) => foto.principal) || item.fotos?.[0];
                     return (
                       <tr key={item.id}>
                         <td>
-                          <strong>{item.nome}</strong>
-                          <small>{item.codigoInterno}</small>
+                          <div className="property-cell">
+                            {cover?.url ? (
+                              <img src={cover.url} alt={item.nome} />
+                            ) : (
+                              <span><ImageIcon size={17} /></span>
+                            )}
+                            <div>
+                              <strong>{item.nome}</strong>
+                              <small>{item.codigoInterno}</small>
+                            </div>
+                          </div>
                         </td>
                         <td>{item.proprietarioNome}</td>
                         <td>{[item.cidade, item.estado].filter(Boolean).join(' / ') || '-'}</td>
@@ -773,11 +903,11 @@ export function ImoveisPage() {
               onChange={(comodidadesTexto) => setForm((current) => ({ ...current, comodidadesTexto }))}
               placeholder="Wi-Fi, piscina, churrasqueira"
             />
-            <TextAreaField
-              label="Fotos"
-              value={form.fotosTexto}
-              onChange={(fotosTexto) => setForm((current) => ({ ...current, fotosTexto }))}
-              placeholder="Uma URL por linha"
+            <FotosField
+              fotos={form.fotos}
+              uploading={photoUploading}
+              onUpload={uploadFotos}
+              onChange={(fotos) => setForm((current) => ({ ...current, fotos: normalizeFotos(fotos) }))}
             />
           </div>
           <button className="primary-action full" type="submit" disabled={saving || proprietarioOptions.length === 0}>

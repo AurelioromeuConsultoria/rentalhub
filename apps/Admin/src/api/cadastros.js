@@ -21,4 +21,9 @@ export const imoveisApi = {
   create: (payload) => api.post('/imoveis', payload),
   update: (id, payload) => api.put(`/imoveis/${id}`, payload),
   deactivate: (id) => api.delete(`/imoveis/${id}`),
+  uploadFoto: (file) => {
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    return api.post('/imoveis/fotos/upload', formData);
+  },
 };

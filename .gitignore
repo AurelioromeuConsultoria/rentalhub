@@ -15,3 +15,5 @@ dist/
 .env.local
 *.user
 
+# Runtime uploads
+apps/API/src/RentalHub.API/wwwroot/uploads/

@@ -13,11 +13,22 @@ namespace RentalHub.API.Controllers;
 [Route("api/[controller]")]
 public sealed class ImoveisController : ControllerBase
 {
-    private readonly RentalHubDbContext _dbContext;
+    private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    };
 
-    public ImoveisController(RentalHubDbContext dbContext)
+    private const long MaxImageSizeBytes = 8 * 1024 * 1024;
+    private readonly RentalHubDbContext _dbContext;
+    private readonly IWebHostEnvironment _environment;
+
+    public ImoveisController(RentalHubDbContext dbContext, IWebHostEnvironment environment)
     {
         _dbContext = dbContext;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -216,6 +227,47 @@ public sealed class ImoveisController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("fotos/upload")]
+    [RequestSizeLimit(MaxImageSizeBytes)]
+    public async Task<ActionResult<ImovelFotoUploadResponse>> UploadFoto(
+        [FromForm] IFormFile arquivo,
+        CancellationToken cancellationToken)
+    {
+        if (arquivo.Length == 0)
+        {
+            return BadRequest(new { message = "Arquivo da foto é obrigatório." });
+        }
+
+        if (arquivo.Length > MaxImageSizeBytes)
+        {
+            return BadRequest(new { message = "A foto deve ter no máximo 8MB." });
+        }
+
+        var extension = Path.GetExtension(arquivo.FileName);
+        if (!AllowedImageExtensions.Contains(extension) ||
+            !arquivo.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Envie uma imagem JPG, PNG ou WebP." });
+        }
+
+        var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var webRootPath = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
+        var relativeDirectory = Path.Combine("uploads", "tenants", _dbContext.CurrentTenantId.ToString(), "imoveis");
+        var absoluteDirectory = Path.Combine(webRootPath, relativeDirectory);
+        Directory.CreateDirectory(absoluteDirectory);
+
+        var absolutePath = Path.Combine(absoluteDirectory, fileName);
+        await using (var stream = System.IO.File.Create(absolutePath))
+        {
+            await arquivo.CopyToAsync(stream, cancellationToken);
+        }
+
+        var publicPath = $"/uploads/tenants/{_dbContext.CurrentTenantId}/imoveis/{fileName}";
+        var url = $"{Request.Scheme}://{Request.Host}{publicPath}";
+
+        return Ok(new ImovelFotoUploadResponse(url, arquivo.FileName, arquivo.Length));
+    }
+
     private async Task<ActionResult?> ValidateRequestAsync(ImovelRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Nome) || string.IsNullOrWhiteSpace(request.CodigoInterno))
@@ -324,3 +376,5 @@ public sealed record ImovelResponse(
     DateTime? DataAtualizacao);
 
 public sealed record ImovelFotoResponse(int Id, string Url, string? Descricao, int Ordem, bool Principal);
+
+public sealed record ImovelFotoUploadResponse(string Url, string NomeArquivo, long Tamanho);

@@ -1251,6 +1251,32 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+.property-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.property-cell img,
+.property-cell > span {
+  width: 46px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+}
+
+.property-cell img {
+  object-fit: cover;
+}
+
+.property-cell > span {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+}
+
 .table-actions {
   justify-content: flex-end;
   gap: 6px;
@@ -1361,6 +1387,94 @@ button:disabled {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
+}
+
+.photo-upload-dropzone {
+  display: grid;
+  min-height: 116px;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 16px;
+  text-align: center;
+}
+
+.photo-upload-dropzone:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.photo-upload-dropzone strong {
+  color: var(--foreground);
+}
+
+.photo-upload-dropzone small {
+  font-size: 0.78rem;
+}
+
+.photo-upload-dropzone input {
+  display: none;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.photo-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+}
+
+.photo-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.photo-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.photo-card-actions button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+}
+
+.photo-card-actions button.active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.photo-card input {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  outline: 0;
+  background: var(--card);
+  color: var(--foreground);
+  padding: 0 10px;
 }
 
 .form-alert,
@@ -1818,6 +1932,7 @@ button:disabled {
   .financial-filters,
   .audit-filters,
   .form-grid,
+  .photo-grid,
   .login-feature-row {
     grid-template-columns: 1fr;
   }
