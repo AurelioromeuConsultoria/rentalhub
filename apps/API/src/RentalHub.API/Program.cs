@@ -83,6 +83,24 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("Admin");
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    var isOwner = string.Equals(context.User.FindFirst("TipoUsuario")?.Value, "4", StringComparison.Ordinal);
+    var path = context.Request.Path;
+    var isAllowedOwnerPath =
+        path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api/portalproprietario", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api/health", StringComparison.OrdinalIgnoreCase);
+
+    if (isOwner && path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !isAllowedOwnerPath)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { message = "Acesso restrito ao portal do proprietário." });
+        return;
+    }
+
+    await next();
+});
 app.UseAuthorization();
 
 app.MapControllers();

@@ -10,6 +10,6 @@ public sealed record UsuarioAuthDto(
     string Nome,
     string Email,
     int TipoUsuario,
+    int? ProprietarioId,
     bool IsPlatformAdmin,
     IReadOnlyCollection<PermissaoDto> Permissoes);
-

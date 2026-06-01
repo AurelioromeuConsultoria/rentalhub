@@ -15,6 +15,7 @@ const routeLabels = {
   limpeza: 'Limpeza',
   manutencao: 'Manutenção',
   relatorios: 'Relatórios',
+  'portal-proprietario': 'Portal do Proprietário',
   usuarios: 'Usuários',
   empresas: 'Empresas',
   configuracoes: 'Configurações',

@@ -29,6 +29,7 @@ public sealed class UsuariosController : ControllerBase
                 u.Nome,
                 u.Email,
                 TipoUsuario = (int)u.TipoUsuario,
+                u.ProprietarioId,
                 u.IsPlatformAdmin,
                 u.Ativo,
                 Perfil = u.PerfilAcesso == null ? null : u.PerfilAcesso.Nome
@@ -38,4 +39,3 @@ public sealed class UsuariosController : ControllerBase
         return Ok(usuarios);
     }
 }
-

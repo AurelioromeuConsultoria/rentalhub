@@ -116,6 +116,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.ToTable("Usuarios");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ProprietarioId);
             entity.Property(e => e.Nome).IsRequired().HasMaxLength(150);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(180);
             entity.Property(e => e.SenhaHash).IsRequired().HasMaxLength(300);
@@ -127,6 +128,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.Email }).IsUnique();
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.PerfilAcesso).WithMany().HasForeignKey(e => e.PerfilAcessoId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Proprietario).WithMany().HasForeignKey(e => e.ProprietarioId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AuditLog>(entity =>

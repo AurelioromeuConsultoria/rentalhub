@@ -9,6 +9,8 @@ public sealed class Usuario : ITenantEntity
     public Tenant? Tenant { get; set; }
     public int? PerfilAcessoId { get; set; }
     public PerfilAcesso? PerfilAcesso { get; set; }
+    public int? ProprietarioId { get; set; }
+    public Proprietario? Proprietario { get; set; }
     public string Nome { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string SenhaHash { get; set; } = string.Empty;
@@ -20,4 +22,3 @@ public sealed class Usuario : ITenantEntity
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
     public DateTime? DataAtualizacao { get; set; }
 }
-

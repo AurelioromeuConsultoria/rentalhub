@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 const menuGroups = [
   {
@@ -56,12 +57,22 @@ const menuGroups = [
 ];
 
 export function Sidebar() {
+  const { usuario } = useAuth();
+  const isOwner = Number(usuario?.tipoUsuario) === 4;
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({
     Operação: true,
     Gestão: true,
     Administração: false,
   });
+  const visibleGroups = isOwner
+    ? [
+        {
+          title: 'Portal',
+          items: [{ label: 'Meu portal', href: '/portal-proprietario', icon: Home }],
+        },
+      ]
+    : menuGroups;
 
   const toggleGroup = (groupTitle) => {
     if (collapsed) {
@@ -82,7 +93,7 @@ export function Sidebar() {
           </div>
           <div className="brand-copy">
             <strong>RentalHub</strong>
-            <span>Admin</span>
+            <span>{isOwner ? 'Proprietário' : 'Admin'}</span>
           </div>
         </div>
 
@@ -101,7 +112,7 @@ export function Sidebar() {
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegação principal">
-        {menuGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <section className="nav-group" key={group.title}>
             <button
               className="nav-group-trigger"
@@ -140,7 +151,7 @@ export function Sidebar() {
             <Shield size={16} />
             <strong>Modo plataforma</strong>
           </div>
-          <p>tenant: rentalhub</p>
+          <p>{isOwner ? 'acesso proprietário' : 'tenant: rentalhub'}</p>
         </div>
         <a href="https://malachdigital.com.br/" target="_blank" rel="noreferrer">
           <span className="malach-mark">M</span>

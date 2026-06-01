@@ -41,6 +41,7 @@ public sealed class TokenService : ITokenService
             new("TenantNomeExibicao", tenant.NomeExibicao),
             new("IsRootTenant", tenant.IsRootTenant.ToString().ToLowerInvariant()),
             new("TipoUsuario", ((int)usuario.TipoUsuario).ToString()),
+            new("ProprietarioId", usuario.ProprietarioId?.ToString() ?? string.Empty),
             new("IsPlatformAdmin", usuario.IsPlatformAdmin.ToString().ToLowerInvariant())
         };
 
@@ -70,4 +71,3 @@ public sealed class TokenService : ITokenService
         return Convert.ToBase64String(bytes);
     }
 }
-

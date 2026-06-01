@@ -11,15 +11,22 @@ import { LimpezaPage } from '@/pages/Limpeza/LimpezaPage';
 import { Login } from '@/pages/Login/Login';
 import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
 import { ModulePlaceholder } from '@/pages/Placeholder/ModulePlaceholder';
+import { PortalProprietarioPage } from '@/pages/PortalProprietario/PortalProprietarioPage';
 import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
+import { useAuth } from '@/context/AuthContext';
 
 const moduleRoutes = [
   ['usuarios', 'Usuários', 'Controle de acessos e usuários do tenant.'],
   ['empresas', 'Empresas', 'Gestão de tenants da plataforma.'],
   ['configuracoes', 'Configurações', 'Preferências administrativas do RentalHub.'],
 ];
+
+function HomeRoute() {
+  const { usuario } = useAuth();
+  return Number(usuario?.tipoUsuario) === 4 ? <Navigate to="/portal-proprietario" replace /> : <Dashboard />;
+}
 
 export default function App() {
   return (
@@ -35,7 +42,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Dashboard />} />
+            <Route index element={<HomeRoute />} />
             <Route path="reservas" element={<ReservasPage />} />
             <Route path="calendario" element={<CalendarioPage />} />
             <Route path="imoveis" element={<ImoveisPage />} />
@@ -46,6 +53,7 @@ export default function App() {
             <Route path="limpeza" element={<LimpezaPage />} />
             <Route path="manutencao" element={<ManutencaoPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
+            <Route path="portal-proprietario" element={<PortalProprietarioPage />} />
             {moduleRoutes.map(([path, title, description]) => (
               <Route
                 key={path}
