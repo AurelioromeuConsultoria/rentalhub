@@ -683,7 +683,70 @@ button:disabled {
 }
 
 .status-board strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--foreground);
+}
+
+.dashboard-filters {
+  display: grid;
+  max-width: 520px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.secondary-kpis .metric-card {
+  padding: 16px;
+}
+
+.secondary-kpis .metric-card strong {
+  font-size: 1.35rem;
+}
+
+.performance-list {
+  display: grid;
+  gap: 12px;
+}
+
+.performance-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 12px;
+}
+
+.performance-item strong,
+.performance-item span {
+  display: block;
+}
+
+.performance-item span,
+.performance-value span {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+.performance-value {
+  text-align: right;
+}
+
+.performance-bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.performance-bar span {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
 }
 
 .placeholder-page {
@@ -1148,6 +1211,10 @@ button:disabled {
   text-align: center;
 }
 
+.inline-empty.compact {
+  min-height: 190px;
+}
+
 .inline-empty strong {
   color: var(--foreground);
   font-size: 1rem;
@@ -1525,6 +1592,11 @@ button:disabled {
 
   .calendar-toolbar label {
     min-width: 0;
+  }
+
+  .dashboard-filters {
+    max-width: none;
+    grid-template-columns: 1fr;
   }
 
   .resource-panel-heading {
