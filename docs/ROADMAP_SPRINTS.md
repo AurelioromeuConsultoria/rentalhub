@@ -342,3 +342,11 @@ Sprint 12
 ```
 
 Resultado: administração de usuários e configurações reais do tenant.
+
+Marco 6:
+
+```txt
+Sprint 13
+```
+
+Resultado: gestão de empresas/tenants e troca operacional para administradores da plataforma.

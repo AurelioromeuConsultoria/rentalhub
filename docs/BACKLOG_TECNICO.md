@@ -252,3 +252,12 @@
 - Criar endpoints de configurações do tenant.
 - Criar tela real de configurações no Admin.
 - Exibir catálogo de recursos e resumo operacional.
+
+## Sprint 13 - Empresas E Operação MultiTenant
+
+- Completar `TenantsController` com criação, edição e inativação.
+- Criar perfil administrador inicial ao provisionar tenant.
+- Criar usuário administrador inicial opcional.
+- Criar tela real de empresas no Admin.
+- Permitir seleção de tenant operacional por platform admin.
+- Persistir seleção via headers `X-Tenant-Id` e `X-Tenant-Slug`.

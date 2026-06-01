@@ -13,7 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { configuracoesApi, perfisAcessoApi, usuariosApi } from '@/api/administracao';
+import { configuracoesApi, perfisAcessoApi, tenantsApi, usuariosApi } from '@/api/administracao';
 import { proprietariosApi } from '@/api/cadastros';
 
 const tipoUsuarioOptions = [
@@ -34,6 +34,17 @@ const emptyUsuario = {
   ativo: true,
 };
 
+const emptyTenant = {
+  nome: '',
+  nomeExibicao: '',
+  slug: '',
+  domainsTexto: '',
+  ativo: true,
+  adminNome: '',
+  adminEmail: '',
+  adminSenha: '',
+};
+
 function extractItems(response) {
   return response.data?.items || response.data || [];
 }
@@ -44,6 +55,13 @@ function getErrorMessage(error) {
 
 function normalizeId(value) {
   return value ? Number(value) : null;
+}
+
+function splitLines(value) {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function StatusPill({ active, label }) {
@@ -330,6 +348,228 @@ export function UsuariosPage() {
           <button className="primary-action full" type="submit" disabled={saving}>
             <Save size={18} />
             {saving ? 'Salvando...' : 'Salvar usuário'}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+export function EmpresasPage() {
+  const [empresas, setEmpresas] = useState([]);
+  const [form, setForm] = useState(emptyTenant);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const selectedTenantId = localStorage.getItem('selectedTenantId');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await tenantsApi.list();
+      setEmpresas(extractItems(response));
+    } catch (loadError) {
+      setError(getErrorMessage(loadError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(load, 0);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const startCreate = () => {
+    setEditingId(null);
+    setForm(emptyTenant);
+  };
+
+  const startEdit = (empresa) => {
+    setEditingId(empresa.id);
+    setForm({
+      nome: empresa.nome || '',
+      nomeExibicao: empresa.nomeExibicao || '',
+      slug: empresa.slug || '',
+      domainsTexto: (empresa.domains || []).join('\n'),
+      ativo: empresa.ativo,
+      adminNome: '',
+      adminEmail: '',
+      adminSenha: '',
+    });
+  };
+
+  const selectTenant = (empresa) => {
+    localStorage.setItem('selectedTenantId', String(empresa.id));
+    localStorage.setItem('selectedTenantSlug', empresa.slug);
+    window.location.assign('/');
+  };
+
+  const clearTenantSelection = () => {
+    localStorage.removeItem('selectedTenantId');
+    localStorage.removeItem('selectedTenantSlug');
+    window.location.assign('/');
+  };
+
+  const save = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+
+    const payload = {
+      nome: form.nome.trim(),
+      nomeExibicao: form.nomeExibicao.trim(),
+      slug: form.slug.trim() || null,
+      domains: splitLines(form.domainsTexto),
+      ativo: form.ativo,
+      adminNome: editingId ? null : form.adminNome.trim() || null,
+      adminEmail: editingId ? null : form.adminEmail.trim() || null,
+      adminSenha: editingId ? null : form.adminSenha.trim() || null,
+    };
+
+    try {
+      if (editingId) {
+        await tenantsApi.update(editingId, payload);
+      } else {
+        await tenantsApi.create(payload);
+      }
+      startCreate();
+      await load();
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivate = async (empresa) => {
+    setError('');
+    try {
+      await tenantsApi.deactivate(empresa.id);
+      if (selectedTenantId === String(empresa.id)) {
+        localStorage.removeItem('selectedTenantId');
+        localStorage.removeItem('selectedTenantSlug');
+      }
+      await load();
+    } catch (deactivateError) {
+      setError(getErrorMessage(deactivateError));
+    }
+  };
+
+  return (
+    <section className="resource-page">
+      <PageHeader
+        eyebrow="Plataforma"
+        title="Empresas"
+        description="Gestão de tenants, domínios e empresa operacional para administradores da plataforma."
+        onRefresh={load}
+      />
+
+      {error && <div className="form-alert">{error}</div>}
+
+      <div className="resource-layout">
+        <section className="resource-panel">
+          <div className="resource-panel-heading">
+            <div>
+              <strong>Empresas cadastradas</strong>
+              <small>Use uma empresa para operar seus dados isolados</small>
+            </div>
+            <span>{empresas.length} empresas</span>
+          </div>
+
+          {loading ? (
+            <div className="loading-line">Carregando empresas...</div>
+          ) : empresas.length === 0 ? (
+            <div className="inline-empty">
+              <Building2 size={34} />
+              <strong>Nenhuma empresa encontrada</strong>
+              <span>Crie tenants para separar operações de clientes da plataforma.</span>
+            </div>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Empresa</th>
+                    <th>Uso</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {empresas.map((empresa) => (
+                    <tr key={empresa.id}>
+                      <td>
+                        <strong>{empresa.nomeExibicao}</strong>
+                        <small>{empresa.slug}</small>
+                        {(empresa.domains || []).map((domain) => <small key={domain}>{domain}</small>)}
+                      </td>
+                      <td>
+                        <strong>{empresa.usuarios} usuários</strong>
+                        <small>{empresa.imoveis} imóveis · {empresa.reservas} reservas</small>
+                      </td>
+                      <td>
+                        <StatusPill active={empresa.ativo} label={empresa.ativo ? 'Ativa' : 'Inativa'} />
+                      </td>
+                      <td>
+                        <div className="table-actions">
+                          <button type="button" aria-label="Operar empresa" onClick={() => selectTenant(empresa)}>
+                            <CheckCircle2 size={16} />
+                          </button>
+                          <button type="button" aria-label="Editar" onClick={() => startEdit(empresa)}>
+                            <Edit3 size={16} />
+                          </button>
+                          <button type="button" aria-label="Inativar" disabled={empresa.isRootTenant} onClick={() => deactivate(empresa)}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedTenantId && (
+            <button className="primary-action full tenant-clear-action" type="button" onClick={clearTenantSelection}>
+              Voltar para empresa do meu login
+            </button>
+          )}
+        </section>
+
+        <form className="resource-form" onSubmit={save}>
+          <div className="form-title">
+            <Building2 size={18} />
+            <strong>{editingId ? 'Editar empresa' : 'Nova empresa'}</strong>
+          </div>
+          <div className="form-grid">
+            <TextField label="Nome jurídico" value={form.nome} onChange={(nome) => setForm((current) => ({ ...current, nome }))} required />
+            <TextField label="Nome de exibição" value={form.nomeExibicao} onChange={(nomeExibicao) => setForm((current) => ({ ...current, nomeExibicao }))} required />
+            <TextField label="Slug" value={form.slug} onChange={(slug) => setForm((current) => ({ ...current, slug }))} placeholder="gerado pelo nome se vazio" />
+            <label className="form-field">
+              <span>Domínios</span>
+              <textarea
+                value={form.domainsTexto}
+                onChange={(event) => setForm((current) => ({ ...current, domainsTexto: event.target.value }))}
+                placeholder="Um domínio por linha"
+              />
+            </label>
+            {!editingId && (
+              <>
+                <TextField label="Nome do admin" value={form.adminNome} onChange={(adminNome) => setForm((current) => ({ ...current, adminNome }))} />
+                <TextField label="E-mail do admin" type="email" value={form.adminEmail} onChange={(adminEmail) => setForm((current) => ({ ...current, adminEmail }))} />
+                <TextField label="Senha do admin" type="password" value={form.adminSenha} onChange={(adminSenha) => setForm((current) => ({ ...current, adminSenha }))} placeholder="Opcional, mínimo 8" />
+              </>
+            )}
+            <CheckboxField label="Empresa ativa" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
+          </div>
+          <button className="primary-action full" type="submit" disabled={saving}>
+            <Save size={18} />
+            {saving ? 'Salvando...' : 'Salvar empresa'}
           </button>
         </form>
       </div>

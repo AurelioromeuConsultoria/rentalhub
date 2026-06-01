@@ -17,3 +17,10 @@ export const configuracoesApi = {
   get: () => api.get('/configuracoes'),
   updateTenant: (payload) => api.put('/configuracoes/tenant', payload),
 };
+
+export const tenantsApi = {
+  list: () => api.get('/tenants'),
+  create: (payload) => api.post('/tenants', payload),
+  update: (id, payload) => api.put(`/tenants/${id}`, payload),
+  deactivate: (id) => api.delete(`/tenants/${id}`),
+};

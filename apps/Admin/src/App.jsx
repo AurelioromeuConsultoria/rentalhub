@@ -10,17 +10,12 @@ import { FinanceiroPage } from '@/pages/Financeiro/FinanceiroPage';
 import { LimpezaPage } from '@/pages/Limpeza/LimpezaPage';
 import { Login } from '@/pages/Login/Login';
 import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
-import { ModulePlaceholder } from '@/pages/Placeholder/ModulePlaceholder';
 import { PortalProprietarioPage } from '@/pages/PortalProprietario/PortalProprietarioPage';
 import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 import { useAuth } from '@/context/AuthContext';
-import { ConfiguracoesPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
-
-const moduleRoutes = [
-  ['empresas', 'Empresas', 'Gestão de tenants da plataforma.'],
-];
+import { ConfiguracoesPage, EmpresasPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
 
 function HomeRoute() {
   const { usuario } = useAuth();
@@ -54,14 +49,8 @@ export default function App() {
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="portal-proprietario" element={<PortalProprietarioPage />} />
             <Route path="usuarios" element={<UsuariosPage />} />
+            <Route path="empresas" element={<EmpresasPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
-            {moduleRoutes.map(([path, title, description]) => (
-              <Route
-                key={path}
-                path={path}
-                element={<ModulePlaceholder title={title} description={description} />}
-              />
-            ))}
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

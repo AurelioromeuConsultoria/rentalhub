@@ -1,6 +1,7 @@
 import { Bell, ChevronDown, Globe, Moon, Search, Settings, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { tenantsApi } from '@/api/administracao';
 import { buscaGlobalApi, notificacoesApi } from '@/api/operacao';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -55,6 +56,9 @@ export function Header() {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
+  const [tenants, setTenants] = useState([]);
+  const [showTenants, setShowTenants] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState(() => localStorage.getItem('selectedTenantId'));
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const highPriorityCount = useMemo(
     () => notifications.filter((item) => item.prioridade === 'alta').length,
@@ -67,6 +71,10 @@ export function Header() {
     .map((part) => part[0])
     .join('')
     .toUpperCase() || 'RH';
+  const activeTenant = useMemo(() => {
+    const selectedTenant = tenants.find((tenant) => String(tenant.id) === String(selectedTenantId));
+    return selectedTenant || currentTenant;
+  }, [currentTenant, selectedTenantId, tenants]);
 
   const handleLogout = () => {
     logout();
@@ -86,6 +94,23 @@ export function Header() {
     const timeout = setTimeout(loadNotifications, 0);
     return () => clearTimeout(timeout);
   }, [loadNotifications, location.pathname]);
+
+  useEffect(() => {
+    if (!usuario?.isPlatformAdmin) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await tenantsApi.list();
+        setTenants(response.data || []);
+      } catch {
+        setTenants([]);
+      }
+    }, 0);
+
+    return () => clearTimeout(timeout);
+  }, [usuario?.isPlatformAdmin]);
 
   useEffect(() => {
     const timeout = setTimeout(async () => {
@@ -111,6 +136,22 @@ export function Header() {
     setShowNotifications(false);
     setSearch('');
     navigate(href);
+  };
+
+  const selectTenant = (tenant) => {
+    if (!tenant) {
+      localStorage.removeItem('selectedTenantId');
+      localStorage.removeItem('selectedTenantSlug');
+      setSelectedTenantId(null);
+    } else {
+      localStorage.setItem('selectedTenantId', String(tenant.id));
+      localStorage.setItem('selectedTenantSlug', tenant.slug);
+      setSelectedTenantId(String(tenant.id));
+    }
+
+    setShowTenants(false);
+    navigate('/');
+    window.location.reload();
   };
 
   return (
@@ -200,11 +241,34 @@ export function Header() {
             </div>
           )}
         </div>
-        <button className="tenant-switcher" type="button">
-          <span className="tenant-dot" />
-          <span>{currentTenant?.nomeExibicao || currentTenant?.nome || 'RentalHub'}</span>
-          <ChevronDown size={16} />
-        </button>
+        <div className="tenant-anchor">
+          <button
+            className="tenant-switcher"
+            type="button"
+            onClick={() => usuario?.isPlatformAdmin && setShowTenants((current) => !current)}
+          >
+            <span className="tenant-dot" />
+            <span>{activeTenant?.nomeExibicao || activeTenant?.nome || 'RentalHub'}</span>
+            <ChevronDown size={16} />
+          </button>
+          {usuario?.isPlatformAdmin && showTenants && (
+            <div className="topbar-popover tenant-popover">
+              <div className="popover-heading">
+                <strong>Operar empresa</strong>
+              </div>
+              <button type="button" onClick={() => selectTenant(null)}>
+                <strong>{currentTenant?.nomeExibicao || currentTenant?.nome || 'Meu tenant'}</strong>
+                <span>Tenant do login</span>
+              </button>
+              {tenants.map((tenant) => (
+                <button type="button" key={tenant.id} onClick={() => selectTenant(tenant)}>
+                  <strong>{tenant.nomeExibicao}</strong>
+                  <span>{tenant.slug}{tenant.ativo ? '' : ' · inativa'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="user-menu" type="button">
           <div className="user-chip" aria-label="Usuário atual">
             {initials}

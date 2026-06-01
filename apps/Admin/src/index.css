@@ -417,7 +417,8 @@ button:disabled {
 }
 
 .global-search,
-.notification-anchor {
+.notification-anchor,
+.tenant-anchor {
   position: relative;
 }
 
@@ -569,6 +570,10 @@ button:disabled {
   width: min(390px, calc(100vw - 32px));
 }
 
+.tenant-popover {
+  width: min(340px, calc(100vw - 32px));
+}
+
 .icon-button,
 .tenant-switcher,
 .user-menu,
@@ -598,6 +603,10 @@ button:disabled {
   border-radius: 999px;
   background: var(--card);
   font-weight: 650;
+}
+
+.tenant-clear-action {
+  margin-top: 14px;
 }
 
 .tenant-dot {
