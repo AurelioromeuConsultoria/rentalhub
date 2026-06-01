@@ -90,6 +90,8 @@ app.Use(async (context, next) =>
     var isAllowedOwnerPath =
         path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/api/portalproprietario", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api/notificacoes", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api/buscaglobal", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/api/health", StringComparison.OrdinalIgnoreCase);
 
     if (isOwner && path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !isAllowedOwnerPath)
