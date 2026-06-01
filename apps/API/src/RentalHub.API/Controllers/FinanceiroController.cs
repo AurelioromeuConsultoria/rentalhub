@@ -183,25 +183,41 @@ public sealed class FinanceiroController : ControllerBase
             .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa)
             .SumAsync(m => (decimal?)m.Valor, cancellationToken) ?? 0;
 
-        var porCategoria = await query
+        var categorias = await query
             .GroupBy(m => new { m.CategoriaFinanceiraId, CategoriaNome = m.CategoriaFinanceira!.Nome, m.Tipo })
-            .Select(g => new FluxoCaixaCategoriaResponse(
+            .Select(g => new
+            {
                 g.Key.CategoriaFinanceiraId,
                 g.Key.CategoriaNome,
                 g.Key.Tipo,
-                g.Sum(m => m.Valor)))
+                Total = g.Sum(m => m.Valor)
+            })
             .OrderBy(g => g.Tipo)
             .ThenByDescending(g => g.Total)
             .ToListAsync(cancellationToken);
 
-        var porDia = await query
+        var porCategoria = categorias
+            .Select(g => new FluxoCaixaCategoriaResponse(
+                g.CategoriaFinanceiraId,
+                g.CategoriaNome,
+                g.Tipo,
+                g.Total))
+            .ToList();
+
+        var dias = await query
             .GroupBy(m => m.Data.Date)
-            .Select(g => new FluxoCaixaDiaResponse(
-                g.Key,
-                g.Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita).Sum(m => m.Valor),
-                g.Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa).Sum(m => m.Valor)))
+            .Select(g => new
+            {
+                Data = g.Key,
+                Entradas = g.Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita).Sum(m => m.Valor),
+                Saidas = g.Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa).Sum(m => m.Valor)
+            })
             .OrderBy(g => g.Data)
             .ToListAsync(cancellationToken);
+
+        var porDia = dias
+            .Select(g => new FluxoCaixaDiaResponse(g.Data, g.Entradas, g.Saidas))
+            .ToList();
 
         return Ok(new FluxoCaixaResponse(
             entradas,
