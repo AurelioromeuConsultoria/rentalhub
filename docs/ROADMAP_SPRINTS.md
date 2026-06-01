@@ -335,3 +335,10 @@ Sprint 10 + Sprint 11
 
 Resultado: portal do proprietário, notificações e acabamento.
 
+Marco 5:
+
+```txt
+Sprint 12
+```
+
+Resultado: administração de usuários e configurações reais do tenant.

@@ -243,3 +243,12 @@
 - Criar rodada de ajustes visuais.
 - Criar checklist de regressão.
 
+## Sprint 12 - Administração E Configurações
+
+- Completar CRUD de usuários.
+- Criar tela real de usuários no Admin.
+- Permitir vínculo de usuário proprietário.
+- Permitir redefinição de senha por edição administrativa.
+- Criar endpoints de configurações do tenant.
+- Criar tela real de configurações no Admin.
+- Exibir catálogo de recursos e resumo operacional.

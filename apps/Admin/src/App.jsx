@@ -16,11 +16,10 @@ import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 import { useAuth } from '@/context/AuthContext';
+import { ConfiguracoesPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
 
 const moduleRoutes = [
-  ['usuarios', 'Usuários', 'Controle de acessos e usuários do tenant.'],
   ['empresas', 'Empresas', 'Gestão de tenants da plataforma.'],
-  ['configuracoes', 'Configurações', 'Preferências administrativas do RentalHub.'],
 ];
 
 function HomeRoute() {
@@ -54,6 +53,8 @@ export default function App() {
             <Route path="manutencao" element={<ManutencaoPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="portal-proprietario" element={<PortalProprietarioPage />} />
+            <Route path="usuarios" element={<UsuariosPage />} />
+            <Route path="configuracoes" element={<ConfiguracoesPage />} />
             {moduleRoutes.map(([path, title, description]) => (
               <Route
                 key={path}
