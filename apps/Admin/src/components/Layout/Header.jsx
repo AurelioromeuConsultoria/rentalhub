@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Globe, Moon, Search, Settings, Sun } from 'lucide-react';
+import { Bell, ChevronDown, Globe, Moon, RefreshCw, Search, Settings, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { tenantsApi } from '@/api/administracao';
@@ -26,6 +26,15 @@ const routeLabels = {
   auditoria: 'Auditoria',
 };
 
+const notificationTypeLabels = {
+  'nova-reserva': 'Reserva',
+  checkin: 'Check-in',
+  checkout: 'Check-out',
+  limpeza: 'Limpeza',
+  manutencao: 'Manutenção',
+  repasse: 'Repasse',
+};
+
 function getBreadcrumbs(pathname) {
   const segments = pathname.split('/').filter(Boolean);
   const breadcrumbs = [{ label: 'Dashboard', path: '/' }];
@@ -48,12 +57,29 @@ function formatDate(value) {
   return `${day}/${month}/${year}`;
 }
 
+function formatNotificationDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return formatDate(value);
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const { usuario, currentTenant, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState([]);
+  const [notificationsUpdatedAt, setNotificationsUpdatedAt] = useState(null);
+  const [notificationLoading, setNotificationLoading] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -66,6 +92,7 @@ export function Header() {
     () => notifications.filter((item) => item.prioridade === 'alta').length,
     [notifications],
   );
+  const visibleNotifications = useMemo(() => notifications.slice(0, 8), [notifications]);
   const initials = usuario?.nome
     ?.split(' ')
     .filter(Boolean)
@@ -84,17 +111,25 @@ export function Header() {
   };
 
   const loadNotifications = useCallback(async () => {
+    setNotificationLoading(true);
     try {
-      const response = await notificacoesApi.list({ dias: 3 });
+      const response = await notificacoesApi.list({ dias: 3, novasReservasHoras: 48 });
       setNotifications(response.data || []);
+      setNotificationsUpdatedAt(new Date());
     } catch {
       setNotifications([]);
+    } finally {
+      setNotificationLoading(false);
     }
   }, []);
 
   useEffect(() => {
     const timeout = setTimeout(loadNotifications, 0);
-    return () => clearTimeout(timeout);
+    const interval = setInterval(loadNotifications, 60000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [loadNotifications, location.pathname]);
 
   useEffect(() => {
@@ -215,7 +250,7 @@ export function Header() {
         </button>
         <div className="notification-anchor">
           <button
-            className="icon-button notification-button"
+            className={`icon-button notification-button${notifications.length > 0 ? ' has-notifications' : ''}`}
             type="button"
             aria-label="Notificações"
             onClick={() => setShowNotifications((current) => !current)}
@@ -226,17 +261,35 @@ export function Header() {
           {showNotifications && (
             <div className="topbar-popover notification-popover">
               <div className="popover-heading">
-                <strong>Notificações</strong>
-                <button type="button" onClick={loadNotifications}>Atualizar</button>
+                <div>
+                  <strong>Notificações</strong>
+                  {notificationsUpdatedAt && (
+                    <small>Atualizado {formatNotificationDate(notificationsUpdatedAt)}</small>
+                  )}
+                </div>
+                <button type="button" onClick={loadNotifications} disabled={notificationLoading}>
+                  <RefreshCw size={13} />
+                  {notificationLoading ? 'Atualizando' : 'Atualizar'}
+                </button>
               </div>
               {notifications.length === 0 ? (
                 <span className="popover-empty">Nenhuma pendência crítica</span>
               ) : (
-                notifications.slice(0, 8).map((item) => (
-                  <button type="button" key={item.id} onClick={() => navigateTo(item.href)}>
-                    <strong>{item.titulo}</strong>
+                visibleNotifications.map((item) => (
+                  <button
+                    className={`notification-item ${item.prioridade}`}
+                    type="button"
+                    key={item.id}
+                    onClick={() => navigateTo(item.href)}
+                  >
+                    <span className="notification-item-topline">
+                      <strong>{item.titulo}</strong>
+                      <small className="notification-type">
+                        {notificationTypeLabels[item.tipo] || item.tipo}
+                      </small>
+                    </span>
                     <span>{item.descricao}</span>
-                    <small>{formatDate(item.data)} · {item.prioridade}</small>
+                    <small>{formatNotificationDate(item.data)} · {item.prioridade}</small>
                   </button>
                 ))
               )}

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,11 +23,14 @@ public sealed class NotificacoesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyCollection<NotificacaoResponse>>> GetAll(
         [FromQuery] int dias = 3,
+        [FromQuery] int novasReservasHoras = 24,
         CancellationToken cancellationToken = default)
     {
         dias = Math.Clamp(dias, 1, 14);
+        novasReservasHoras = Math.Clamp(novasReservasHoras, 1, 168);
         var today = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
         var horizon = today.AddDays(dias);
+        var recentReservationStart = DateTime.UtcNow.AddHours(-novasReservasHoras);
         var ownerId = GetOwnerId();
         var isOwner = IsOwnerUser();
 
@@ -53,7 +57,8 @@ public sealed class NotificacoesController : ControllerBase
             .Include(r => r.Hospede)
             .Where(r => r.Status != ReservaStatus.Cancelada &&
                 ((r.CheckIn >= today && r.CheckIn <= horizon) ||
-                 (r.CheckOut >= today && r.CheckOut <= horizon)));
+                 (r.CheckOut >= today && r.CheckOut <= horizon) ||
+                 r.DataCriacao >= recentReservationStart));
 
         if (isOwner)
         {
@@ -63,6 +68,18 @@ public sealed class NotificacoesController : ControllerBase
         var reservas = await reservasQuery.ToListAsync(cancellationToken);
         foreach (var reserva in reservas)
         {
+            if (reserva.DataCriacao >= recentReservationStart)
+            {
+                notificacoes.Add(new NotificacaoResponse(
+                    $"nova-reserva-{reserva.Id}",
+                    "nova-reserva",
+                    "Nova reserva",
+                    $"{reserva.Imovel?.Nome ?? "Imóvel"} · {reserva.Hospede?.Nome ?? "Hóspede"} · {FormatCurrency(reserva.ValorHospedagem)}",
+                    reserva.DataCriacao,
+                    reserva.Status == ReservaStatus.Pendente ? "alta" : "media",
+                    isOwner ? "/portal-proprietario" : "/reservas"));
+            }
+
             if (reserva.CheckIn >= today && reserva.CheckIn <= horizon)
             {
                 notificacoes.Add(new NotificacaoResponse(
@@ -142,7 +159,7 @@ public sealed class NotificacoesController : ControllerBase
             $"repasse-{r.Id}",
             "repasse",
             "Repasse pendente",
-            $"{r.Proprietario?.Nome ?? "Proprietário"} · saldo {(r.ValorRepassar - r.ValorPago):C}",
+            $"{r.Proprietario?.Nome ?? "Proprietário"} · saldo {FormatCurrency(r.ValorRepassar - r.ValorPago)}",
             r.PeriodoFim,
             "media",
             isOwner ? "/portal-proprietario" : "/repasses")));
@@ -162,6 +179,11 @@ public sealed class NotificacoesController : ControllerBase
     private int? GetOwnerId()
     {
         return int.TryParse(User.FindFirstValue("ProprietarioId"), out var ownerId) ? ownerId : null;
+    }
+
+    private static string FormatCurrency(decimal value)
+    {
+        return value.ToString("C", CultureInfo.GetCultureInfo("pt-BR"));
     }
 }
 
