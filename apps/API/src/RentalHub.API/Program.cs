@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using RentalHub.API.Health;
+using RentalHub.API.Security;
 using RentalHub.API.Services;
 using RentalHub.Application.Services;
 using RentalHub.Infrastructure;
@@ -103,6 +104,7 @@ app.Use(async (context, next) =>
 
     await next();
 });
+app.UseRentalHubPermissions();
 app.UseAuthorization();
 
 app.MapControllers();

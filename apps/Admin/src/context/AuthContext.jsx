@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '@/api/auth';
 import {
   clearAuthStorage,
@@ -10,6 +10,10 @@ import {
 } from '@/lib/authStorage';
 
 const AuthContext = createContext(null);
+
+function readPermissionValue(permission, key) {
+  return permission?.[key] ?? permission?.[`${key[0].toUpperCase()}${key.slice(1)}`] ?? false;
+}
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(() => {
@@ -73,12 +77,39 @@ export function AuthProvider({ children }) {
     setUsuario(null);
   };
 
+  const hasPermission = useCallback((resource, access = 'view') => {
+    if (!usuario || Number(usuario.tipoUsuario) === 4) {
+      return false;
+    }
+
+    if (usuario.isPlatformAdmin) {
+      return true;
+    }
+
+    const permission = usuario.permissoes?.find((item) => item.recurso === resource || item.Recurso === resource);
+    if (!permission) {
+      return false;
+    }
+
+    const accessByName = {
+      view: 'podeVer',
+      edit: 'podeEditar',
+      delete: 'podeExcluir',
+    };
+
+    return Boolean(readPermissionValue(permission, accessByName[access] || 'podeVer'));
+  }, [usuario]);
+
   const value = useMemo(
     () => ({
       usuario,
       loading,
       login,
       logout,
+      hasPermission,
+      canView: (resource) => hasPermission(resource, 'view'),
+      canEdit: (resource) => hasPermission(resource, 'edit'),
+      canDelete: (resource) => hasPermission(resource, 'delete'),
       isAuthenticated: !!usuario,
       currentTenant: usuario
         ? {
@@ -90,7 +121,7 @@ export function AuthProvider({ children }) {
           }
         : null,
     }),
-    [usuario, loading],
+    [hasPermission, usuario, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

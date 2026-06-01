@@ -28,36 +28,36 @@ const menuGroups = [
   {
     title: 'Operação',
     items: [
-      { label: 'Dashboard', href: '/', icon: BarChart3 },
-      { label: 'Reservas', href: '/reservas', icon: CalendarDays },
-      { label: 'Calendário', href: '/calendario', icon: ClipboardCheck },
-      { label: 'Imóveis', href: '/imoveis', icon: Hotel },
-      { label: 'Proprietários', href: '/proprietarios', icon: Users },
-      { label: 'Hóspedes', href: '/hospedes', icon: UserRound },
+      { label: 'Dashboard', href: '/', icon: BarChart3, resource: 'dashboard' },
+      { label: 'Reservas', href: '/reservas', icon: CalendarDays, resource: 'reservas' },
+      { label: 'Calendário', href: '/calendario', icon: ClipboardCheck, resource: 'calendario' },
+      { label: 'Imóveis', href: '/imoveis', icon: Hotel, resource: 'imoveis' },
+      { label: 'Proprietários', href: '/proprietarios', icon: Users, resource: 'proprietarios' },
+      { label: 'Hóspedes', href: '/hospedes', icon: UserRound, resource: 'hospedes' },
     ],
   },
   {
     title: 'Gestão',
     items: [
-      { label: 'Financeiro', href: '/financeiro', icon: Banknote },
-      { label: 'Repasses', href: '/repasses', icon: ReceiptText },
-      { label: 'Limpeza', href: '/limpeza', icon: Sparkles },
-      { label: 'Manutenção', href: '/manutencao', icon: Wrench },
-      { label: 'Relatórios', href: '/relatorios', icon: BarChart3 },
+      { label: 'Financeiro', href: '/financeiro', icon: Banknote, resource: 'financeiro' },
+      { label: 'Repasses', href: '/repasses', icon: ReceiptText, resource: 'repasses' },
+      { label: 'Limpeza', href: '/limpeza', icon: Sparkles, resource: 'limpezas' },
+      { label: 'Manutenção', href: '/manutencao', icon: Wrench, resource: 'manutencoes' },
+      { label: 'Relatórios', href: '/relatorios', icon: BarChart3, resource: 'relatorios' },
     ],
   },
   {
     title: 'Administração',
     items: [
-      { label: 'Usuários', href: '/usuarios', icon: KeyRound },
-      { label: 'Empresas', href: '/empresas', icon: Building2 },
-      { label: 'Configurações', href: '/configuracoes', icon: Settings },
+      { label: 'Usuários', href: '/usuarios', icon: KeyRound, resource: 'usuarios' },
+      { label: 'Empresas', href: '/empresas', icon: Building2, resource: 'tenants' },
+      { label: 'Configurações', href: '/configuracoes', icon: Settings, resource: 'tenants' },
     ],
   },
 ];
 
 export function Sidebar() {
-  const { usuario } = useAuth();
+  const { usuario, canView } = useAuth();
   const isOwner = Number(usuario?.tipoUsuario) === 4;
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({
@@ -72,7 +72,12 @@ export function Sidebar() {
           items: [{ label: 'Meu portal', href: '/portal-proprietario', icon: Home }],
         },
       ]
-    : menuGroups;
+    : menuGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => canView(item.resource)),
+        }))
+        .filter((group) => group.items.length > 0);
 
   const toggleGroup = (groupTitle) => {
     if (collapsed) {

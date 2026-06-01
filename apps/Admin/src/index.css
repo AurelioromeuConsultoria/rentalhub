@@ -1099,6 +1099,28 @@ button:disabled {
   font-weight: 700;
 }
 
+.access-denied {
+  display: grid;
+  max-width: 520px;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--surface-shadow);
+  color: var(--foreground);
+  margin: 64px auto;
+  padding: 24px;
+}
+
+.access-denied strong {
+  font-size: 1rem;
+}
+
+.access-denied span {
+  color: var(--muted-foreground);
+  font-size: 0.92rem;
+}
+
 .login-form > label:first-child .field-with-icon {
   grid-template-columns: 20px minmax(0, 1fr);
 }
