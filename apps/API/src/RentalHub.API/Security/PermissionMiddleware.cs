@@ -23,7 +23,8 @@ public sealed class PermissionMiddleware
     private static readonly HashSet<string> AuthenticatedOnlySegments = new(StringComparer.OrdinalIgnoreCase)
     {
         "buscaglobal",
-        "notificacoes"
+        "notificacoes",
+        "portalproprietario"
     };
 
     private static readonly Dictionary<string, string> ResourceBySegment = new(StringComparer.OrdinalIgnoreCase)
@@ -40,7 +41,6 @@ public sealed class PermissionMiddleware
         ["limpezas"] = Resources.Limpezas,
         ["manutencoes"] = Resources.Manutencoes,
         ["relatorios"] = Resources.Relatorios,
-        ["portalproprietario"] = Resources.PortalProprietario,
         ["usuarios"] = Resources.Usuarios,
         ["perfis-acesso"] = Resources.PerfisAcesso,
         ["perfisacesso"] = Resources.PerfisAcesso,

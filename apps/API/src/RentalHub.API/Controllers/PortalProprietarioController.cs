@@ -23,6 +23,7 @@ public sealed class PortalProprietarioController : ControllerBase
     public async Task<ActionResult<PortalProprietarioResponse>> GetPortal(
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
+        [FromQuery] int? imovelId,
         CancellationToken cancellationToken)
     {
         var proprietarioId = GetProprietarioId();
@@ -58,17 +59,31 @@ public sealed class PortalProprietarioController : ControllerBase
                 i.CodigoInterno,
                 i.Cidade,
                 i.Estado,
-                i.Status.ToString()))
+                i.Status.ToString(),
+                i.QuantidadeHospedes,
+                i.QuantidadeQuartos,
+                i.QuantidadeBanheiros,
+                i.Fotos
+                    .OrderByDescending(f => f.Principal)
+                    .ThenBy(f => f.Ordem)
+                    .Select(f => f.Url)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         var imovelIds = imoveis.Select(i => i.Id).ToArray();
+        if (imovelId.HasValue && !imovelIds.Contains(imovelId.Value))
+        {
+            return BadRequest(new { message = "Imóvel não pertence ao proprietário autenticado." });
+        }
+
+        var selectedImovelIds = imovelId.HasValue ? [imovelId.Value] : imovelIds;
 
         var reservas = await _dbContext.Reservas
             .AsNoTracking()
             .Include(r => r.Imovel)
             .Include(r => r.Hospede)
             .Where(r =>
-                imovelIds.Contains(r.ImovelId) &&
+                selectedImovelIds.Contains(r.ImovelId) &&
                 r.Status != ReservaStatus.Cancelada &&
                 r.CheckOut >= start &&
                 r.CheckIn <= end)
@@ -93,11 +108,12 @@ public sealed class PortalProprietarioController : ControllerBase
             .Where(m =>
                 m.Data >= start &&
                 m.Data <= end &&
-                (m.ProprietarioId == proprietarioId.Value ||
-                 (m.ImovelId.HasValue && imovelIds.Contains(m.ImovelId.Value))))
+                ((!imovelId.HasValue && m.ProprietarioId == proprietarioId.Value) ||
+                 (m.ImovelId.HasValue && selectedImovelIds.Contains(m.ImovelId.Value))))
             .OrderByDescending(m => m.Data)
             .Select(m => new PortalMovimentacaoResponse(
                 m.Id,
+                m.ImovelId,
                 m.Data,
                 m.Tipo.ToString(),
                 m.CategoriaFinanceira == null ? string.Empty : m.CategoriaFinanceira.Nome,
@@ -108,13 +124,17 @@ public sealed class PortalProprietarioController : ControllerBase
 
         var repasses = await _dbContext.RepassesProprietarios
             .AsNoTracking()
+            .Include(r => r.Imovel)
             .Where(r =>
                 r.ProprietarioId == proprietarioId.Value &&
+                (!imovelId.HasValue || r.ImovelId == imovelId.Value) &&
                 r.PeriodoFim >= start &&
                 r.PeriodoInicio <= end)
             .OrderByDescending(r => r.PeriodoFim)
             .Select(r => new PortalRepasseResponse(
                 r.Id,
+                r.ImovelId,
+                r.Imovel == null ? null : r.Imovel.Nome,
                 r.PeriodoInicio,
                 r.PeriodoFim,
                 r.ValorRepassar,
@@ -149,11 +169,40 @@ public sealed class PortalProprietarioController : ControllerBase
             .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString())
             .Sum(m => m.Valor);
 
+        var resumoPorImovel = imoveis
+            .Where(i => selectedImovelIds.Contains(i.Id))
+            .Select(i =>
+            {
+                var reservasImovel = reservas.Where(r => r.ImovelId == i.Id).ToArray();
+                var movimentacoesImovel = movimentacoes.Where(m => m.ImovelId == i.Id).ToArray();
+                var repassesImovel = repasses.Where(r => r.ImovelId == i.Id).ToArray();
+                var receitaImovel = reservasImovel.Sum(r => r.Receita) +
+                    movimentacoesImovel
+                        .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita.ToString())
+                        .Sum(m => m.Valor);
+                var custosImovel = movimentacoesImovel
+                    .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString())
+                    .Sum(m => m.Valor);
+
+                return new PortalImovelResumoResponse(
+                    i.Id,
+                    i.Nome,
+                    i.FotoPrincipal,
+                    receitaImovel,
+                    custosImovel,
+                    receitaImovel - custosImovel,
+                    reservasImovel.Length,
+                    repassesImovel.Sum(r => r.SaldoPendente));
+            })
+            .OrderByDescending(i => i.Lucro)
+            .ToList();
+
         return Ok(new PortalProprietarioResponse(
             proprietario.Id,
             proprietario.Nome,
             start,
             end,
+            imovelId,
             imoveis.Count,
             reservas.Count,
             receitas,
@@ -164,7 +213,8 @@ public sealed class PortalProprietarioController : ControllerBase
             reservas,
             movimentacoes,
             repasses,
-            calendario));
+            calendario,
+            resumoPorImovel));
     }
 
     private int? GetProprietarioId()
@@ -185,6 +235,7 @@ public sealed record PortalProprietarioResponse(
     string ProprietarioNome,
     DateTime PeriodoInicio,
     DateTime PeriodoFim,
+    int? ImovelSelecionadoId,
     int TotalImoveis,
     int TotalReservas,
     decimal Receitas,
@@ -195,7 +246,8 @@ public sealed record PortalProprietarioResponse(
     IReadOnlyCollection<PortalReservaResponse> Reservas,
     IReadOnlyCollection<PortalMovimentacaoResponse> Movimentacoes,
     IReadOnlyCollection<PortalRepasseResponse> Repasses,
-    IReadOnlyCollection<PortalCalendarioEventoResponse> Calendario);
+    IReadOnlyCollection<PortalCalendarioEventoResponse> Calendario,
+    IReadOnlyCollection<PortalImovelResumoResponse> ResumoPorImovel);
 
 public sealed record PortalImovelResponse(
     int Id,
@@ -203,7 +255,11 @@ public sealed record PortalImovelResponse(
     string CodigoInterno,
     string? Cidade,
     string? Estado,
-    string Status);
+    string Status,
+    int QuantidadeHospedes,
+    int QuantidadeQuartos,
+    int QuantidadeBanheiros,
+    string? FotoPrincipal);
 
 public sealed record PortalReservaResponse(
     int Id,
@@ -219,6 +275,7 @@ public sealed record PortalReservaResponse(
 
 public sealed record PortalMovimentacaoResponse(
     int Id,
+    int? ImovelId,
     DateTime Data,
     string Tipo,
     string CategoriaNome,
@@ -228,6 +285,8 @@ public sealed record PortalMovimentacaoResponse(
 
 public sealed record PortalRepasseResponse(
     int Id,
+    int? ImovelId,
+    string? ImovelNome,
     DateTime PeriodoInicio,
     DateTime PeriodoFim,
     decimal ValorRepassar,
@@ -242,3 +301,13 @@ public sealed record PortalCalendarioEventoResponse(
     DateTime Inicio,
     DateTime Fim,
     string Status);
+
+public sealed record PortalImovelResumoResponse(
+    int ImovelId,
+    string ImovelNome,
+    string? FotoPrincipal,
+    decimal Receitas,
+    decimal Custos,
+    decimal Lucro,
+    int Reservas,
+    decimal RepassesPendentes);

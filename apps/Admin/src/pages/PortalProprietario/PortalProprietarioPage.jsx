@@ -1,4 +1,16 @@
-import { Building2, CalendarDays, Home, ReceiptText, RotateCcw, WalletCards } from 'lucide-react';
+import {
+  Bath,
+  BedDouble,
+  Building2,
+  CalendarDays,
+  Home,
+  Image as ImageIcon,
+  ReceiptText,
+  RotateCcw,
+  TrendingUp,
+  Users,
+  WalletCards,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { portalProprietarioApi } from '@/api/portalProprietario';
 
@@ -7,6 +19,7 @@ currentMonthStart.setDate(1);
 
 const emptyPortal = {
   proprietarioNome: '',
+  imovelSelecionadoId: null,
   totalImoveis: 0,
   totalReservas: 0,
   receitas: 0,
@@ -18,6 +31,7 @@ const emptyPortal = {
   movimentacoes: [],
   repasses: [],
   calendario: [],
+  resumoPorImovel: [],
 };
 
 function money(value) {
@@ -79,6 +93,7 @@ export function PortalProprietarioPage() {
   const [filters, setFilters] = useState({
     inicio: currentMonthStart.toISOString().slice(0, 10),
     fim: new Date().toISOString().slice(0, 10),
+    imovelId: '',
   });
   const [data, setData] = useState(emptyPortal);
   const [loading, setLoading] = useState(true);
@@ -88,6 +103,7 @@ export function PortalProprietarioPage() {
     () => ({
       inicio: filters.inicio || undefined,
       fim: filters.fim || undefined,
+      imovelId: filters.imovelId || undefined,
     }),
     [filters],
   );
@@ -125,7 +141,7 @@ export function PortalProprietarioPage() {
         </div>
       </section>
 
-      <section className="resource-panel dashboard-filters">
+      <section className="resource-panel dashboard-filters portal-filters">
         <label className="form-field">
           <span>Início</span>
           <input type="date" value={filters.inicio} onChange={(event) => setFilters((current) => ({ ...current, inicio: event.target.value }))} />
@@ -133,6 +149,15 @@ export function PortalProprietarioPage() {
         <label className="form-field">
           <span>Fim</span>
           <input type="date" value={filters.fim} onChange={(event) => setFilters((current) => ({ ...current, fim: event.target.value }))} />
+        </label>
+        <label className="form-field">
+          <span>Imóvel</span>
+          <select value={filters.imovelId} onChange={(event) => setFilters((current) => ({ ...current, imovelId: event.target.value }))}>
+            <option value="">Todos os imóveis</option>
+            {(data.imoveis || []).map((imovel) => (
+              <option key={imovel.id} value={imovel.id}>{imovel.nome}</option>
+            ))}
+          </select>
         </label>
       </section>
 
@@ -170,6 +195,57 @@ export function PortalProprietarioPage() {
         </article>
       </section>
 
+      <section className="resource-panel">
+        <div className="resource-panel-heading">
+          <div>
+            <strong>Desempenho por imóvel</strong>
+            <small>Receita, custos, lucro e pendências consolidados no período.</small>
+          </div>
+          <span>{data.resumoPorImovel?.length || 0} imóveis</span>
+        </div>
+        {data.resumoPorImovel?.length ? (
+          <div className="portal-property-grid">
+            {data.resumoPorImovel.map((item) => (
+              <article className="portal-property-card" key={item.imovelId}>
+                {item.fotoPrincipal ? (
+                  <img src={item.fotoPrincipal} alt={item.imovelNome} />
+                ) : (
+                  <span className="portal-property-placeholder"><ImageIcon size={24} /></span>
+                )}
+                <div>
+                  <strong>{item.imovelNome}</strong>
+                  <small>{item.reservas} reservas no período</small>
+                </div>
+                <dl>
+                  <div>
+                    <dt>Receitas</dt>
+                    <dd>{money(item.receitas)}</dd>
+                  </div>
+                  <div>
+                    <dt>Custos</dt>
+                    <dd>{money(item.custos)}</dd>
+                  </div>
+                  <div>
+                    <dt>Lucro</dt>
+                    <dd className={Number(item.lucro || 0) >= 0 ? 'positive' : 'negative'}>{money(item.lucro)}</dd>
+                  </div>
+                  <div>
+                    <dt>Pendente</dt>
+                    <dd>{money(item.repassesPendentes)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="inline-empty compact">
+            <TrendingUp size={24} />
+            <strong>Sem desempenho no período</strong>
+            <span>Selecione outro período ou cadastre reservas para formar o resumo por imóvel.</span>
+          </div>
+        )}
+      </section>
+
       <section className="content-grid">
         <article className="resource-panel">
           <div className="resource-panel-heading">
@@ -181,9 +257,35 @@ export function PortalProprietarioPage() {
           </div>
           <PortalTable
             columns={[
-              { key: 'nome', label: 'Imóvel' },
-              { key: 'codigoInterno', label: 'Código' },
+              {
+                key: 'nome',
+                label: 'Imóvel',
+                render: (item) => (
+                  <div className="property-cell">
+                    {item.fotoPrincipal ? (
+                      <img src={item.fotoPrincipal} alt={item.nome} />
+                    ) : (
+                      <span><ImageIcon size={17} /></span>
+                    )}
+                    <div>
+                      <strong>{item.nome}</strong>
+                      <small>{item.codigoInterno}</small>
+                    </div>
+                  </div>
+                ),
+              },
               { key: 'cidade', label: 'Cidade', render: (item) => [item.cidade, item.estado].filter(Boolean).join(' / ') || '-' },
+              {
+                key: 'capacidade',
+                label: 'Capacidade',
+                render: (item) => (
+                  <span className="portal-capacity">
+                    <Users size={14} /> {item.quantidadeHospedes}
+                    <BedDouble size={14} /> {item.quantidadeQuartos}
+                    <Bath size={14} /> {item.quantidadeBanheiros}
+                  </span>
+                ),
+              },
               { key: 'status', label: 'Status' },
             ]}
             emptyText="Nenhum imóvel vinculado ao seu usuário."
@@ -232,8 +334,10 @@ export function PortalProprietarioPage() {
             { key: 'checkIn', label: 'Check-in', render: (item) => formatDate(item.checkIn) },
             { key: 'checkOut', label: 'Check-out', render: (item) => formatDate(item.checkOut) },
             { key: 'imovelNome', label: 'Imóvel' },
+            { key: 'hospedeNome', label: 'Hóspede' },
             { key: 'origem', label: 'Origem' },
             { key: 'receita', label: 'Receita', render: (item) => money(item.receita) },
+            { key: 'valorLiquido', label: 'Líquido', render: (item) => money(item.valorLiquido) },
             { key: 'status', label: 'Status' },
           ]}
           emptyText="Não há reservas para seus imóveis no período."
@@ -255,6 +359,7 @@ export function PortalProprietarioPage() {
               { key: 'data', label: 'Data', render: (item) => formatDate(item.data) },
               { key: 'tipo', label: 'Tipo' },
               { key: 'categoriaNome', label: 'Categoria' },
+              { key: 'imovelNome', label: 'Imóvel', render: (item) => item.imovelNome || '-' },
               { key: 'descricao', label: 'Descrição' },
               { key: 'valor', label: 'Valor', render: (item) => money(item.valor) },
             ]}
@@ -274,6 +379,7 @@ export function PortalProprietarioPage() {
           <PortalTable
             columns={[
               { key: 'periodoFim', label: 'Período', render: (item) => `${formatDate(item.periodoInicio)} - ${formatDate(item.periodoFim)}` },
+              { key: 'imovelNome', label: 'Imóvel', render: (item) => item.imovelNome || 'Todos' },
               { key: 'valorRepassar', label: 'Valor', render: (item) => money(item.valorRepassar) },
               { key: 'valorPago', label: 'Pago', render: (item) => money(item.valorPago) },
               { key: 'saldoPendente', label: 'Pendente', render: (item) => money(item.saldoPendente) },
