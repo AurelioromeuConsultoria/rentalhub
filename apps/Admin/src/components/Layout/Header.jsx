@@ -21,6 +21,7 @@ const routeLabels = {
   relatorios: 'Relatórios',
   'portal-proprietario': 'Portal do Proprietário',
   usuarios: 'Usuários',
+  perfis: 'Perfis',
   empresas: 'Empresas',
   configuracoes: 'Configurações',
   auditoria: 'Auditoria',

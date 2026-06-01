@@ -61,6 +61,7 @@ const menuGroups = [
     title: 'Administração',
     items: [
       { label: 'Usuários', href: '/usuarios', icon: KeyRound, resource: 'usuarios' },
+      { label: 'Perfis', href: '/perfis', icon: Shield, resource: 'perfis-acesso' },
       { label: 'Empresas', href: '/empresas', icon: Building2, resource: 'tenants' },
       { label: 'Configurações', href: '/configuracoes', icon: Settings, resource: 'tenants' },
       { label: 'Auditoria', href: '/auditoria', icon: History, resource: 'auditoria' },

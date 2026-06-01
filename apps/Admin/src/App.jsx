@@ -16,7 +16,7 @@ import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 import { useAuth } from '@/context/AuthContext';
-import { ConfiguracoesPage, EmpresasPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
+import { ConfiguracoesPage, EmpresasPage, PerfisPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
 
 const internalRoutes = [
   { path: '/reservas', resource: 'reservas' },
@@ -30,6 +30,7 @@ const internalRoutes = [
   { path: '/manutencao', resource: 'manutencoes' },
   { path: '/relatorios', resource: 'relatorios' },
   { path: '/usuarios', resource: 'usuarios' },
+  { path: '/perfis', resource: 'perfis-acesso' },
   { path: '/empresas', resource: 'tenants' },
   { path: '/configuracoes', resource: 'tenants' },
   { path: '/auditoria', resource: 'auditoria' },
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="relatorios" element={<ProtectedRoute resource="relatorios"><RelatoriosPage /></ProtectedRoute>} />
             <Route path="portal-proprietario" element={<PortalProprietarioPage />} />
             <Route path="usuarios" element={<ProtectedRoute resource="usuarios"><UsuariosPage /></ProtectedRoute>} />
+            <Route path="perfis" element={<ProtectedRoute resource="perfis-acesso"><PerfisPage /></ProtectedRoute>} />
             <Route path="empresas" element={<ProtectedRoute resource="tenants"><EmpresasPage /></ProtectedRoute>} />
             <Route path="configuracoes" element={<ProtectedRoute resource="tenants"><ConfiguracoesPage /></ProtectedRoute>} />
             <Route path="auditoria" element={<ProtectedRoute resource="auditoria"><AuditoriaPage /></ProtectedRoute>} />

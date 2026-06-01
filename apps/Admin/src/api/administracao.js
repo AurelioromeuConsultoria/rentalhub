@@ -11,6 +11,9 @@ export const usuariosApi = {
 
 export const perfisAcessoApi = {
   list: () => api.get('/perfis-acesso'),
+  create: (payload) => api.post('/perfis-acesso', payload),
+  update: (id, payload) => api.put(`/perfis-acesso/${id}`, payload),
+  deactivate: (id) => api.delete(`/perfis-acesso/${id}`),
 };
 
 export const configuracoesApi = {

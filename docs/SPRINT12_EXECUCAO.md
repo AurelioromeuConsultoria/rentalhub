@@ -14,6 +14,12 @@
 - Tela real `/configuracoes` no Admin.
 - Resumo operacional do tenant nas configurações.
 - Catálogo visual dos recursos usados por perfis de acesso.
+- CRUD de perfis de acesso.
+- Tela real `/perfis` no Admin.
+- Matriz granular de permissões por recurso:
+  - Ver.
+  - Editar.
+  - Excluir.
 
 ## Regra De Administração
 
@@ -21,7 +27,7 @@ Usuários proprietários continuam bloqueados pelo middleware de acesso restrito
 
 ## Observação
 
-O módulo de perfis permanece como catálogo de leitura nesta sprint. A edição granular de permissões por perfil pode ser tratada em uma sprint futura, reaproveitando o catálogo de recursos já exposto em configurações.
+A edição granular de permissões por perfil foi incorporada ao módulo administrativo. As permissões são normalizadas contra o catálogo oficial de recursos do sistema e continuam respeitando o isolamento por tenant.
 
 ## Validações Executadas
 

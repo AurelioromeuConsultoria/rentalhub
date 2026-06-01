@@ -24,6 +24,25 @@ const tipoUsuarioOptions = [
   { value: 4, label: 'Proprietário' },
 ];
 
+const recursoLabels = {
+  dashboard: 'Dashboard',
+  imoveis: 'Imóveis',
+  proprietarios: 'Proprietários',
+  hospedes: 'Hóspedes',
+  reservas: 'Reservas',
+  calendario: 'Calendário',
+  financeiro: 'Financeiro',
+  repasses: 'Repasses',
+  limpezas: 'Limpeza',
+  manutencoes: 'Manutenção',
+  relatorios: 'Relatórios',
+  'portal-proprietario': 'Portal do proprietário',
+  usuarios: 'Usuários',
+  'perfis-acesso': 'Perfis de acesso',
+  tenants: 'Empresas e configurações',
+  auditoria: 'Auditoria',
+};
+
 const emptyUsuario = {
   nome: '',
   email: '',
@@ -33,6 +52,13 @@ const emptyUsuario = {
   proprietarioId: '',
   isPlatformAdmin: false,
   ativo: true,
+};
+
+const emptyPerfil = {
+  nome: '',
+  descricao: '',
+  ativo: true,
+  permissoes: {},
 };
 
 const emptyTenant = {
@@ -63,6 +89,20 @@ function splitLines(value) {
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function buildPermissionMap(resources, permissoes = []) {
+  const source = Object.fromEntries(permissoes.map((permissao) => [permissao.recurso, permissao]));
+
+  return Object.fromEntries(resources.map((recurso) => {
+    const permissao = source[recurso] || {};
+
+    return [recurso, {
+      podeVer: Boolean(permissao.podeVer),
+      podeEditar: Boolean(permissao.podeEditar),
+      podeExcluir: Boolean(permissao.podeExcluir),
+    }];
+  }));
 }
 
 function StatusPill({ active, label }) {
@@ -349,6 +389,235 @@ export function UsuariosPage() {
           <button className="primary-action full" type="submit" disabled={saving}>
             <Save size={18} />
             {saving ? 'Salvando...' : 'Salvar usuário'}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+export function PerfisPage() {
+  const [perfis, setPerfis] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [form, setForm] = useState(emptyPerfil);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [perfisResponse, configuracoesResponse] = await Promise.all([
+        perfisAcessoApi.list(),
+        configuracoesApi.get(),
+      ]);
+      const nextResources = configuracoesResponse.data?.recursos || [];
+      setPerfis(extractItems(perfisResponse));
+      setResources(nextResources);
+      setForm((current) => ({
+        ...current,
+        permissoes: buildPermissionMap(nextResources, Object.entries(current.permissoes).map(([recurso, permissao]) => ({
+          recurso,
+          ...permissao,
+        }))),
+      }));
+    } catch (loadError) {
+      setError(getErrorMessage(loadError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(load, 0);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const startCreate = () => {
+    setEditingId(null);
+    setForm({
+      ...emptyPerfil,
+      permissoes: buildPermissionMap(resources),
+    });
+  };
+
+  const startEdit = (perfil) => {
+    setEditingId(perfil.id);
+    setForm({
+      nome: perfil.nome || '',
+      descricao: perfil.descricao || '',
+      ativo: perfil.ativo,
+      permissoes: buildPermissionMap(resources, perfil.permissoes || []),
+    });
+  };
+
+  const togglePermission = (recurso, field) => {
+    setForm((current) => {
+      const previous = current.permissoes[recurso] || {};
+      const next = {
+        podeVer: Boolean(previous.podeVer),
+        podeEditar: Boolean(previous.podeEditar),
+        podeExcluir: Boolean(previous.podeExcluir),
+        [field]: !previous[field],
+      };
+
+      if ((field === 'podeEditar' || field === 'podeExcluir') && next[field]) {
+        next.podeVer = true;
+      }
+
+      if (field === 'podeVer' && !next.podeVer) {
+        next.podeEditar = false;
+        next.podeExcluir = false;
+      }
+
+      return {
+        ...current,
+        permissoes: {
+          ...current.permissoes,
+          [recurso]: next,
+        },
+      };
+    });
+  };
+
+  const save = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+
+    const payload = {
+      nome: form.nome.trim(),
+      descricao: form.descricao.trim(),
+      ativo: form.ativo,
+      permissoes: resources.map((recurso) => ({
+        recurso,
+        podeVer: Boolean(form.permissoes[recurso]?.podeVer),
+        podeEditar: Boolean(form.permissoes[recurso]?.podeEditar),
+        podeExcluir: Boolean(form.permissoes[recurso]?.podeExcluir),
+      })),
+    };
+
+    try {
+      if (editingId) {
+        await perfisAcessoApi.update(editingId, payload);
+      } else {
+        await perfisAcessoApi.create(payload);
+      }
+      startCreate();
+      await load();
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivate = async (id) => {
+    setError('');
+    try {
+      await perfisAcessoApi.deactivate(id);
+      await load();
+      if (editingId === id) {
+        startCreate();
+      }
+    } catch (deactivateError) {
+      setError(getErrorMessage(deactivateError));
+    }
+  };
+
+  return (
+    <section className="resource-page">
+      <PageHeader
+        eyebrow="Administração"
+        title="Perfis de acesso"
+        description="Configure permissões de visualização, edição e exclusão por recurso do sistema."
+        onRefresh={load}
+      />
+
+      {error && <div className="form-alert">{error}</div>}
+
+      <div className="resource-layout wide-detail">
+        <section className="resource-panel">
+          <div className="resource-panel-heading">
+            <div>
+              <strong>Perfis cadastrados</strong>
+              <small>Use perfis para liberar módulos por função</small>
+            </div>
+            <span>{perfis.length} perfis</span>
+          </div>
+
+          {loading ? (
+            <div className="loading-line">Carregando perfis...</div>
+          ) : perfis.length === 0 ? (
+            <div className="inline-empty">
+              <ShieldCheck size={34} />
+              <strong>Nenhum perfil encontrado</strong>
+              <span>Crie perfis para administradores, financeiro e operação.</span>
+            </div>
+          ) : (
+            <div className="profile-list">
+              {perfis.map((perfil) => (
+                <article className="profile-card" key={perfil.id}>
+                  <div>
+                    <strong>{perfil.nome}</strong>
+                    <span>{perfil.descricao || 'Sem descrição'}</span>
+                    <small>{(perfil.permissoes || []).filter((permissao) => permissao.podeVer).length} recursos liberados</small>
+                  </div>
+                  <StatusPill active={perfil.ativo} label={perfil.ativo ? 'Ativo' : 'Inativo'} />
+                  <div className="table-actions">
+                    <button type="button" aria-label="Editar" onClick={() => startEdit(perfil)}>
+                      <Edit3 size={16} />
+                    </button>
+                    <button type="button" aria-label="Inativar" onClick={() => deactivate(perfil.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <form className="resource-form permissions-form" onSubmit={save}>
+          <div className="form-title">
+            <ShieldCheck size={18} />
+            <strong>{editingId ? 'Editar perfil' : 'Novo perfil'}</strong>
+          </div>
+          <div className="form-grid">
+            <TextField label="Nome" value={form.nome} onChange={(nome) => setForm((current) => ({ ...current, nome }))} required />
+            <TextField label="Descrição" value={form.descricao} onChange={(descricao) => setForm((current) => ({ ...current, descricao }))} />
+            <CheckboxField label="Perfil ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
+          </div>
+
+          <div className="permissions-matrix">
+            <div className="permissions-row header">
+              <strong>Recurso</strong>
+              <span>Ver</span>
+              <span>Editar</span>
+              <span>Excluir</span>
+            </div>
+            {resources.map((recurso) => (
+              <div className="permissions-row" key={recurso}>
+                <strong>{recursoLabels[recurso] || recurso}</strong>
+                {['podeVer', 'podeEditar', 'podeExcluir'].map((field) => (
+                  <label className="permission-check" key={field}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.permissoes[recurso]?.[field])}
+                      onChange={() => togglePermission(recurso, field)}
+                    />
+                    <span />
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <button className="primary-action full" type="submit" disabled={saving}>
+            <Save size={18} />
+            {saving ? 'Salvando...' : 'Salvar perfil'}
           </button>
         </form>
       </div>
