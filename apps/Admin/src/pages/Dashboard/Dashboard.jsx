@@ -1,8 +1,10 @@
 import {
   ArrowDownRight,
   ArrowUpRight,
+  BarChart3,
   CalendarCheck,
   Home,
+  PieChart,
   RotateCcw,
   Sparkles,
   WalletCards,
@@ -25,6 +27,8 @@ const emptyDashboard = {
   repassesPendentes: 0,
   limpezasPendentes: 0,
   manutencoesPendentes: 0,
+  fluxoDiario: [],
+  reservasPorOrigem: [],
   imoveisMaisRentaveis: [],
   imoveisMenorDesempenho: [],
 };
@@ -39,6 +43,94 @@ function percent(value) {
 
 function getErrorMessage(error) {
   return error.response?.data?.message || 'Não foi possível carregar o dashboard.';
+}
+
+function shortDate(value) {
+  if (!value) return '';
+  const [, month, day] = String(value).slice(0, 10).split('-');
+  return `${day}/${month}`;
+}
+
+function FlowChart({ items }) {
+  const maxValue = Math.max(
+    ...items.map((item) => Math.max(Number(item.receita || 0), Number(item.despesa || 0))),
+    1,
+  );
+
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <h2>Fluxo do período</h2>
+        <span>Receita x despesa</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="inline-empty compact">
+          <BarChart3 size={24} />
+          <strong>Sem movimentações</strong>
+          <span>Registre receitas e despesas para montar o gráfico.</span>
+        </div>
+      ) : (
+        <div className="flow-chart" aria-label="Fluxo diário de receitas e despesas">
+          {items.map((item) => (
+            <div className="flow-day" key={item.data}>
+              <div className="flow-bars">
+                <span
+                  className="income"
+                  title={`Receita ${money(item.receita)}`}
+                  style={{ height: `${Math.max(3, (Number(item.receita || 0) / maxValue) * 100)}%` }}
+                />
+                <span
+                  className="expense"
+                  title={`Despesa ${money(item.despesa)}`}
+                  style={{ height: `${Math.max(3, (Number(item.despesa || 0) / maxValue) * 100)}%` }}
+                />
+              </div>
+              <small>{shortDate(item.data)}</small>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function OriginChart({ items }) {
+  const total = items.reduce((sum, item) => sum + Number(item.quantidade || 0), 0);
+
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <h2>Origem das reservas</h2>
+        <span>Canais</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="inline-empty compact">
+          <PieChart size={24} />
+          <strong>Sem reservas</strong>
+          <span>As origens aparecem conforme as reservas entram.</span>
+        </div>
+      ) : (
+        <div className="origin-chart">
+          {items.map((item) => {
+            const percentage = total === 0 ? 0 : Math.round((Number(item.quantidade || 0) / total) * 100);
+
+            return (
+              <div className="origin-row" key={item.origem}>
+                <div>
+                  <strong>{item.origem}</strong>
+                  <span>{item.quantidade} reservas · {money(item.receita)}</span>
+                </div>
+                <small>{percentage}%</small>
+                <span className="origin-bar">
+                  <span style={{ width: `${Math.max(4, percentage)}%` }} />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </article>
+  );
 }
 
 function PerformanceList({ title, badge, items, emptyText }) {
@@ -188,6 +280,11 @@ export function Dashboard() {
           <span>Imóveis ativos</span>
           <strong>{data.imoveisAtivos || 0}</strong>
         </article>
+      </section>
+
+      <section className="content-grid dashboard-charts">
+        <FlowChart items={data.fluxoDiario || []} />
+        <OriginChart items={data.reservasPorOrigem || []} />
       </section>
 
       <section className="content-grid">

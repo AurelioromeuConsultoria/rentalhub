@@ -935,6 +935,105 @@ button:disabled {
   font-size: 1.35rem;
 }
 
+.dashboard-charts {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+}
+
+.flow-chart {
+  display: grid;
+  min-height: 220px;
+  grid-template-columns: repeat(auto-fit, minmax(24px, 1fr));
+  align-items: end;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 14px;
+}
+
+.flow-day {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  align-items: end;
+}
+
+.flow-bars {
+  display: grid;
+  height: 158px;
+  grid-template-columns: repeat(2, minmax(5px, 1fr));
+  align-items: end;
+  gap: 3px;
+}
+
+.flow-bars span {
+  display: block;
+  min-height: 3px;
+  border-radius: 999px 999px 2px 2px;
+}
+
+.flow-bars .income {
+  background: var(--success);
+}
+
+.flow-bars .expense {
+  background: var(--danger);
+}
+
+.flow-day small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.origin-chart {
+  display: grid;
+  gap: 12px;
+}
+
+.origin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 12px;
+}
+
+.origin-row strong,
+.origin-row span {
+  display: block;
+}
+
+.origin-row span,
+.origin-row small {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+.origin-row small {
+  font-weight: 900;
+}
+
+.origin-bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.origin-bar span {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
 .performance-list {
   display: grid;
   gap: 12px;

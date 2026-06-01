@@ -68,6 +68,30 @@ public sealed class DashboardController : ControllerBase
         var diasPeriodo = Math.Max(1, (end - start).Days + 1);
         var totalNoitesDisponiveis = Math.Max(1, imoveisAtivos.Count * diasPeriodo);
         var taxaOcupacao = Math.Round((decimal)totalNoitesOcupadas / totalNoitesDisponiveis * 100, 2);
+        var fluxoDiario = Enumerable.Range(0, diasPeriodo)
+            .Select(offset =>
+            {
+                var dia = start.AddDays(offset);
+                var receitaDia = movimentos
+                    .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita && m.Data.Date == dia)
+                    .Sum(m => m.Valor);
+                var despesaDia = movimentos
+                    .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa && m.Data.Date == dia)
+                    .Sum(m => m.Valor);
+
+                return new DashboardFluxoDiarioResponse(dia, receitaDia, despesaDia, receitaDia - despesaDia);
+            })
+            .ToList();
+
+        var reservasPorOrigem = reservas
+            .GroupBy(r => r.Origem)
+            .Select(group => new DashboardOrigemReservaResponse(
+                group.Key.ToString(),
+                group.Count(),
+                group.Sum(r => r.ValorHospedagem + r.TaxaLimpeza)))
+            .OrderByDescending(item => item.Quantidade)
+            .ThenByDescending(item => item.Receita)
+            .ToList();
 
         var repassesPendentes = await _dbContext.RepassesProprietarios
             .AsNoTracking()
@@ -120,6 +144,8 @@ public sealed class DashboardController : ControllerBase
             repassesPendentes,
             limpezasPendentes,
             manutencoesPendentes,
+            fluxoDiario,
+            reservasPorOrigem,
             performance
                 .OrderByDescending(i => i.Lucro)
                 .ThenByDescending(i => i.Receita)
@@ -159,8 +185,21 @@ public sealed record DashboardExecutivoResponse(
     decimal RepassesPendentes,
     int LimpezasPendentes,
     int ManutencoesPendentes,
+    IReadOnlyCollection<DashboardFluxoDiarioResponse> FluxoDiario,
+    IReadOnlyCollection<DashboardOrigemReservaResponse> ReservasPorOrigem,
     IReadOnlyCollection<ImovelPerformanceResponse> ImoveisMaisRentaveis,
     IReadOnlyCollection<ImovelPerformanceResponse> ImoveisMenorDesempenho);
+
+public sealed record DashboardFluxoDiarioResponse(
+    DateTime Data,
+    decimal Receita,
+    decimal Despesa,
+    decimal Lucro);
+
+public sealed record DashboardOrigemReservaResponse(
+    string Origem,
+    int Quantidade,
+    decimal Receita);
 
 public sealed record ImovelPerformanceResponse(
     int ImovelId,
