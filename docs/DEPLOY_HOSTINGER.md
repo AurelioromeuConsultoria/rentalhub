@@ -36,12 +36,6 @@ services:
       Cors__AllowedOrigins__0: ${RENTALHUB_PUBLIC_URL}
     volumes:
       - rentalhub_uploads:/app/wwwroot/uploads
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
 
   admin:
@@ -51,8 +45,7 @@ services:
       args:
         VITE_API_BASE_URL: ${RENTALHUB_PUBLIC_URL}
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     ports:
       - "8080:80"
     restart: unless-stopped
