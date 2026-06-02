@@ -1,7 +1,9 @@
 import { CalendarDays, Edit3, Plus, RotateCcw, Save, Search, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { calendarioApi } from '@/api/calendario';
 import { hospedesApi, imoveisApi } from '@/api/cadastros';
 import { reservasApi } from '@/api/reservas';
+import { MoneyField } from '@/components/Form/MoneyField';
 
 const origemOptions = [
   { value: 1, label: 'Airbnb' },
@@ -32,6 +34,12 @@ const emptyReserva = {
   comissaoAdministradora: 0,
   status: 1,
   observacoes: '',
+};
+
+const initialAvailability = {
+  status: 'idle',
+  message: 'Escolha imóvel, check-in e check-out para verificar a agenda.',
+  events: [],
 };
 
 function extractItems(response) {
@@ -69,6 +77,62 @@ function calculateValorLiquido(form) {
     Number(form.taxaPlataforma || 0) -
     Number(form.comissaoAdministradora || 0)
   );
+}
+
+function calculateTotalReserva(form) {
+  return Number(form.valorHospedagem || 0) + Number(form.taxaLimpeza || 0);
+}
+
+function calculateDiarias(form) {
+  const checkIn = dateOnly(form.checkIn);
+  const checkOut = dateOnly(form.checkOut);
+  if (!checkIn || !checkOut) {
+    return 0;
+  }
+
+  const [inYear, inMonth, inDay] = checkIn.split('-').map(Number);
+  const [outYear, outMonth, outDay] = checkOut.split('-').map(Number);
+  const start = Date.UTC(inYear, inMonth - 1, inDay);
+  const end = Date.UTC(outYear, outMonth - 1, outDay);
+  const days = Math.round((end - start) / 86400000);
+
+  return Math.max(days, 0);
+}
+
+function calculateValorPorDia(value, form) {
+  const diarias = calculateDiarias(form);
+  return diarias > 0 ? Number(value || 0) / diarias : 0;
+}
+
+function getAvailabilityInputError(form) {
+  if (!form.imovelId || !form.checkIn || !form.checkOut) {
+    return 'Escolha imóvel, check-in e check-out para verificar a agenda.';
+  }
+
+  if (calculateDiarias(form) <= 0) {
+    return 'O check-out precisa ser posterior ao check-in.';
+  }
+
+  return '';
+}
+
+function eventTypeLabel(type) {
+  const labels = {
+    reserva: 'Reserva',
+    bloqueio: 'Bloqueio',
+    limpeza: 'Limpeza',
+    manutencao: 'Manutenção',
+  };
+
+  return labels[type] || 'Evento';
+}
+
+function isBlockingEvent(event) {
+  return ['reserva', 'bloqueio', 'manutencao'].includes(event.tipo);
+}
+
+function formatEventPeriod(event) {
+  return `${formatDate(event.inicio)} até ${formatDate(event.fim)}`;
 }
 
 function StatusPill({ status }) {
@@ -126,6 +190,10 @@ export function ReservasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [availability, setAvailability] = useState(initialAvailability);
+  const selectedImovelId = form.imovelId;
+  const selectedCheckIn = form.checkIn;
+  const selectedCheckOut = form.checkOut;
 
   const filteredReservas = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -161,6 +229,79 @@ export function ReservasPage() {
     const timeout = setTimeout(load, 0);
     return () => clearTimeout(timeout);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const timeout = setTimeout(async () => {
+      const periodForm = {
+        imovelId: selectedImovelId,
+        checkIn: selectedCheckIn,
+        checkOut: selectedCheckOut,
+      };
+      const inputError = getAvailabilityInputError(periodForm);
+      if (inputError) {
+        if (active) {
+          setAvailability({
+            status: 'idle',
+            message: inputError,
+            events: [],
+          });
+        }
+        return;
+      }
+
+      if (active) {
+        setAvailability({
+          status: 'loading',
+          message: 'Verificando agenda do imóvel...',
+          events: [],
+        });
+      }
+
+      try {
+        const [availabilityResponse, eventsResponse] = await Promise.all([
+          reservasApi.availability({
+            imovelId: selectedImovelId,
+            checkIn: selectedCheckIn,
+            checkOut: selectedCheckOut,
+            reservaId: editingId || undefined,
+          }),
+          calendarioApi.events({
+            imovelId: selectedImovelId,
+            inicio: selectedCheckIn,
+            fim: selectedCheckOut,
+          }),
+        ]);
+
+        if (!active) return;
+
+        const events = (eventsResponse.data || []).filter((event) => event.id !== `reserva-${editingId}`);
+        const blockingEvents = events.filter(isBlockingEvent);
+        const isAvailable = Boolean(availabilityResponse.data?.disponivel) && blockingEvents.length === 0;
+
+        setAvailability({
+          status: isAvailable ? 'available' : 'conflict',
+          message: isAvailable
+            ? 'Período livre para este imóvel.'
+            : 'Período indisponível para este imóvel.',
+          events,
+        });
+      } catch (availabilityError) {
+        if (active) {
+          setAvailability({
+            status: 'error',
+            message: getErrorMessage(availabilityError),
+            events: [],
+          });
+        }
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [editingId, selectedCheckIn, selectedCheckOut, selectedImovelId]);
 
   const startCreate = () => {
     setEditingId(null);
@@ -280,6 +421,7 @@ export function ReservasPage() {
                     <th>Período</th>
                     <th>Origem</th>
                     <th>Hóspedes</th>
+                    <th>Bruto</th>
                     <th>Líquido</th>
                     <th>Status</th>
                     <th />
@@ -297,6 +439,7 @@ export function ReservasPage() {
                       </td>
                       <td>{labelFor(origemOptions, reserva.origem)}</td>
                       <td>{reserva.numeroHospedes}</td>
+                      <td>{money(calculateTotalReserva(reserva))}</td>
                       <td>{money(reserva.valorLiquido)}</td>
                       <td>
                         <StatusPill status={reserva.status} />
@@ -355,6 +498,25 @@ export function ReservasPage() {
             </SelectField>
             <TextField label="Check-in" type="date" value={form.checkIn} onChange={(checkIn) => setForm((current) => ({ ...current, checkIn }))} required />
             <TextField label="Check-out" type="date" value={form.checkOut} onChange={(checkOut) => setForm((current) => ({ ...current, checkOut }))} required />
+            <div className={`availability-card ${availability.status}`}>
+              <div>
+                <strong>Agenda do imóvel</strong>
+                <span>{availability.message}</span>
+              </div>
+              {availability.events.length > 0 && (
+                <ul>
+                  {availability.events.map((event) => (
+                    <li key={event.id}>
+                      <strong>{eventTypeLabel(event.tipo)}</strong>
+                      <span>
+                        {event.titulo}
+                        {event.descricao ? ` · ${event.descricao}` : ''} · {formatEventPeriod(event)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <TextField
               label="Nº hóspedes"
               type="number"
@@ -363,45 +525,53 @@ export function ReservasPage() {
               onChange={(numeroHospedes) => setForm((current) => ({ ...current, numeroHospedes }))}
               required
             />
-            <TextField
-              label="Hospedagem"
-              type="number"
-              min="0"
-              step="0.01"
+            <MoneyField
+              label="Valor da hospedagem"
               value={form.valorHospedagem}
               onChange={(valorHospedagem) => setForm((current) => ({ ...current, valorHospedagem }))}
             />
-            <TextField
+            <MoneyField
               label="Taxa limpeza"
-              type="number"
-              min="0"
-              step="0.01"
               value={form.taxaLimpeza}
               onChange={(taxaLimpeza) => setForm((current) => ({ ...current, taxaLimpeza }))}
             />
-            <TextField
+            <MoneyField
               label="Taxa plataforma"
-              type="number"
-              min="0"
-              step="0.01"
               value={form.taxaPlataforma}
               onChange={(taxaPlataforma) => setForm((current) => ({ ...current, taxaPlataforma }))}
             />
-            <TextField
+            <MoneyField
               label="Comissão"
-              type="number"
-              min="0"
-              step="0.01"
               value={form.comissaoAdministradora}
               onChange={(comissaoAdministradora) => setForm((current) => ({ ...current, comissaoAdministradora }))}
             />
             <label className="form-field">
-              <span>Valor líquido</span>
+              <span>Diárias</span>
+              <input value={calculateDiarias(form)} readOnly />
+            </label>
+            <label className="form-field">
+              <span>Bruto por dia</span>
+              <input value={money(calculateValorPorDia(calculateTotalReserva(form), form))} readOnly />
+            </label>
+            <label className="form-field">
+              <span>Bruto total</span>
+              <input value={money(calculateTotalReserva(form))} readOnly />
+            </label>
+            <label className="form-field">
+              <span>Líquido por dia</span>
+              <input value={money(calculateValorPorDia(calculateValorLiquido(form), form))} readOnly />
+            </label>
+            <label className="form-field">
+              <span>Líquido total</span>
               <input value={money(calculateValorLiquido(form))} readOnly />
             </label>
             <TextAreaField label="Observações" value={form.observacoes} onChange={(observacoes) => setForm((current) => ({ ...current, observacoes }))} />
           </div>
-          <button className="primary-action full" type="submit" disabled={saving || imoveis.length === 0 || hospedes.length === 0}>
+          <button
+            className="primary-action full"
+            type="submit"
+            disabled={saving || imoveis.length === 0 || hospedes.length === 0 || availability.status === 'conflict' || availability.status === 'loading'}
+          >
             <Save size={18} />
             {saving ? 'Salvando...' : 'Salvar reserva'}
           </button>

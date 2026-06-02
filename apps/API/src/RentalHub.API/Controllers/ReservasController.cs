@@ -267,7 +267,7 @@ public sealed class ReservasController : ControllerBase
         if (request.Status != ReservaStatus.Cancelada &&
             await HasConflictAsync(request.ImovelId, checkIn, checkOut, reservaId, cancellationToken))
         {
-            return Conflict(new { message = "Já existe uma reserva conflitante para este imóvel no período informado." });
+            return Conflict(new { message = "Já existe uma reserva, bloqueio ou manutenção conflitante para este imóvel no período informado." });
         }
 
         return null;
@@ -280,12 +280,23 @@ public sealed class ReservasController : ControllerBase
         int? reservaId,
         CancellationToken cancellationToken)
     {
-        return await _dbContext.Reservas.AnyAsync(
+        var hasReservationConflict = await _dbContext.Reservas.AnyAsync(
             r => r.ImovelId == imovelId &&
                  r.Status != ReservaStatus.Cancelada &&
                  (!reservaId.HasValue || r.Id != reservaId.Value) &&
                  r.CheckOut > checkIn &&
                  r.CheckIn < checkOut,
+            cancellationToken);
+
+        if (hasReservationConflict)
+        {
+            return true;
+        }
+
+        return await _dbContext.BloqueiosCalendario.AnyAsync(
+            b => b.ImovelId == imovelId &&
+                 b.Fim > checkIn &&
+                 b.Inicio < checkOut,
             cancellationToken);
     }
 

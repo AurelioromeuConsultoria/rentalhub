@@ -22,6 +22,9 @@ const imovelStatusOptions = [
   { value: 3, label: 'Em manutenção' },
 ];
 
+const IBGE_BASE_URL = 'https://servicodados.ibge.gov.br/api/v1/localidades';
+const VIACEP_BASE_URL = 'https://viacep.com.br/ws';
+
 const emptyProprietario = {
   nome: '',
   documento: '',
@@ -47,7 +50,10 @@ const emptyImovel = {
   nome: '',
   codigoInterno: '',
   descricao: '',
-  endereco: '',
+  enderecoLogradouro: '',
+  enderecoNumero: '',
+  enderecoBairro: '',
+  enderecoComplemento: '',
   cidade: '',
   estado: '',
   cep: '',
@@ -61,6 +67,69 @@ const emptyImovel = {
 
 function normalizeText(value) {
   return value?.trim() || '';
+}
+
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function formatCep(value) {
+  const digits = onlyDigits(value).slice(0, 8);
+  if (digits.length <= 5) {
+    return digits;
+  }
+
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function composeEndereco({ enderecoLogradouro, enderecoNumero, enderecoBairro, enderecoComplemento }) {
+  const linha = [enderecoLogradouro, enderecoNumero].map(normalizeText).filter(Boolean).join(', ');
+  return [linha, enderecoBairro, enderecoComplemento].map(normalizeText).filter(Boolean).join(' - ');
+}
+
+function parseEndereco(endereco) {
+  const [linha = '', bairro = '', complemento = ''] = String(endereco || '').split(' - ');
+  const [logradouro = '', ...numeroParts] = linha.split(', ');
+
+  return {
+    enderecoLogradouro: logradouro.trim(),
+    enderecoNumero: numeroParts.join(', ').trim(),
+    enderecoBairro: bairro.trim(),
+    enderecoComplemento: complemento.trim(),
+  };
+}
+
+async function fetchEstados() {
+  const response = await fetch(`${IBGE_BASE_URL}/estados?orderBy=nome`);
+  if (!response.ok) {
+    throw new Error('Não foi possível carregar estados.');
+  }
+
+  return response.json();
+}
+
+async function fetchCidades(uf) {
+  const response = await fetch(`${IBGE_BASE_URL}/estados/${uf}/municipios?orderBy=nome`);
+  if (!response.ok) {
+    throw new Error('Não foi possível carregar cidades.');
+  }
+
+  return response.json();
+}
+
+async function fetchCep(cep) {
+  const digits = onlyDigits(cep);
+  const response = await fetch(`${VIACEP_BASE_URL}/${digits}/json/`);
+  if (!response.ok) {
+    throw new Error('Não foi possível consultar o CEP.');
+  }
+
+  const data = await response.json();
+  if (data.erro) {
+    throw new Error('CEP não encontrado.');
+  }
+
+  return data;
 }
 
 function extractItems(response) {
@@ -137,7 +206,7 @@ function EmptyState({ title, description, icon }) {
   );
 }
 
-function TextField({ label, value, onChange, required, type = 'text', placeholder }) {
+function TextField({ label, value, onChange, onBlur, required, type = 'text', placeholder }) {
   return (
     <label className="form-field">
       <span>{label}</span>
@@ -145,6 +214,7 @@ function TextField({ label, value, onChange, required, type = 'text', placeholde
         type={type}
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
         placeholder={placeholder}
         required={required}
       />
@@ -614,6 +684,11 @@ export function ImoveisPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(true);
+  const [addressMessage, setAddressMessage] = useState('');
+  const [estados, setEstados] = useState([]);
+  const [cidades, setCidades] = useState([]);
   const [error, setError] = useState('');
 
   const proprietarioOptions = useMemo(() => proprietarios.filter((proprietario) => proprietario.ativo), [proprietarios]);
@@ -641,6 +716,110 @@ export function ImoveisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  useEffect(() => {
+    let active = true;
+
+    fetchEstados()
+      .then((data) => {
+        if (active) {
+          setEstados(data.map((estado) => ({ id: estado.id, sigla: estado.sigla, nome: estado.nome })));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setEstados([]);
+          setAddressMessage('Não foi possível carregar a lista de estados. Preencha manualmente.');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setAddressLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const uf = form.estado;
+
+    if (!uf) {
+      return undefined;
+    }
+
+    Promise.resolve()
+      .then(() => {
+        if (active) {
+          setAddressLoading(true);
+        }
+
+        return fetchCidades(uf);
+      })
+      .then((data) => {
+        if (active) {
+          setCidades(data.map((cidade) => ({ id: cidade.id, nome: cidade.nome })));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCidades([]);
+          setAddressMessage('Não foi possível carregar cidades para este estado. Preencha manualmente.');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setAddressLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.estado]);
+
+  const updateEstado = (estado) => {
+    setAddressMessage('');
+    setForm((current) => ({
+      ...current,
+      estado,
+      cidade: estado === current.estado ? current.cidade : '',
+    }));
+    if (!estado || estado !== form.estado) {
+      setCidades([]);
+    }
+  };
+
+  const lookupCep = async () => {
+    const cepDigits = onlyDigits(form.cep);
+    if (cepDigits.length !== 8) {
+      return;
+    }
+
+    setCepLoading(true);
+    setAddressMessage('');
+
+    try {
+      const data = await fetchCep(cepDigits);
+
+      setForm((current) => ({
+        ...current,
+        cep: formatCep(data.cep || cepDigits),
+        estado: data.uf || current.estado,
+        cidade: data.localidade || current.cidade,
+        enderecoLogradouro: data.logradouro || current.enderecoLogradouro,
+        enderecoBairro: data.bairro || current.enderecoBairro,
+        enderecoComplemento: data.complemento || current.enderecoComplemento,
+      }));
+    } catch (cepError) {
+      setAddressMessage(cepError.message || 'Não foi possível consultar o CEP.');
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   const startCreate = () => {
     setEditingId(null);
     setForm({
@@ -650,13 +829,15 @@ export function ImoveisPage() {
   };
 
   const startEdit = (item) => {
+    const enderecoFields = parseEndereco(item.endereco);
+
     setEditingId(item.id);
     setForm({
       proprietarioId: String(item.proprietarioId),
       nome: item.nome || '',
       codigoInterno: item.codigoInterno || '',
       descricao: item.descricao || '',
-      endereco: item.endereco || '',
+      ...enderecoFields,
       cidade: item.cidade || '',
       estado: item.estado || '',
       cep: item.cep || '',
@@ -710,7 +891,7 @@ export function ImoveisPage() {
       nome: normalizeText(form.nome),
       codigoInterno: normalizeText(form.codigoInterno),
       descricao: normalizeText(form.descricao),
-      endereco: normalizeText(form.endereco),
+      endereco: composeEndereco(form),
       cidade: normalizeText(form.cidade),
       estado: normalizeText(form.estado),
       cep: normalizeText(form.cep),
@@ -863,10 +1044,66 @@ export function ImoveisPage() {
               onChange={(codigoInterno) => setForm((current) => ({ ...current, codigoInterno }))}
               required
             />
-            <TextField label="Cidade" value={form.cidade} onChange={(cidade) => setForm((current) => ({ ...current, cidade }))} />
-            <TextField label="Estado" value={form.estado} onChange={(estado) => setForm((current) => ({ ...current, estado }))} placeholder="SP" />
-            <TextField label="Endereço" value={form.endereco} onChange={(endereco) => setForm((current) => ({ ...current, endereco }))} />
-            <TextField label="CEP" value={form.cep} onChange={(cep) => setForm((current) => ({ ...current, cep }))} />
+            <TextField
+              label={cepLoading ? 'CEP consultando...' : 'CEP'}
+              value={form.cep}
+              onChange={(cep) => {
+                setAddressMessage('');
+                setForm((current) => ({ ...current, cep: formatCep(cep) }));
+              }}
+              onBlur={lookupCep}
+              placeholder="00000-000"
+            />
+            <TextField
+              label="Logradouro"
+              value={form.enderecoLogradouro}
+              onChange={(enderecoLogradouro) => setForm((current) => ({ ...current, enderecoLogradouro }))}
+            />
+            <TextField
+              label="Número"
+              value={form.enderecoNumero}
+              onChange={(enderecoNumero) => setForm((current) => ({ ...current, enderecoNumero }))}
+            />
+            <TextField
+              label="Bairro"
+              value={form.enderecoBairro}
+              onChange={(enderecoBairro) => setForm((current) => ({ ...current, enderecoBairro }))}
+            />
+            <TextField
+              label="Complemento"
+              value={form.enderecoComplemento}
+              onChange={(enderecoComplemento) => setForm((current) => ({ ...current, enderecoComplemento }))}
+            />
+            <label className="form-field">
+              <span>Estado</span>
+              <select value={form.estado} onChange={(event) => updateEstado(event.target.value)} disabled={addressLoading && estados.length === 0}>
+                <option value="">{addressLoading && estados.length === 0 ? 'Carregando...' : 'Selecione'}</option>
+                {estados.map((estado) => (
+                  <option key={estado.id} value={estado.sigla}>
+                    {estado.sigla} - {estado.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Cidade</span>
+              <select
+                value={form.cidade}
+                onChange={(event) => setForm((current) => ({ ...current, cidade: event.target.value }))}
+                disabled={!form.estado || addressLoading}
+              >
+                <option value="">{form.estado ? 'Selecione' : 'Escolha o estado'}</option>
+                {form.cidade && !cidades.some((cidade) => cidade.nome === form.cidade) && (
+                  <option value={form.cidade}>{form.cidade}</option>
+                )}
+                {cidades.map((cidade) => (
+                  <option key={cidade.id} value={cidade.nome}>
+                    {cidade.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {addressMessage && <div className="form-hint span-2">{addressMessage}</div>}
             <TextField
               label="Hóspedes"
               type="number"

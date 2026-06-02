@@ -17,6 +17,23 @@ public sealed class TenantsController : ControllerBase
 {
     private readonly RentalHubDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
+    private static readonly (string Nome, MovimentacaoFinanceiraTipo Tipo)[] DefaultFinancialCategories =
+    [
+        ("Reservas Airbnb", MovimentacaoFinanceiraTipo.Receita),
+        ("Reservas Booking", MovimentacaoFinanceiraTipo.Receita),
+        ("Reservas Diretas", MovimentacaoFinanceiraTipo.Receita),
+        ("Receitas extras", MovimentacaoFinanceiraTipo.Receita),
+        ("Limpeza", MovimentacaoFinanceiraTipo.Despesa),
+        ("Energia", MovimentacaoFinanceiraTipo.Despesa),
+        ("Água", MovimentacaoFinanceiraTipo.Despesa),
+        ("Internet", MovimentacaoFinanceiraTipo.Despesa),
+        ("Condomínio", MovimentacaoFinanceiraTipo.Despesa),
+        ("IPTU", MovimentacaoFinanceiraTipo.Despesa),
+        ("Manutenção", MovimentacaoFinanceiraTipo.Despesa),
+        ("Impostos", MovimentacaoFinanceiraTipo.Despesa),
+        ("Comissão de terceiros", MovimentacaoFinanceiraTipo.Despesa),
+        ("Outros custos", MovimentacaoFinanceiraTipo.Despesa)
+    ];
 
     public TenantsController(RentalHubDbContext dbContext, IPasswordHasher passwordHasher)
     {
@@ -131,53 +148,63 @@ public sealed class TenantsController : ControllerBase
             }
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        var tenant = new Tenant
-        {
-            Nome = request.Nome.Trim(),
-            NomeExibicao = request.NomeExibicao.Trim(),
-            Slug = slug,
-            IsRootTenant = false,
-            Ativo = request.Ativo,
-            DataCriacao = DateTime.UtcNow
-        };
-
-        _dbContext.Tenants.Add(tenant);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        ApplyDomains(tenant, domains);
-        var perfil = CreateAdminProfile(tenant.Id);
-        _dbContext.PerfisAcesso.Add(perfil);
-
-        if (!string.IsNullOrWhiteSpace(request.AdminEmail))
-        {
-            _dbContext.Usuarios.Add(new Usuario
-            {
-                TenantId = tenant.Id,
-                PerfilAcesso = perfil,
-                Nome = string.IsNullOrWhiteSpace(request.AdminNome) ? request.NomeExibicao.Trim() : request.AdminNome.Trim(),
-                Email = request.AdminEmail.Trim().ToLowerInvariant(),
-                SenhaHash = _passwordHasher.HashPassword(request.AdminSenha!.Trim()),
-                TipoUsuario = TipoUsuario.Administrador,
-                IsPlatformAdmin = false,
-                Ativo = true,
-                DataCriacao = DateTime.UtcNow
-            });
-        }
+        TenantResponse? createdTenant = null;
+        var createdTenantId = 0;
 
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+                var tenant = new Tenant
+                {
+                    Nome = request.Nome.Trim(),
+                    NomeExibicao = request.NomeExibicao.Trim(),
+                    Slug = slug,
+                    IsRootTenant = false,
+                    Ativo = request.Ativo,
+                    DataCriacao = DateTime.UtcNow
+                };
+
+                _dbContext.Tenants.Add(tenant);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                ApplyDomains(tenant, domains);
+                var perfil = CreateAdminProfile(tenant.Id);
+                _dbContext.PerfisAcesso.Add(perfil);
+                _dbContext.CategoriasFinanceiras.AddRange(CreateDefaultFinancialCategories(tenant.Id));
+
+                if (!string.IsNullOrWhiteSpace(request.AdminEmail))
+                {
+                    _dbContext.Usuarios.Add(new Usuario
+                    {
+                        TenantId = tenant.Id,
+                        PerfilAcesso = perfil,
+                        Nome = string.IsNullOrWhiteSpace(request.AdminNome) ? request.NomeExibicao.Trim() : request.AdminNome.Trim(),
+                        Email = request.AdminEmail.Trim().ToLowerInvariant(),
+                        SenhaHash = _passwordHasher.HashPassword(request.AdminSenha!.Trim()),
+                        TipoUsuario = TipoUsuario.Administrador,
+                        IsPlatformAdmin = false,
+                        Ativo = true,
+                        DataCriacao = DateTime.UtcNow
+                    });
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                createdTenantId = tenant.Id;
+                createdTenant = ToResponse(tenant, string.IsNullOrWhiteSpace(request.AdminEmail) ? 0 : 1, 0, 0);
+            });
         }
         catch (DbUpdateException)
         {
-            await transaction.RollbackAsync(cancellationToken);
             return Conflict(new { message = "Não foi possível criar a empresa. Verifique slug, domínios e e-mail do admin." });
         }
 
-        return CreatedAtAction(nameof(GetById), new { id = tenant.Id }, ToResponse(tenant, string.IsNullOrWhiteSpace(request.AdminEmail) ? 0 : 1, 0, 0));
+        return CreatedAtAction(nameof(GetById), new { id = createdTenantId }, createdTenant);
     }
 
     [HttpPut("{id:int}")]
@@ -327,6 +354,18 @@ public sealed class TenantsController : ControllerBase
                 PodeExcluir = true
             }).ToList()
         };
+    }
+
+    private static IEnumerable<CategoriaFinanceira> CreateDefaultFinancialCategories(int tenantId)
+    {
+        return DefaultFinancialCategories.Select(category => new CategoriaFinanceira
+        {
+            TenantId = tenantId,
+            Nome = category.Nome,
+            Tipo = category.Tipo,
+            Ativo = true,
+            DataCriacao = DateTime.UtcNow
+        });
     }
 
     private void ApplyDomains(Tenant tenant, IReadOnlyCollection<string> domains)

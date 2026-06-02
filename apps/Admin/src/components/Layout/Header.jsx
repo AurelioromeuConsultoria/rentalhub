@@ -1,10 +1,11 @@
-import { Bell, ChevronDown, Globe, Moon, RefreshCw, Search, Settings, Sun } from 'lucide-react';
+import { Bell, ChevronDown, Moon, RefreshCw, Search, Settings, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { tenantsApi } from '@/api/administracao';
 import { buscaGlobalApi, notificacoesApi } from '@/api/operacao';
 import { useAuth } from '@/context/AuthContext';
 import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
+import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
 import { useTheme } from '@/context/ThemeContext';
 
 const routeLabels = {
@@ -94,6 +95,10 @@ export function Header() {
     [notifications],
   );
   const visibleNotifications = useMemo(() => notifications.slice(0, 8), [notifications]);
+  const tenantOptions = useMemo(
+    () => tenants.filter((tenant) => String(tenant.id) !== String(currentTenant?.id)),
+    [currentTenant?.id, tenants],
+  );
   const initials = usuario?.nome
     ?.split(' ')
     .filter(Boolean)
@@ -133,22 +138,29 @@ export function Header() {
     };
   }, [loadNotifications, location.pathname]);
 
-  useEffect(() => {
+  const loadTenants = useCallback(async () => {
     if (!usuario?.isPlatformAdmin) {
-      return undefined;
+      setTenants([]);
+      return;
     }
 
-    const timeout = setTimeout(async () => {
-      try {
-        const response = await tenantsApi.list();
-        setTenants(response.data || []);
-      } catch {
-        setTenants([]);
-      }
-    }, 0);
-
-    return () => clearTimeout(timeout);
+    try {
+      const response = await tenantsApi.list();
+      setTenants(response.data || []);
+    } catch {
+      setTenants([]);
+    }
   }, [usuario?.isPlatformAdmin]);
+
+  useEffect(() => {
+    const timeout = setTimeout(loadTenants, 0);
+    window.addEventListener(TENANTS_UPDATED_EVENT, loadTenants);
+
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener(TENANTS_UPDATED_EVENT, loadTenants);
+    };
+  }, [loadTenants]);
 
   useEffect(() => {
     const timeout = setTimeout(async () => {
@@ -237,9 +249,6 @@ export function Header() {
             </div>
           )}
         </div>
-        <button className="icon-button" type="button" aria-label="Idioma">
-          <Globe size={18} />
-        </button>
         <button
           className="icon-button"
           type="button"
@@ -301,7 +310,14 @@ export function Header() {
           <button
             className="tenant-switcher"
             type="button"
-            onClick={() => usuario?.isPlatformAdmin && setShowTenants((current) => !current)}
+            onClick={() => {
+              if (!usuario?.isPlatformAdmin) {
+                return;
+              }
+
+              setShowTenants((current) => !current);
+              loadTenants();
+            }}
           >
             <span className="tenant-dot" />
             <span>{activeTenant?.nomeExibicao || activeTenant?.nome || 'RentalHub'}</span>
@@ -316,7 +332,7 @@ export function Header() {
                 <strong>{currentTenant?.nomeExibicao || currentTenant?.nome || 'Meu tenant'}</strong>
                 <span>Tenant do login</span>
               </button>
-              {tenants.map((tenant) => (
+              {tenantOptions.map((tenant) => (
                 <button type="button" key={tenant.id} onClick={() => selectTenant(tenant)}>
                   <strong>{tenant.nomeExibicao}</strong>
                   <span>{tenant.slug}{tenant.ativo ? '' : ' · inativa'}</span>
@@ -325,7 +341,13 @@ export function Header() {
             </div>
           )}
         </div>
-        <button className="user-menu" type="button">
+        <button
+          className="user-menu"
+          type="button"
+          aria-label="Abrir configurações"
+          title="Abrir configurações"
+          onClick={() => navigate('/configuracoes')}
+        >
           <div className="user-chip" aria-label="Usuário atual">
             {initials}
           </div>

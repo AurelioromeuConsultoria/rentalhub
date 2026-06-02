@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
 import { relatoriosApi } from '@/api/relatorios';
 import { repassesApi } from '@/api/repasses';
+import { MoneyField } from '@/components/Form/MoneyField';
 
 const statusOptions = [
   { value: 1, label: 'Pendente' },
@@ -477,11 +478,8 @@ export function RepassesPage() {
               )}
             </div>
             <div className="form-grid">
-              <TextField
+              <MoneyField
                 label="Valor"
-                type="number"
-                min="0"
-                step="0.01"
                 value={paymentForm.valor}
                 onChange={(valor) => setPaymentForm((current) => ({ ...current, valor }))}
                 required

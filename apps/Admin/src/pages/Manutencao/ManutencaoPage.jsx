@@ -2,6 +2,7 @@ import { CheckCircle2, Edit3, Plus, RotateCcw, Save, Trash2, Wrench } from 'luci
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi } from '@/api/cadastros';
 import { manutencoesApi } from '@/api/operacional';
+import { MoneyField } from '@/components/Form/MoneyField';
 
 const statusOptions = [
   { value: 1, label: 'Aberta' },
@@ -393,8 +394,8 @@ export function ManutencaoPage() {
             <TextField label="Data abertura" type="date" value={form.dataAbertura} onChange={(dataAbertura) => setForm((current) => ({ ...current, dataAbertura }))} required />
             <TextField label="Data prevista" type="date" value={form.dataPrevista} onChange={(dataPrevista) => setForm((current) => ({ ...current, dataPrevista }))} />
             <TextField label="Data resolução" type="date" value={form.dataResolucao} onChange={(dataResolucao) => setForm((current) => ({ ...current, dataResolucao }))} />
-            <TextField label="Valor estimado" type="number" min="0" step="0.01" value={form.valorEstimado} onChange={(valorEstimado) => setForm((current) => ({ ...current, valorEstimado }))} />
-            <TextField label="Valor realizado" type="number" min="0" step="0.01" value={form.valorRealizado} onChange={(valorRealizado) => setForm((current) => ({ ...current, valorRealizado }))} />
+            <MoneyField label="Valor estimado" value={form.valorEstimado} onChange={(valorEstimado) => setForm((current) => ({ ...current, valorEstimado }))} />
+            <MoneyField label="Valor realizado" value={form.valorRealizado} onChange={(valorRealizado) => setForm((current) => ({ ...current, valorRealizado }))} />
             <TextAreaField label="Descrição" value={form.descricao} onChange={(descricao) => setForm((current) => ({ ...current, descricao }))} />
             <TextAreaField label="Observações" value={form.observacoes} onChange={(observacoes) => setForm((current) => ({ ...current, observacoes }))} />
           </div>

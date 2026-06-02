@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { configuracoesApi, perfisAcessoApi, tenantsApi, usuariosApi } from '@/api/administracao';
 import { proprietariosApi } from '@/api/cadastros';
 import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
+import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
 
 const tipoUsuarioOptions = [
   { value: 1, label: 'Administrador' },
@@ -507,6 +508,7 @@ export function PerfisPage() {
       }
       startCreate();
       await load();
+      window.dispatchEvent(new Event(TENANTS_UPDATED_EVENT));
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -724,6 +726,7 @@ export function EmpresasPage() {
         localStorage.removeItem(SELECTED_TENANT_SLUG_KEY);
       }
       await load();
+      window.dispatchEvent(new Event(TENANTS_UPDATED_EVENT));
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
     }

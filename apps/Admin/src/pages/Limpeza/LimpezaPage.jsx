@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi } from '@/api/cadastros';
 import { limpezasApi } from '@/api/operacional';
 import { reservasApi } from '@/api/reservas';
+import { MoneyField } from '@/components/Form/MoneyField';
 
 const statusOptions = [
   { value: 1, label: 'Pendente' },
@@ -114,6 +115,7 @@ export function LimpezaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const filterParams = useMemo(
     () => ({
@@ -135,12 +137,13 @@ export function LimpezaPage() {
     [limpezas],
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (paramsOverride) => {
     setLoading(true);
     setError('');
     try {
+      const params = paramsOverride || filterParams;
       const [limpezasResponse, imoveisResponse, reservasResponse] = await Promise.all([
-        limpezasApi.list(filterParams),
+        limpezasApi.list(params),
         imoveisApi.list({ status: 1, pageSize: 100 }),
         reservasApi.list({ pageSize: 100 }),
       ]);
@@ -181,6 +184,7 @@ export function LimpezaPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       imovelId: Number(form.imovelId),
@@ -193,13 +197,31 @@ export function LimpezaPage() {
     };
 
     try {
+      let response;
       if (editingId) {
-        await limpezasApi.update(editingId, payload);
+        response = await limpezasApi.update(editingId, payload);
       } else {
-        await limpezasApi.create(payload);
+        response = await limpezasApi.create(payload);
       }
+
+      const saved = response.data || {};
+      const savedDate = dateOnly(saved.dataPrevista || form.dataPrevista);
+      const visibleFilters = {
+        inicio: savedDate,
+        fim: savedDate,
+        imovelId: String(saved.imovelId || form.imovelId),
+        status: '',
+      };
+
+      setFilters(visibleFilters);
+      setSuccess(`Limpeza ${editingId ? 'atualizada' : 'salva'} para ${formatDate(savedDate)}.`);
       startCreate();
-      await load();
+      await load({
+        inicio: visibleFilters.inicio,
+        fim: visibleFilters.fim,
+        imovelId: visibleFilters.imovelId,
+        status: undefined,
+      });
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -298,6 +320,7 @@ export function LimpezaPage() {
             <span>{limpezas.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando limpezas...</div>
           ) : limpezas.length === 0 ? (
@@ -373,7 +396,7 @@ export function LimpezaPage() {
               ))}
             </SelectField>
             <TextField label="Data prevista" type="date" value={form.dataPrevista} onChange={(dataPrevista) => setForm((current) => ({ ...current, dataPrevista }))} required />
-            <TextField label="Valor" type="number" min="0" step="0.01" value={form.valor} onChange={(valor) => setForm((current) => ({ ...current, valor }))} />
+            <MoneyField label="Valor" value={form.valor} onChange={(valor) => setForm((current) => ({ ...current, valor }))} />
             <TextField label="Responsável" value={form.responsavel} onChange={(responsavel) => setForm((current) => ({ ...current, responsavel }))} required />
             <SelectField label="Status" value={form.status} onChange={(status) => setForm((current) => ({ ...current, status: Number(status) }))} required>
               {statusOptions.map((status) => (

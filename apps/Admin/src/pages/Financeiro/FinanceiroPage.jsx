@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
 import { categoriasFinanceirasApi, financeiroApi } from '@/api/financeiro';
 import { reservasApi } from '@/api/reservas';
+import { MoneyField } from '@/components/Form/MoneyField';
 
 const tipoOptions = [
   { value: 1, label: 'Receita' },
@@ -140,6 +141,7 @@ export function FinanceiroPage() {
   const [saving, setSaving] = useState(false);
   const [categorySaving, setCategorySaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const categoriasFiltradas = useMemo(
     () => categorias.filter((categoria) => categoria.ativo && Number(categoria.tipo) === Number(form.tipo)),
@@ -158,10 +160,11 @@ export function FinanceiroPage() {
     [filters],
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (paramsOverride) => {
     setLoading(true);
     setError('');
     try {
+      const params = paramsOverride || filterParams;
       const [
         movimentacoesResponse,
         fluxoResponse,
@@ -170,8 +173,8 @@ export function FinanceiroPage() {
         proprietariosResponse,
         reservasResponse,
       ] = await Promise.all([
-        financeiroApi.listMovimentacoes(filterParams),
-        financeiroApi.fluxoCaixa(filterParams),
+        financeiroApi.listMovimentacoes(params),
+        financeiroApi.fluxoCaixa(params),
         categoriasFinanceirasApi.list({ ativo: true }),
         imoveisApi.list({ pageSize: 100 }),
         proprietariosApi.list({ ativo: true, pageSize: 100 }),
@@ -213,6 +216,8 @@ export function FinanceiroPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm({
       ...emptyMovimentacao,
       categoriaFinanceiraId: categoriasFiltradas[0]?.id ? String(categoriasFiltradas[0].id) : '',
@@ -221,6 +226,8 @@ export function FinanceiroPage() {
 
   const startEdit = (movimentacao) => {
     setEditingId(movimentacao.id);
+    setError('');
+    setSuccess('');
     setForm({
       tipo: movimentacao.tipo,
       categoriaFinanceiraId: String(movimentacao.categoriaFinanceiraId),
@@ -238,6 +245,25 @@ export function FinanceiroPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
+
+    if (!form.categoriaFinanceiraId) {
+      setError('Selecione uma categoria financeira.');
+      setSaving(false);
+      return;
+    }
+
+    if (!form.descricao.trim()) {
+      setError('Informe a descrição da movimentação.');
+      setSaving(false);
+      return;
+    }
+
+    if (Number(form.valor || 0) <= 0) {
+      setError('Informe um valor maior que zero.');
+      setSaving(false);
+      return;
+    }
 
     const payload = {
       tipo: Number(form.tipo),
@@ -252,13 +278,35 @@ export function FinanceiroPage() {
     };
 
     try {
+      let response;
       if (editingId) {
-        await financeiroApi.updateMovimentacao(editingId, payload);
+        response = await financeiroApi.updateMovimentacao(editingId, payload);
       } else {
-        await financeiroApi.createMovimentacao(payload);
+        response = await financeiroApi.createMovimentacao(payload);
       }
+
+      const saved = response.data || {};
+      const savedDate = dateOnly(saved.data || form.data);
+      const visibleFilters = {
+        inicio: savedDate,
+        fim: savedDate,
+        tipo: String(saved.tipo || form.tipo),
+        categoriaId: String(saved.categoriaFinanceiraId || form.categoriaFinanceiraId),
+        imovelId: saved.imovelId ? String(saved.imovelId) : '',
+        proprietarioId: saved.proprietarioId ? String(saved.proprietarioId) : '',
+      };
+
       startCreate();
-      await load();
+      setFilters(visibleFilters);
+      setSuccess(`Movimentação ${editingId ? 'atualizada' : 'salva'} para ${formatDate(savedDate)}.`);
+      await load({
+        inicio: visibleFilters.inicio,
+        fim: visibleFilters.fim,
+        tipo: visibleFilters.tipo,
+        categoriaId: visibleFilters.categoriaId,
+        imovelId: visibleFilters.imovelId || undefined,
+        proprietarioId: visibleFilters.proprietarioId || undefined,
+      });
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -270,6 +318,7 @@ export function FinanceiroPage() {
     event.preventDefault();
     setCategorySaving(true);
     setError('');
+    setSuccess('');
     try {
       await categoriasFinanceirasApi.create({
         nome: categoriaForm.nome.trim(),
@@ -287,6 +336,7 @@ export function FinanceiroPage() {
 
   const deleteMovimentacao = async (movimentacao) => {
     setError('');
+    setSuccess('');
     try {
       await financeiroApi.deleteMovimentacao(movimentacao.id);
       await load();
@@ -304,7 +354,7 @@ export function FinanceiroPage() {
           <p>Receitas, despesas, categorias e fluxo de caixa por período, imóvel e proprietário.</p>
         </div>
         <div className="resource-actions">
-          <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
+          <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={() => load()}>
             <RotateCcw size={18} />
           </button>
           <button className="primary-action" type="button" onClick={startCreate}>
@@ -400,6 +450,7 @@ export function FinanceiroPage() {
             <span>{movimentacoes.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando movimentações...</div>
           ) : movimentacoes.length === 0 ? (
@@ -494,11 +545,8 @@ export function FinanceiroPage() {
                 ))}
               </SelectField>
               <TextField label="Data" type="date" value={form.data} onChange={(data) => setForm((current) => ({ ...current, data }))} required />
-              <TextField
+              <MoneyField
                 label="Valor"
-                type="number"
-                min="0"
-                step="0.01"
                 value={form.valor}
                 onChange={(valor) => setForm((current) => ({ ...current, valor }))}
                 required
