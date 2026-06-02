@@ -10,6 +10,7 @@ Cadastre estas variáveis no serviço:
 
 ```txt
 RENTALHUB_PUBLIC_URL=https://app.seudominio.com.br
+RENTALHUB_ADMIN_PORT=8081
 RENTALHUB_CONNECTION_STRING=Host=<host>;Port=<porta>;Database=rentalhub;Username=rentalhub;Password=<senha>;Timeout=3;Command Timeout=10
 RENTALHUB_JWT_KEY=<chave-longa-e-secreta>
 ```
@@ -47,7 +48,7 @@ services:
     depends_on:
       - api
     ports:
-      - "8080:80"
+      - "${RENTALHUB_ADMIN_PORT:-8081}:80"
     restart: unless-stopped
 
 volumes:
