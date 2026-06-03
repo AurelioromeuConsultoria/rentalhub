@@ -3,6 +3,7 @@ import {
   BedDouble,
   Building2,
   CalendarDays,
+  Download,
   Home,
   Image as ImageIcon,
   ReceiptText,
@@ -54,6 +55,18 @@ function getErrorMessage(error) {
   return error.response?.data?.message || 'Não foi possível carregar o portal do proprietário.';
 }
 
+function saveBlob(response, fallbackName) {
+  const contentDisposition = response.headers?.['content-disposition'] || '';
+  const match = contentDisposition.match(/filename="?([^"]+)"?/i);
+  const fileName = match?.[1] || fallbackName;
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function PortalTable({ columns, items, emptyText }) {
   if (!items || items.length === 0) {
     return (
@@ -97,6 +110,7 @@ export function PortalProprietarioPage() {
   });
   const [data, setData] = useState(emptyPortal);
   const [loading, setLoading] = useState(true);
+  const [downloadingRepasseId, setDownloadingRepasseId] = useState(null);
   const [error, setError] = useState('');
 
   const params = useMemo(
@@ -125,6 +139,22 @@ export function PortalProprietarioPage() {
     const timeout = setTimeout(load, 0);
     return () => clearTimeout(timeout);
   }, [load]);
+
+  const downloadRepasse = async (repasseId) => {
+    setDownloadingRepasseId(repasseId);
+    setError('');
+    try {
+      const response = await portalProprietarioApi.demonstrativoRepassePdf(repasseId);
+      saveBlob(response, `demonstrativo-repasse-${repasseId}.pdf`);
+    } catch (downloadError) {
+      setError(getErrorMessage(downloadError));
+    } finally {
+      setDownloadingRepasseId(null);
+    }
+  };
+
+  const saldoOperacional = Number(data.receitas || 0) - Number(data.custos || 0);
+  const repassesPagos = Number(data.repassesGerados || 0) - Number(data.repassesPendentes || 0);
 
   return (
     <div className="resource-page">
@@ -192,6 +222,20 @@ export function PortalProprietarioPage() {
           </div>
           <span>Repasses pendentes</span>
           <strong>{money(data.repassesPendentes)}</strong>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon blue">
+            <TrendingUp size={19} />
+          </div>
+          <span>Saldo operacional</span>
+          <strong>{money(saldoOperacional)}</strong>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon green">
+            <WalletCards size={19} />
+          </div>
+          <span>Repasses pagos</span>
+          <strong>{money(repassesPagos)}</strong>
         </article>
       </section>
 
@@ -306,7 +350,7 @@ export function PortalProprietarioPage() {
               <div className="timeline-item" key={event.id}>
                 <span>{formatDate(event.inicio).slice(0, 2)}</span>
                 <p>
-                  {event.titulo} · {event.tipo} · {event.status}
+                  {event.titulo} · {event.tipo} · {event.status} · {formatDate(event.inicio)}{dateOnly(event.fim) !== dateOnly(event.inicio) ? ` até ${formatDate(event.fim)}` : ''}
                 </p>
               </div>
             ))}
@@ -384,6 +428,21 @@ export function PortalProprietarioPage() {
               { key: 'valorPago', label: 'Pago', render: (item) => money(item.valorPago) },
               { key: 'saldoPendente', label: 'Pendente', render: (item) => money(item.saldoPendente) },
               { key: 'status', label: 'Status' },
+              {
+                key: 'acoes',
+                label: '',
+                render: (item) => (
+                  <button
+                    className="icon-button bordered"
+                    type="button"
+                    aria-label="Baixar demonstrativo"
+                    onClick={() => downloadRepasse(item.id)}
+                    disabled={downloadingRepasseId === item.id}
+                  >
+                    <Download size={16} />
+                  </button>
+                ),
+              },
             ]}
             emptyText="Não há repasses gerados no período."
             items={data.repasses}

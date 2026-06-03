@@ -8,22 +8,27 @@ public sealed class DatabaseInitializerHostedService : IHostedService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DatabaseInitializerHostedService> _logger;
     private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _hostEnvironment;
 
     public DatabaseInitializerHostedService(
         IServiceProvider serviceProvider,
         ILogger<DatabaseInitializerHostedService> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment hostEnvironment)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _configuration = configuration;
+        _hostEnvironment = hostEnvironment;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var ensureCreated = _configuration.GetValue("Database:EnsureCreatedOnStartup", true);
+        var ensureCreated = _configuration.GetValue<bool?>("Database:EnsureCreatedOnStartup")
+            ?? _hostEnvironment.IsDevelopment();
         if (!ensureCreated)
         {
+            _logger.LogInformation("RentalHub database auto initialization skipped for environment {EnvironmentName}.", _hostEnvironment.EnvironmentName);
             return;
         }
 

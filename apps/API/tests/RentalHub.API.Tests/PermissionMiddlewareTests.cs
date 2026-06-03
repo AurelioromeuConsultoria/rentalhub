@@ -12,7 +12,7 @@ public sealed class PermissionMiddlewareTests
     [InlineData("/api/reservas/10", "DELETE", Resources.Reservas, PermissionAccess.Delete)]
     [InlineData("/api/categoriasfinanceiras", "PUT", Resources.Financeiro, PermissionAccess.Edit)]
     [InlineData("/api/perfis-acesso", "GET", Resources.PerfisAcesso, PermissionAccess.View)]
-    [InlineData("/api/configuracoes/tenant", "PUT", Resources.Tenants, PermissionAccess.Edit)]
+    [InlineData("/api/configuracoes/tenant", "PUT", Resources.Configuracoes, PermissionAccess.Edit)]
     [InlineData("/api/auditoria", "GET", Resources.Auditoria, PermissionAccess.View)]
     public void TryCreateCheck_ShouldResolveKnownApiResources(
         string path,
@@ -54,5 +54,13 @@ public sealed class PermissionMiddlewareTests
         var allowed = PermissionMiddleware.HasPermission(user, new PermissionCheck(Resources.Financeiro, access));
 
         Assert.Equal(expected, allowed);
+    }
+
+    [Fact]
+    public void ResourceCatalog_ShouldExposeDistinctAdministrativeResources()
+    {
+        Assert.Contains(Resources.Tenants, Resources.All);
+        Assert.Contains(Resources.Configuracoes, Resources.All);
+        Assert.Equal(Resources.All.Length, Resources.All.Distinct(StringComparer.Ordinal).Count());
     }
 }

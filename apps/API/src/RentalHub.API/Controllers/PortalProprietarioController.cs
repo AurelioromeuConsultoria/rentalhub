@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using RentalHub.API.Services;
 using RentalHub.Domain.Enums;
 using RentalHub.Infrastructure.Data;
 
@@ -217,6 +218,31 @@ public sealed class PortalProprietarioController : ControllerBase
             resumoPorImovel));
     }
 
+    [HttpGet("repasses/{id:int}/demonstrativo.pdf")]
+    public async Task<IActionResult> DemonstrativoRepassePdf(int id, CancellationToken cancellationToken)
+    {
+        var proprietarioId = GetProprietarioId();
+        if (!proprietarioId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var repasse = await _dbContext.RepassesProprietarios
+            .AsNoTracking()
+            .Include(r => r.Proprietario)
+            .Include(r => r.Imovel)
+            .Include(r => r.Itens)
+            .FirstOrDefaultAsync(r => r.Id == id && r.ProprietarioId == proprietarioId.Value, cancellationToken);
+
+        if (repasse is null)
+        {
+            return NotFound();
+        }
+
+        var pdf = BuildDemonstrativoRepassePdf(repasse);
+        return File(pdf, "application/pdf", $"demonstrativo-repasse-{id}.pdf");
+    }
+
     private int? GetProprietarioId()
     {
         return int.TryParse(User.FindFirstValue("ProprietarioId"), out var proprietarioId)
@@ -228,6 +254,44 @@ public sealed class PortalProprietarioController : ControllerBase
     {
         return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
     }
+
+    private static byte[] BuildDemonstrativoRepassePdf(Domain.Entities.RepasseProprietario repasse)
+    {
+        var lines = new List<string>
+        {
+            "RentalHub - Demonstrativo de Repasse",
+            $"Repasse #{repasse.Id}",
+            $"Proprietario: {repasse.Proprietario?.Nome ?? string.Empty}",
+            $"Imovel: {repasse.Imovel?.Nome ?? "Todos os imoveis"}",
+            $"Periodo: {FormatDate(repasse.PeriodoInicio)} a {FormatDate(repasse.PeriodoFim)}",
+            $"Status: {repasse.Status}",
+            string.Empty,
+            $"Receitas: {FormatCurrency(repasse.ReceitaReservas)}",
+            $"Taxas da plataforma: {FormatCurrency(repasse.TaxasPlataforma)}",
+            $"Custos vinculados: {FormatCurrency(repasse.CustosVinculados)}",
+            $"Comissao da administradora: {FormatCurrency(repasse.ComissaoAdministradora)}",
+            $"Valor a repassar: {FormatCurrency(repasse.ValorRepassar)}",
+            $"Valor pago: {FormatCurrency(repasse.ValorPago)}",
+            $"Saldo pendente: {FormatCurrency(repasse.ValorRepassar - repasse.ValorPago)}",
+            string.Empty,
+            "Itens",
+            "Descricao | Receita | Taxas | Custos | Comissao | Liquido"
+        };
+
+        lines.AddRange(repasse.Itens
+            .OrderBy(i => i.Id)
+            .Select(item =>
+                $"{item.Descricao} | {FormatCurrency(item.Receita)} | {FormatCurrency(item.Taxas)} | {FormatCurrency(item.Custos)} | {FormatCurrency(item.Comissao)} | {FormatCurrency(item.ValorLiquido)}"));
+
+        lines.Add(string.Empty);
+        lines.Add($"Emitido em {FormatDate(DateTime.UtcNow)}");
+
+        return SimplePdfBuilder.Create(lines);
+    }
+
+    private static string FormatDate(DateTime value) => value.ToString("dd/MM/yyyy");
+
+    private static string FormatCurrency(decimal value) => $"R$ {value:0.00}";
 }
 
 public sealed record PortalProprietarioResponse(

@@ -1,5 +1,6 @@
 import { Download, FileText, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { categoriasFinanceirasApi } from '@/api/financeiro';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
 import { relatoriosApi } from '@/api/relatorios';
 
@@ -13,8 +14,17 @@ const tabs = [
   { key: 'proprietarios', label: 'Proprietários' },
 ];
 
+const origemOptions = [
+  { value: '', label: 'Todas' },
+  { value: 1, label: 'Airbnb' },
+  { value: 2, label: 'Booking' },
+  { value: 3, label: 'VRBO' },
+  { value: 4, label: 'Reserva Direta' },
+  { value: 5, label: 'Outros' },
+];
+
 function extractItems(response) {
-  return response.data?.items || [];
+  return response.data?.items || response.data || [];
 }
 
 function money(value) {
@@ -104,9 +114,12 @@ export function RelatoriosPage() {
     fim: new Date().toISOString().slice(0, 10),
     imovelId: '',
     proprietarioId: '',
+    categoriaId: '',
+    plataforma: '',
   });
   const [imoveis, setImoveis] = useState([]);
   const [proprietarios, setProprietarios] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -131,26 +144,46 @@ export function RelatoriosPage() {
       };
     }
 
+    if (activeTab === 'financeiro') {
+      return {
+        inicio: baseParams.inicio,
+        fim: baseParams.fim,
+        imovelId: baseParams.imovelId,
+        categoriaId: filters.categoriaId || undefined,
+      };
+    }
+
+    if (activeTab === 'reservas') {
+      return {
+        inicio: baseParams.inicio,
+        fim: baseParams.fim,
+        imovelId: baseParams.imovelId,
+        plataforma: filters.plataforma || undefined,
+      };
+    }
+
     return {
       inicio: baseParams.inicio,
       fim: baseParams.fim,
       imovelId: baseParams.imovelId,
     };
-  }, [activeTab, baseParams]);
+  }, [activeTab, baseParams, filters.categoriaId, filters.plataforma]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const reportRequest = relatoriosApi[activeTab](reportParams);
-      const [reportResponse, imoveisResponse, proprietariosResponse] = await Promise.all([
+      const [reportResponse, imoveisResponse, proprietariosResponse, categoriasResponse] = await Promise.all([
         reportRequest,
         imoveisApi.list({ pageSize: 100 }),
         proprietariosApi.list({ pageSize: 100 }),
+        categoriasFinanceirasApi.list({ ativo: true }),
       ]);
       setData(reportResponse.data);
       setImoveis(extractItems(imoveisResponse));
       setProprietarios(extractItems(proprietariosResponse));
+      setCategorias(extractItems(categoriasResponse));
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -182,23 +215,123 @@ export function RelatoriosPage() {
   const renderSummary = () => {
     if (activeTab === 'reservas') {
       return (
-        <section className="kpi-grid secondary-kpis">
-          <SummaryCard label="Reservas" value={data?.totalReservas || 0} />
-          <SummaryCard label="Hospedagem" value={money(data?.valorHospedagem)} />
-          <SummaryCard label="Taxas" value={money(Number(data?.taxaPlataforma || 0) + Number(data?.comissaoAdministradora || 0))} />
-          <SummaryCard label="Líquido" value={money(data?.valorLiquido)} />
-        </section>
+        <>
+          <section className="kpi-grid secondary-kpis">
+            <SummaryCard label="Reservas" value={data?.totalReservas || 0} />
+            <SummaryCard label="Hospedagem" value={money(data?.valorHospedagem)} />
+            <SummaryCard label="Limpeza" value={money(data?.taxaLimpeza)} />
+            <SummaryCard label="Líquido" value={money(data?.valorLiquido)} />
+          </section>
+
+          <section className="content-grid">
+            <article className="panel">
+              <div className="panel-heading">
+                <h2>Origem das reservas</h2>
+                <span>Distribuição</span>
+              </div>
+              {(data?.porPlataforma || []).length > 0 ? (
+                <div className="origin-chart">
+                  {data.porPlataforma.map((item) => {
+                    const total = Number(data.totalReservas || 0);
+                    const width = total > 0 ? (Number(item.quantidade || 0) / total) * 100 : 0;
+
+                    return (
+                      <article className="origin-row" key={item.nome}>
+                        <div>
+                          <strong>{item.nome}</strong>
+                          <span>{item.quantidade} reservas</span>
+                        </div>
+                        <small>{money(item.total)}</small>
+                        <div className="origin-bar">
+                          <span style={{ width: `${Math.max(width, 4)}%` }} />
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="inline-empty compact">
+                  <FileText size={24} />
+                  <strong>Sem distribuição</strong>
+                  <span>Cadastre reservas para visualizar a origem por plataforma.</span>
+                </div>
+              )}
+            </article>
+
+            <article className="panel">
+              <div className="panel-heading">
+                <h2>Taxas e comissões</h2>
+                <span>Descontos</span>
+              </div>
+              <div className="status-board">
+                <div>
+                  <small>Taxa da plataforma</small>
+                  <strong>{money(data?.taxaPlataforma)}</strong>
+                </div>
+                <div>
+                  <small>Comissão administradora</small>
+                  <strong>{money(data?.comissaoAdministradora)}</strong>
+                </div>
+                <div>
+                  <small>Total descontado</small>
+                  <strong>{money(Number(data?.taxaPlataforma || 0) + Number(data?.comissaoAdministradora || 0))}</strong>
+                </div>
+              </div>
+            </article>
+          </section>
+        </>
       );
     }
 
     if (activeTab === 'financeiro') {
       return (
-        <section className="kpi-grid secondary-kpis">
-          <SummaryCard label="Receitas" value={money(data?.receitas)} />
-          <SummaryCard label="Despesas" value={money(data?.despesas)} />
-          <SummaryCard label="Lucro" value={money(data?.lucro)} />
-          <SummaryCard label="Categorias" value={data?.porCategoria?.length || 0} />
-        </section>
+        <>
+          <section className="kpi-grid secondary-kpis">
+            <SummaryCard label="Receitas" value={money(data?.receitas)} />
+            <SummaryCard label="Despesas" value={money(data?.despesas)} />
+            <SummaryCard label="Lucro" value={money(data?.lucro)} />
+            <SummaryCard label="Categorias" value={data?.porCategoria?.length || 0} />
+          </section>
+
+          <section className="content-grid">
+            <article className="panel">
+              <div className="panel-heading">
+                <h2>Categorias</h2>
+                <span>Financeiro</span>
+              </div>
+              {(data?.porCategoria || []).length > 0 ? (
+                <div className="performance-list">
+                  {data.porCategoria.map((item) => {
+                    const totalBase = item.tipo === 'Receita' ? Number(data.receitas || 0) : Number(data.despesas || 0);
+                    const width = totalBase > 0 ? (Number(item.total || 0) / totalBase) * 100 : 0;
+
+                    return (
+                      <article className="performance-item" key={`${item.tipo}-${item.categoriaNome}`}>
+                        <div>
+                          <strong>{item.categoriaNome}</strong>
+                          <span>{item.tipo}</span>
+                        </div>
+                        <div className="performance-value">
+                          <strong>{money(item.total)}</strong>
+                          <span>{totalBase > 0 ? `${width.toFixed(0)}% do total` : 'Sem base'}</span>
+                        </div>
+                        <div className="performance-bar">
+                          <span style={{ width: `${Math.max(width, 4)}%` }} />
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="inline-empty compact">
+                  <FileText size={24} />
+                  <strong>Sem categorias no período</strong>
+                  <span>Ajuste os filtros ou registre movimentações financeiras.</span>
+                </div>
+              )}
+            </article>
+          </section>
+        </>
       );
     }
 
@@ -319,6 +452,31 @@ export function RelatoriosPage() {
               {imoveis.map((imovel) => (
                 <option key={imovel.id} value={imovel.id}>
                   {imovel.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {activeTab === 'reservas' && (
+          <label className="form-field">
+            <span>Plataforma</span>
+            <select value={filters.plataforma} onChange={(event) => setFilters((current) => ({ ...current, plataforma: event.target.value }))}>
+              {origemOptions.map((option) => (
+                <option key={String(option.value)} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {activeTab === 'financeiro' && (
+          <label className="form-field">
+            <span>Categoria</span>
+            <select value={filters.categoriaId} onChange={(event) => setFilters((current) => ({ ...current, categoriaId: event.target.value }))}>
+              <option value="">Todas</option>
+              {categorias.map((categoria) => (
+                <option key={categoria.id} value={categoria.id}>
+                  {categoria.nome}
                 </option>
               ))}
             </select>
