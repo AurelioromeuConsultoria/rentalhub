@@ -1,8 +1,12 @@
 import {
   Building2,
   CheckCircle2,
+  ClipboardList,
+  DollarSign,
   Edit3,
   KeyRound,
+  MapPin,
+  Phone,
   RotateCcw,
   Save,
   Search,
@@ -15,6 +19,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { configuracoesApi, perfisAcessoApi, tenantsApi, usuariosApi } from '@/api/administracao';
 import { proprietariosApi } from '@/api/cadastros';
+import { useAuth } from '@/context/AuthContext';
 import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
 import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
 
@@ -40,7 +45,8 @@ const recursoLabels = {
   'portal-proprietario': 'Portal do proprietário',
   usuarios: 'Usuários',
   'perfis-acesso': 'Perfis de acesso',
-  tenants: 'Empresas e configurações',
+  tenants: 'Empresas',
+  configuracoes: 'Configurações',
   auditoria: 'Auditoria',
 };
 
@@ -138,6 +144,21 @@ function TextField({ label, value, onChange, required, readOnly, type = 'text', 
         placeholder={placeholder}
         readOnly={readOnly}
         required={required}
+        step={type === 'number' ? '0.01' : undefined}
+      />
+    </label>
+  );
+}
+
+function TextAreaField({ label, value, onChange, placeholder, rows = 4 }) {
+  return (
+    <label className="form-field span-2">
+      <span>{label}</span>
+      <textarea
+        value={value ?? ''}
+        onChange={(event) => onChange?.(event.target.value)}
+        placeholder={placeholder}
+        rows={rows}
       />
     </label>
   );
@@ -164,6 +185,7 @@ function CheckboxField({ label, checked, onChange }) {
 }
 
 export function UsuariosPage() {
+  const { usuario: currentUser } = useAuth();
   const [usuarios, setUsuarios] = useState([]);
   const [perfis, setPerfis] = useState([]);
   const [proprietarios, setProprietarios] = useState([]);
@@ -385,7 +407,13 @@ export function UsuariosPage() {
               </SelectField>
             )}
             <CheckboxField label="Usuário ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
-            <CheckboxField label="Administrador da plataforma" checked={form.isPlatformAdmin} onChange={(isPlatformAdmin) => setForm((current) => ({ ...current, isPlatformAdmin }))} />
+            {currentUser?.isPlatformAdmin && (
+              <CheckboxField
+                label="Administrador da plataforma"
+                checked={form.isPlatformAdmin}
+                onChange={(isPlatformAdmin) => setForm((current) => ({ ...current, isPlatformAdmin }))}
+              />
+            )}
           </div>
           <button className="primary-action full" type="submit" disabled={saving}>
             <Save size={18} />
@@ -852,7 +880,28 @@ export function EmpresasPage() {
 
 export function ConfiguracoesPage() {
   const [data, setData] = useState(null);
-  const [form, setForm] = useState({ nome: '', nomeExibicao: '', ativo: true });
+  const [form, setForm] = useState({
+    nome: '',
+    nomeExibicao: '',
+    documentoEmpresa: '',
+    responsavelOperacional: '',
+    emailOperacional: '',
+    telefoneOperacional: '',
+    whatsappOperacional: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
+    checkInPadrao: '',
+    checkOutPadrao: '',
+    comissaoPadraoAdministradora: '',
+    taxaLimpezaPadrao: '',
+    observacoesOperacionais: '',
+    ativo: true,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -866,6 +915,23 @@ export function ConfiguracoesPage() {
       setForm({
         nome: response.data.tenant.nome || '',
         nomeExibicao: response.data.tenant.nomeExibicao || '',
+        documentoEmpresa: response.data.tenant.documentoEmpresa || '',
+        responsavelOperacional: response.data.tenant.responsavelOperacional || '',
+        emailOperacional: response.data.tenant.emailOperacional || '',
+        telefoneOperacional: response.data.tenant.telefoneOperacional || '',
+        whatsappOperacional: response.data.tenant.whatsappOperacional || '',
+        cep: response.data.tenant.cep || '',
+        logradouro: response.data.tenant.logradouro || '',
+        numero: response.data.tenant.numero || '',
+        complemento: response.data.tenant.complemento || '',
+        bairro: response.data.tenant.bairro || '',
+        cidade: response.data.tenant.cidade || '',
+        estado: response.data.tenant.estado || '',
+        checkInPadrao: response.data.tenant.checkInPadrao || '',
+        checkOutPadrao: response.data.tenant.checkOutPadrao || '',
+        comissaoPadraoAdministradora: response.data.tenant.comissaoPadraoAdministradora ?? '',
+        taxaLimpezaPadrao: response.data.tenant.taxaLimpezaPadrao ?? '',
+        observacoesOperacionais: response.data.tenant.observacoesOperacionais || '',
         ativo: response.data.tenant.ativo,
       });
     } catch (loadError) {
@@ -888,6 +954,23 @@ export function ConfiguracoesPage() {
       const response = await configuracoesApi.updateTenant({
         nome: form.nome.trim(),
         nomeExibicao: form.nomeExibicao.trim(),
+        documentoEmpresa: form.documentoEmpresa.trim() || null,
+        responsavelOperacional: form.responsavelOperacional.trim() || null,
+        emailOperacional: form.emailOperacional.trim() || null,
+        telefoneOperacional: form.telefoneOperacional.trim() || null,
+        whatsappOperacional: form.whatsappOperacional.trim() || null,
+        cep: form.cep.trim() || null,
+        logradouro: form.logradouro.trim() || null,
+        numero: form.numero.trim() || null,
+        complemento: form.complemento.trim() || null,
+        bairro: form.bairro.trim() || null,
+        cidade: form.cidade.trim() || null,
+        estado: form.estado.trim() || null,
+        checkInPadrao: form.checkInPadrao || null,
+        checkOutPadrao: form.checkOutPadrao || null,
+        comissaoPadraoAdministradora: form.comissaoPadraoAdministradora === '' ? null : Number(form.comissaoPadraoAdministradora),
+        taxaLimpezaPadrao: form.taxaLimpezaPadrao === '' ? null : Number(form.taxaLimpezaPadrao),
+        observacoesOperacionais: form.observacoesOperacionais.trim() || null,
         ativo: form.ativo,
       });
       setData((current) => ({ ...current, tenant: response.data }));
@@ -905,7 +988,7 @@ export function ConfiguracoesPage() {
       <PageHeader
         eyebrow="Administração"
         title="Configurações"
-        description="Preferências do tenant, recursos disponíveis e resumo da operação."
+        description="Dados da empresa operadora, contato, endereço e parâmetros padrão da operação."
         onRefresh={load}
       />
 
@@ -938,14 +1021,48 @@ export function ConfiguracoesPage() {
             <form className="resource-form" onSubmit={save}>
               <div className="form-title">
                 <Building2 size={18} />
-                <strong>Tenant atual</strong>
+                <strong>Empresa operadora</strong>
               </div>
               <div className="form-grid">
                 <TextField label="Nome" value={form.nome} onChange={(nome) => setForm((current) => ({ ...current, nome }))} required />
                 <TextField label="Nome de exibição" value={form.nomeExibicao} onChange={(nomeExibicao) => setForm((current) => ({ ...current, nomeExibicao }))} required />
+                <TextField label="CPF/CNPJ" value={form.documentoEmpresa} onChange={(documentoEmpresa) => setForm((current) => ({ ...current, documentoEmpresa }))} />
+                <TextField label="Responsável operacional" value={form.responsavelOperacional} onChange={(responsavelOperacional) => setForm((current) => ({ ...current, responsavelOperacional }))} />
+                <TextField label="E-mail operacional" type="email" value={form.emailOperacional} onChange={(emailOperacional) => setForm((current) => ({ ...current, emailOperacional }))} />
+                <TextField label="Telefone" value={form.telefoneOperacional} onChange={(telefoneOperacional) => setForm((current) => ({ ...current, telefoneOperacional }))} />
+                <TextField label="WhatsApp" value={form.whatsappOperacional} onChange={(whatsappOperacional) => setForm((current) => ({ ...current, whatsappOperacional }))} />
                 <TextField label="Slug" value={data.tenant.slug} readOnly />
+                <TextField label="CEP" value={form.cep} onChange={(cep) => setForm((current) => ({ ...current, cep }))} />
+                <TextField label="Logradouro" value={form.logradouro} onChange={(logradouro) => setForm((current) => ({ ...current, logradouro }))} />
+                <TextField label="Número" value={form.numero} onChange={(numero) => setForm((current) => ({ ...current, numero }))} />
+                <TextField label="Complemento" value={form.complemento} onChange={(complemento) => setForm((current) => ({ ...current, complemento }))} />
+                <TextField label="Bairro" value={form.bairro} onChange={(bairro) => setForm((current) => ({ ...current, bairro }))} />
+                <TextField label="Cidade" value={form.cidade} onChange={(cidade) => setForm((current) => ({ ...current, cidade }))} />
+                <TextField label="Estado" value={form.estado} onChange={(estado) => setForm((current) => ({ ...current, estado: estado.toUpperCase() }))} placeholder="UF" />
                 <TextField label="Domínios" value={(data.tenant.domains || []).join(', ') || 'Sem domínio dedicado'} readOnly />
+                <TextField label="Check-in padrão" type="time" value={form.checkInPadrao} onChange={(checkInPadrao) => setForm((current) => ({ ...current, checkInPadrao }))} />
+                <TextField label="Check-out padrão" type="time" value={form.checkOutPadrao} onChange={(checkOutPadrao) => setForm((current) => ({ ...current, checkOutPadrao }))} />
+                <TextField
+                  label="Comissão padrão da administradora (%)"
+                  type="number"
+                  value={form.comissaoPadraoAdministradora}
+                  onChange={(comissaoPadraoAdministradora) => setForm((current) => ({ ...current, comissaoPadraoAdministradora }))}
+                  placeholder="Ex.: 15"
+                />
+                <TextField
+                  label="Taxa de limpeza sugerida"
+                  type="number"
+                  value={form.taxaLimpezaPadrao}
+                  onChange={(taxaLimpezaPadrao) => setForm((current) => ({ ...current, taxaLimpezaPadrao }))}
+                  placeholder="Ex.: 180.00"
+                />
                 <CheckboxField label="Tenant ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
+                <TextAreaField
+                  label="Observações operacionais"
+                  value={form.observacoesOperacionais}
+                  onChange={(observacoesOperacionais) => setForm((current) => ({ ...current, observacoesOperacionais }))}
+                  placeholder="Instruções internas, política de operação, rotina de atendimento ou observações da empresa."
+                />
               </div>
               <button className="primary-action full" type="submit" disabled={saving}>
                 <Save size={18} />
@@ -957,7 +1074,7 @@ export function ConfiguracoesPage() {
               <div className="resource-panel-heading">
                 <div>
                   <strong>Recursos e permissões</strong>
-                  <small>Catálogo usado pelos perfis de acesso</small>
+                  <small>Catálogo base para perfis, menus e regras de acesso</small>
                 </div>
                 <span>{data.recursos?.length || 0} recursos</span>
               </div>
@@ -975,8 +1092,40 @@ export function ConfiguracoesPage() {
           <section className="content-grid">
             <article className="panel">
               <div className="panel-heading">
+                <h2>Contato e presença</h2>
+                <span>Operação</span>
+              </div>
+              <div className="status-board">
+                <div>
+                  <small>Canal principal</small>
+                  <strong><Phone size={16} /> {data.tenant.emailOperacional || data.tenant.telefoneOperacional || 'Não configurado'}</strong>
+                </div>
+                <div>
+                  <small>Endereço</small>
+                  <strong><MapPin size={16} /> {data.tenant.cidade && data.tenant.estado ? `${data.tenant.cidade}/${data.tenant.estado}` : 'Sem cidade/UF'}</strong>
+                </div>
+              </div>
+            </article>
+            <article className="panel">
+              <div className="panel-heading">
+                <h2>Padrões da operação</h2>
+                <span>Reservas</span>
+              </div>
+              <div className="status-board">
+                <div>
+                  <small>Horários padrão</small>
+                  <strong><ClipboardList size={16} /> {data.tenant.checkInPadrao || '--:--'} / {data.tenant.checkOutPadrao || '--:--'}</strong>
+                </div>
+                <div>
+                  <small>Comissão e limpeza</small>
+                  <strong><DollarSign size={16} /> {data.tenant.comissaoPadraoAdministradora ?? 0}% · R$ {Number(data.tenant.taxaLimpezaPadrao || 0).toFixed(2).replace('.', ',')}</strong>
+                </div>
+              </div>
+            </article>
+            <article className="panel">
+              <div className="panel-heading">
                 <h2>Segurança</h2>
-                <span>JWT</span>
+                <span>Ambiente</span>
               </div>
               <div className="status-board">
                 <div>
@@ -987,11 +1136,15 @@ export function ConfiguracoesPage() {
                   <small>Isolamento</small>
                   <strong><CheckCircle2 size={16} /> Filtro por tenant no DbContext</strong>
                 </div>
+                <div>
+                  <small>Administração de empresas</small>
+                  <strong><ShieldCheck size={16} /> {data.tenant.podeGerenciarEmpresas ? 'Admin geral' : 'Tenant isolado'}</strong>
+                </div>
               </div>
             </article>
             <article className="panel">
               <div className="panel-heading">
-                <h2>Operação</h2>
+                <h2>Base operacional</h2>
                 <span>Resumo</span>
               </div>
               <div className="status-board">

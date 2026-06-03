@@ -63,7 +63,7 @@ const menuGroups = [
       { label: 'Usuários', href: '/usuarios', icon: KeyRound, resource: 'usuarios' },
       { label: 'Perfis', href: '/perfis', icon: Shield, resource: 'perfis-acesso' },
       { label: 'Empresas', href: '/empresas', icon: Building2, resource: 'tenants' },
-      { label: 'Configurações', href: '/configuracoes', icon: Settings, resource: 'tenants' },
+      { label: 'Configurações', href: '/configuracoes', icon: Settings, resource: 'configuracoes' },
       { label: 'Auditoria', href: '/auditoria', icon: History, resource: 'auditoria' },
     ],
   },
@@ -72,6 +72,7 @@ const menuGroups = [
 export function Sidebar() {
   const { usuario, canView } = useAuth();
   const isOwner = Number(usuario?.tipoUsuario) === 4;
+  const isPlatformAdmin = Boolean(usuario?.isPlatformAdmin);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [openGroups, setOpenGroups] = useState({
     Operação: true,
@@ -88,7 +89,13 @@ export function Sidebar() {
     : menuGroups
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => canView(item.resource)),
+          items: group.items.filter((item) => {
+            if (item.href === '/empresas') {
+              return isPlatformAdmin;
+            }
+
+            return canView(item.resource);
+          }),
         }))
         .filter((group) => group.items.length > 0);
 

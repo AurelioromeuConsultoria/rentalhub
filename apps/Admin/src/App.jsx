@@ -32,7 +32,7 @@ const internalRoutes = [
   { path: '/usuarios', resource: 'usuarios' },
   { path: '/perfis', resource: 'perfis-acesso' },
   { path: '/empresas', resource: 'tenants' },
-  { path: '/configuracoes', resource: 'tenants' },
+  { path: '/configuracoes', resource: 'configuracoes' },
   { path: '/auditoria', resource: 'auditoria' },
 ];
 
@@ -57,6 +57,16 @@ function HomeRoute() {
       <span>Seu perfil ainda não possui módulos liberados.</span>
     </div>
   );
+}
+
+function PlatformAdminRoute({ children }) {
+  const { usuario } = useAuth();
+
+  if (!usuario?.isPlatformAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
 
 export default function App() {
@@ -87,8 +97,17 @@ export default function App() {
             <Route path="portal-proprietario" element={<PortalProprietarioPage />} />
             <Route path="usuarios" element={<ProtectedRoute resource="usuarios"><UsuariosPage /></ProtectedRoute>} />
             <Route path="perfis" element={<ProtectedRoute resource="perfis-acesso"><PerfisPage /></ProtectedRoute>} />
-            <Route path="empresas" element={<ProtectedRoute resource="tenants"><EmpresasPage /></ProtectedRoute>} />
-            <Route path="configuracoes" element={<ProtectedRoute resource="tenants"><ConfiguracoesPage /></ProtectedRoute>} />
+            <Route
+              path="empresas"
+              element={
+                <ProtectedRoute resource="tenants">
+                  <PlatformAdminRoute>
+                    <EmpresasPage />
+                  </PlatformAdminRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="configuracoes" element={<ProtectedRoute resource="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
             <Route path="auditoria" element={<ProtectedRoute resource="auditoria"><AuditoriaPage /></ProtectedRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

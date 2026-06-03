@@ -1,5 +1,6 @@
 import { CalendarDays, Edit3, Plus, RotateCcw, Save, Search, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { configuracoesApi } from '@/api/administracao';
 import { calendarioApi } from '@/api/calendario';
 import { hospedesApi, imoveisApi } from '@/api/cadastros';
 import { reservasApi } from '@/api/reservas';
@@ -48,6 +49,14 @@ function extractItems(response) {
 
 function getErrorMessage(error) {
   return error.response?.data?.message || 'Não foi possível concluir a operação.';
+}
+
+function buildEmptyReserva(settings = null) {
+  return {
+    ...emptyReserva,
+    taxaLimpeza: Number(settings?.taxaLimpezaPadrao || 0),
+    comissaoAdministradora: Number(settings?.comissaoPadraoAdministradora || 0),
+  };
 }
 
 function money(value) {
@@ -184,8 +193,9 @@ export function ReservasPage() {
   const [reservas, setReservas] = useState([]);
   const [imoveis, setImoveis] = useState([]);
   const [hospedes, setHospedes] = useState([]);
+  const [tenantSettings, setTenantSettings] = useState(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState(emptyReserva);
+  const [form, setForm] = useState(buildEmptyReserva());
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -210,14 +220,16 @@ export function ReservasPage() {
     setLoading(true);
     setError('');
     try {
-      const [reservasResponse, imoveisResponse, hospedesResponse] = await Promise.all([
+      const [reservasResponse, imoveisResponse, hospedesResponse, configuracoesResponse] = await Promise.all([
         reservasApi.list(),
         imoveisApi.list({ status: 1, pageSize: 100 }),
         hospedesApi.list({ ativo: true, pageSize: 100 }),
+        configuracoesApi.get(),
       ]);
       setReservas(extractItems(reservasResponse));
       setImoveis(extractItems(imoveisResponse));
       setHospedes(extractItems(hospedesResponse));
+      setTenantSettings(configuracoesResponse.data?.tenant || null);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -229,6 +241,26 @@ export function ReservasPage() {
     const timeout = setTimeout(load, 0);
     return () => clearTimeout(timeout);
   }, []);
+
+  useEffect(() => {
+    if (editingId || !tenantSettings) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...buildEmptyReserva(tenantSettings),
+      imovelId: current.imovelId,
+      hospedeId: current.hospedeId,
+      origem: current.origem,
+      checkIn: current.checkIn,
+      checkOut: current.checkOut,
+      numeroHospedes: current.numeroHospedes,
+      valorHospedagem: current.valorHospedagem,
+      taxaPlataforma: current.taxaPlataforma,
+      status: current.status,
+      observacoes: current.observacoes,
+    }));
+  }, [editingId, tenantSettings]);
 
   useEffect(() => {
     let active = true;
@@ -304,9 +336,10 @@ export function ReservasPage() {
   }, [editingId, selectedCheckIn, selectedCheckOut, selectedImovelId]);
 
   const startCreate = () => {
+    const defaultForm = buildEmptyReserva(tenantSettings);
     setEditingId(null);
     setForm({
-      ...emptyReserva,
+      ...defaultForm,
       imovelId: imoveis[0]?.id ? String(imoveis[0].id) : '',
       hospedeId: hospedes[0]?.id ? String(hospedes[0].id) : '',
     });

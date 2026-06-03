@@ -45,7 +45,7 @@ public sealed class PermissionMiddleware
         ["perfis-acesso"] = Resources.PerfisAcesso,
         ["perfisacesso"] = Resources.PerfisAcesso,
         ["tenants"] = Resources.Tenants,
-        ["configuracoes"] = Resources.Tenants,
+        ["configuracoes"] = Resources.Configuracoes,
         ["auditoria"] = Resources.Auditoria
     };
 

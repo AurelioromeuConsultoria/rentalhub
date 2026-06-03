@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RentalHub.Application.Common;
+using RentalHub.Application.Services;
 using RentalHub.Application.Security;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Enums;
@@ -16,11 +17,16 @@ public sealed class UsuariosController : ControllerBase
 {
     private readonly RentalHubDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ICurrentUserContext _currentUserContext;
 
-    public UsuariosController(RentalHubDbContext dbContext, IPasswordHasher passwordHasher)
+    public UsuariosController(
+        RentalHubDbContext dbContext,
+        IPasswordHasher passwordHasher,
+        ICurrentUserContext currentUserContext)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
+        _currentUserContext = currentUserContext;
     }
 
     [HttpGet]
@@ -39,6 +45,11 @@ public sealed class UsuariosController : ControllerBase
             .Include(u => u.PerfilAcesso)
             .Include(u => u.Proprietario)
             .AsQueryable();
+
+        if (!_currentUserContext.IsPlatformAdmin)
+        {
+            query = query.Where(u => !u.IsPlatformAdmin);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -77,6 +88,11 @@ public sealed class UsuariosController : ControllerBase
             .Include(u => u.PerfilAcesso)
             .Include(u => u.Proprietario)
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+
+        if (usuario?.IsPlatformAdmin == true && !_currentUserContext.IsPlatformAdmin)
+        {
+            return Forbid();
+        }
 
         return usuario is null ? NotFound() : Ok(ToResponse(usuario));
     }
@@ -137,6 +153,11 @@ public sealed class UsuariosController : ControllerBase
             return NotFound();
         }
 
+        if (usuario.IsPlatformAdmin && !_currentUserContext.IsPlatformAdmin)
+        {
+            return Forbid();
+        }
+
         var validation = await ValidateRequest(request, requirePassword: false, cancellationToken);
         if (validation is not null)
         {
@@ -181,6 +202,11 @@ public sealed class UsuariosController : ControllerBase
             return NotFound();
         }
 
+        if (usuario.IsPlatformAdmin && !_currentUserContext.IsPlatformAdmin)
+        {
+            return Forbid();
+        }
+
         usuario.Ativo = false;
         usuario.DataAtualizacao = DateTime.UtcNow;
         usuario.RefreshTokenHash = null;
@@ -198,6 +224,11 @@ public sealed class UsuariosController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Nome) || string.IsNullOrWhiteSpace(request.Email))
         {
             return BadRequest(new { message = "Nome e e-mail são obrigatórios." });
+        }
+
+        if (request.IsPlatformAdmin && !_currentUserContext.IsPlatformAdmin)
+        {
+            return Forbid();
         }
 
         if (requirePassword && string.IsNullOrWhiteSpace(request.Senha))

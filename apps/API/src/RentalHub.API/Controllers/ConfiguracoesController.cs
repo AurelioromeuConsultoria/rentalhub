@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using RentalHub.Application.Services;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Security;
 using RentalHub.Infrastructure.Data;
@@ -13,10 +14,12 @@ namespace RentalHub.API.Controllers;
 public sealed class ConfiguracoesController : ControllerBase
 {
     private readonly RentalHubDbContext _dbContext;
+    private readonly ICurrentUserContext _currentUserContext;
 
-    public ConfiguracoesController(RentalHubDbContext dbContext)
+    public ConfiguracoesController(RentalHubDbContext dbContext, ICurrentUserContext currentUserContext)
     {
         _dbContext = dbContext;
+        _currentUserContext = currentUserContext;
     }
 
     [HttpGet]
@@ -40,9 +43,13 @@ public sealed class ConfiguracoesController : ControllerBase
             await _dbContext.MovimentacoesFinanceiras.CountAsync(cancellationToken),
             await _dbContext.RepassesProprietarios.CountAsync(cancellationToken));
 
+        var recursos = _currentUserContext.IsPlatformAdmin
+            ? Resources.All
+            : Resources.All.Where(resource => resource != Resources.Tenants).ToArray();
+
         return Ok(new ConfiguracoesResponse(
             ToTenantResponse(tenant),
-            Resources.All,
+            recursos,
             resumo));
     }
 
@@ -65,8 +72,40 @@ public sealed class ConfiguracoesController : ControllerBase
             return BadRequest(new { message = "Nome e nome de exibição são obrigatórios." });
         }
 
+        if (!string.IsNullOrWhiteSpace(request.Estado) && request.Estado.Trim().Length != 2)
+        {
+            return BadRequest(new { message = "Estado deve ser informado com a sigla da UF." });
+        }
+
+        if (request.ComissaoPadraoAdministradora.HasValue && request.ComissaoPadraoAdministradora.Value < 0)
+        {
+            return BadRequest(new { message = "A comissão padrão não pode ser negativa." });
+        }
+
+        if (request.TaxaLimpezaPadrao.HasValue && request.TaxaLimpezaPadrao.Value < 0)
+        {
+            return BadRequest(new { message = "A taxa de limpeza sugerida não pode ser negativa." });
+        }
+
         tenant.Nome = request.Nome.Trim();
         tenant.NomeExibicao = request.NomeExibicao.Trim();
+        tenant.DocumentoEmpresa = NormalizeOptional(request.DocumentoEmpresa);
+        tenant.ResponsavelOperacional = NormalizeOptional(request.ResponsavelOperacional);
+        tenant.EmailOperacional = NormalizeOptional(request.EmailOperacional);
+        tenant.TelefoneOperacional = NormalizeOptional(request.TelefoneOperacional);
+        tenant.WhatsappOperacional = NormalizeOptional(request.WhatsappOperacional);
+        tenant.Cep = NormalizeOptional(request.Cep);
+        tenant.Logradouro = NormalizeOptional(request.Logradouro);
+        tenant.Numero = NormalizeOptional(request.Numero);
+        tenant.Complemento = NormalizeOptional(request.Complemento);
+        tenant.Bairro = NormalizeOptional(request.Bairro);
+        tenant.Cidade = NormalizeOptional(request.Cidade);
+        tenant.Estado = NormalizeState(request.Estado);
+        tenant.CheckInPadrao = NormalizeTime(request.CheckInPadrao);
+        tenant.CheckOutPadrao = NormalizeTime(request.CheckOutPadrao);
+        tenant.ComissaoPadraoAdministradora = request.ComissaoPadraoAdministradora;
+        tenant.TaxaLimpezaPadrao = request.TaxaLimpezaPadrao;
+        tenant.ObservacoesOperacionais = NormalizeOptional(request.ObservacoesOperacionais);
         tenant.Ativo = request.Ativo;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -74,13 +113,30 @@ public sealed class ConfiguracoesController : ControllerBase
         return Ok(ToTenantResponse(tenant));
     }
 
-    private static TenantConfiguracaoResponse ToTenantResponse(Tenant tenant)
+    private TenantConfiguracaoResponse ToTenantResponse(Tenant tenant)
     {
         return new TenantConfiguracaoResponse(
             tenant.Id,
             tenant.Nome,
             tenant.NomeExibicao,
             tenant.Slug,
+            tenant.DocumentoEmpresa,
+            tenant.ResponsavelOperacional,
+            tenant.EmailOperacional,
+            tenant.TelefoneOperacional,
+            tenant.WhatsappOperacional,
+            tenant.Cep,
+            tenant.Logradouro,
+            tenant.Numero,
+            tenant.Complemento,
+            tenant.Bairro,
+            tenant.Cidade,
+            tenant.Estado,
+            tenant.CheckInPadrao,
+            tenant.CheckOutPadrao,
+            tenant.ComissaoPadraoAdministradora,
+            tenant.TaxaLimpezaPadrao,
+            tenant.ObservacoesOperacionais,
             tenant.IsRootTenant,
             tenant.Ativo,
             tenant.Domains
@@ -88,13 +144,40 @@ public sealed class ConfiguracoesController : ControllerBase
                 .ThenBy(d => d.Domain)
                 .Select(d => d.Domain)
                 .ToList(),
-            tenant.DataCriacao);
+            tenant.DataCriacao,
+            _currentUserContext.IsPlatformAdmin);
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizeState(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+
+    private static string? NormalizeTime(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed record TenantConfiguracaoRequest(
     string Nome,
     string NomeExibicao,
+    string? DocumentoEmpresa = null,
+    string? ResponsavelOperacional = null,
+    string? EmailOperacional = null,
+    string? TelefoneOperacional = null,
+    string? WhatsappOperacional = null,
+    string? Cep = null,
+    string? Logradouro = null,
+    string? Numero = null,
+    string? Complemento = null,
+    string? Bairro = null,
+    string? Cidade = null,
+    string? Estado = null,
+    string? CheckInPadrao = null,
+    string? CheckOutPadrao = null,
+    decimal? ComissaoPadraoAdministradora = null,
+    decimal? TaxaLimpezaPadrao = null,
+    string? ObservacoesOperacionais = null,
     bool Ativo = true);
 
 public sealed record ConfiguracoesResumoResponse(
@@ -110,10 +193,28 @@ public sealed record TenantConfiguracaoResponse(
     string Nome,
     string NomeExibicao,
     string Slug,
+    string? DocumentoEmpresa,
+    string? ResponsavelOperacional,
+    string? EmailOperacional,
+    string? TelefoneOperacional,
+    string? WhatsappOperacional,
+    string? Cep,
+    string? Logradouro,
+    string? Numero,
+    string? Complemento,
+    string? Bairro,
+    string? Cidade,
+    string? Estado,
+    string? CheckInPadrao,
+    string? CheckOutPadrao,
+    decimal? ComissaoPadraoAdministradora,
+    decimal? TaxaLimpezaPadrao,
+    string? ObservacoesOperacionais,
     bool IsRootTenant,
     bool Ativo,
     IReadOnlyCollection<string> Domains,
-    DateTime DataCriacao);
+    DateTime DataCriacao,
+    bool PodeGerenciarEmpresas);
 
 public sealed record ConfiguracoesResponse(
     TenantConfiguracaoResponse Tenant,

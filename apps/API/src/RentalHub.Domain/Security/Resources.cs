@@ -17,6 +17,7 @@ public static class Resources
     public const string Usuarios = "usuarios";
     public const string PerfisAcesso = "perfis-acesso";
     public const string Tenants = "tenants";
+    public const string Configuracoes = "configuracoes";
     public const string Auditoria = "auditoria";
 
     public static readonly string[] All =
@@ -36,6 +37,7 @@ public static class Resources
         Usuarios,
         PerfisAcesso,
         Tenants,
+        Configuracoes,
         Auditoria
     ];
 }
