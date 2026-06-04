@@ -165,6 +165,37 @@ Depois do deploy e do DNS responder:
    - abrir financeiro
    - abrir portal do proprietário
 
+## Monitoramento de erro e saúde
+
+Endpoints prontos para monitoramento externo:
+
+```txt
+https://api.rentalhub.malachdigital.com.br/api/health/live
+https://api.rentalhub.malachdigital.com.br/api/health
+https://rentalhub.malachdigital.com.br
+```
+
+Use `/api/health/live` em ferramentas como UptimeRobot, Better Stack ou HetrixTools para saber se a API está no ar sem depender do banco.
+
+Use `/api/health` para checagem mais completa. Ele retorna:
+
+- status geral da API
+- ambiente
+- versão
+- duração total da checagem
+- status do PostgreSQL
+- status do storage de uploads
+
+Erros internos retornam `traceId` no JSON e no header `X-Trace-Id`. Ao investigar um erro `500`, procure esse identificador nos logs do Coolify.
+
+No Admin, acesse:
+
+```txt
+Configurações > Monitoramento
+```
+
+Essa área mostra a saúde da API, banco e storage diretamente no painel.
+
 ## Troubleshooting
 
 ### Porta ocupada
@@ -214,3 +245,101 @@ Antes de considerar produção pronta, rode esta checagem:
 10. abrir repasses
 11. baixar PDF do demonstrativo
 12. abrir relatórios
+
+## Configuração atual do ambiente publicado
+
+Estado atual validado neste projeto:
+
+- deploy separado em 2 aplicações no Coolify
+- `Admin` e `API` não estão mais no mesmo stack
+- domínio do Admin:
+  - `https://rentalhub.malachdigital.com.br`
+- domínio da API:
+  - `https://api.rentalhub.malachdigital.com.br`
+
+### Admin no Coolify
+
+- `Build Pack`: `Dockerfile`
+- `Base Directory`: `/`
+- `Dockerfile Location`: `/apps/Admin/Dockerfile`
+- `Docker Build Stage Target`: `runtime`
+- `Ports Exposes`: `80`
+
+Variáveis importantes do Admin:
+
+```txt
+VITE_API_BASE_URL=https://api.rentalhub.malachdigital.com.br
+API_PROXY_TARGET=https://api.rentalhub.malachdigital.com.br
+```
+
+Observação importante:
+
+- `VITE_API_BASE_URL` é usada pelo build do frontend
+- `API_PROXY_TARGET` é usada em runtime pelo Nginx do Admin
+- essa segunda variável existe porque o Admin passou a rodar separado da API
+
+### API no Coolify
+
+- `Build Pack`: `Dockerfile`
+- `Base Directory`: `/`
+- `Dockerfile Location`: `/apps/API/Dockerfile`
+- `Docker Build Stage Target`: `runtime`
+- `Ports Exposes`: `8080`
+
+Variáveis importantes da API:
+
+```txt
+ASPNETCORE_ENVIRONMENT=Production
+ConnectionStrings__DefaultConnection=<segredo-no-coolify>
+Jwt__Key=<segredo-no-coolify>
+Jwt__Issuer=RentalHub
+Jwt__Audience=RentalHub
+Cors__AllowedOrigins__0=https://rentalhub.malachdigital.com.br
+App__AdminUrl=https://rentalhub.malachdigital.com.br
+```
+
+Para convite de usuário e reset de senha, `App__AdminUrl` é obrigatório em produção para que a API gere links apontando para o Admin correto.
+
+SMTP é opcional. Se não for configurado, a API apenas registra que o envio foi ignorado. Para envio real de convite/reset por e-mail, adicione:
+
+```txt
+Smtp__Host=<host-smtp>
+Smtp__Port=587
+Smtp__EnableSsl=true
+Smtp__Username=<usuario-smtp>
+Smtp__Password=<senha-smtp>
+Smtp__From=<email-remetente>
+Smtp__FromName=RentalHub
+```
+
+Durante testes sem SMTP, use temporariamente:
+
+```txt
+Auth__ExposePasswordLinks=true
+```
+
+Com essa flag, as chamadas de convite/reset retornam o link no JSON para copiar manualmente. Desative em produção quando o SMTP estiver pronto.
+
+### DNS esperado
+
+Registros `A`:
+
+```txt
+rentalhub -> 77.37.43.5
+api.rentalhub -> 77.37.43.5
+```
+
+### Sintoma conhecido já resolvido
+
+Se o Admin entrar em restart infinito com erro parecido com:
+
+```txt
+host not found in upstream "api"
+```
+
+isso significa que o Nginx ainda está tentando falar com a API pelo host interno `api`.
+Nesse cenário, confirme se a variável abaixo está preenchida no Coolify do Admin:
+
+```txt
+API_PROXY_TARGET=https://api.rentalhub.malachdigital.com.br
+```

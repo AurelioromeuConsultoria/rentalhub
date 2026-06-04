@@ -4,6 +4,7 @@ import { configuracoesApi } from '@/api/administracao';
 import { calendarioApi } from '@/api/calendario';
 import { hospedesApi, imoveisApi } from '@/api/cadastros';
 import { reservasApi } from '@/api/reservas';
+import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
 
 const origemOptions = [
@@ -77,6 +78,10 @@ function formatDate(value) {
 
 function labelFor(options, value) {
   return options.find((option) => option.value === Number(value))?.label || '-';
+}
+
+function scrollToForm() {
+  document.getElementById('reserva-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function calculateValorLiquido(form) {
@@ -247,19 +252,23 @@ export function ReservasPage() {
       return;
     }
 
-    setForm((current) => ({
-      ...buildEmptyReserva(tenantSettings),
-      imovelId: current.imovelId,
-      hospedeId: current.hospedeId,
-      origem: current.origem,
-      checkIn: current.checkIn,
-      checkOut: current.checkOut,
-      numeroHospedes: current.numeroHospedes,
-      valorHospedagem: current.valorHospedagem,
-      taxaPlataforma: current.taxaPlataforma,
-      status: current.status,
-      observacoes: current.observacoes,
-    }));
+    const timeout = setTimeout(() => {
+      setForm((current) => ({
+        ...buildEmptyReserva(tenantSettings),
+        imovelId: current.imovelId,
+        hospedeId: current.hospedeId,
+        origem: current.origem,
+        checkIn: current.checkIn,
+        checkOut: current.checkOut,
+        numeroHospedes: current.numeroHospedes,
+        valorHospedagem: current.valorHospedagem,
+        taxaPlataforma: current.taxaPlataforma,
+        status: current.status,
+        observacoes: current.observacoes,
+      }));
+    }, 0);
+
+    return () => clearTimeout(timeout);
   }, [editingId, tenantSettings]);
 
   useEffect(() => {
@@ -414,7 +423,7 @@ export function ReservasPage() {
         <div>
           <span className="eyebrow">Operação</span>
           <h1>Reservas</h1>
-          <p>Controle de origem, período, hóspede, valores e bloqueio automático de conflitos por imóvel.</p>
+          <p>Crie reservas com disponibilidade, hóspede, origem, valores e bloqueio de conflitos por imóvel.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -440,11 +449,15 @@ export function ReservasPage() {
           {loading ? (
             <div className="loading-line">Carregando reservas...</div>
           ) : filteredReservas.length === 0 ? (
-            <div className="inline-empty">
-              <CalendarDays size={26} />
-              <strong>Nenhuma reserva cadastrada</strong>
-              <span>Cadastre imóveis e hóspedes para começar a operar a agenda.</span>
-            </div>
+            <EmptyState
+              icon={<CalendarDays size={26} />}
+              title="Nenhuma reserva cadastrada"
+              description="A primeira reserva já movimenta calendário, financeiro, limpeza e repasses."
+              actions={[
+                { label: 'Preencher reserva', onClick: scrollToForm, icon: <Plus size={17} /> },
+                { label: 'Ver calendário', to: '/calendario', variant: 'secondary' },
+              ]}
+            />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -493,7 +506,7 @@ export function ReservasPage() {
           )}
         </article>
 
-        <form className="resource-form" onSubmit={save}>
+        <form className="resource-form" id="reserva-form" onSubmit={save}>
           <div className="form-title">
             <CalendarDays size={18} />
             <strong>{editingId ? 'Editar reserva' : 'Nova reserva'}</strong>
@@ -564,17 +577,17 @@ export function ReservasPage() {
               onChange={(valorHospedagem) => setForm((current) => ({ ...current, valorHospedagem }))}
             />
             <MoneyField
-              label="Taxa limpeza"
+              label="Taxa de limpeza"
               value={form.taxaLimpeza}
               onChange={(taxaLimpeza) => setForm((current) => ({ ...current, taxaLimpeza }))}
             />
             <MoneyField
-              label="Taxa plataforma"
+              label="Taxa da plataforma"
               value={form.taxaPlataforma}
               onChange={(taxaPlataforma) => setForm((current) => ({ ...current, taxaPlataforma }))}
             />
             <MoneyField
-              label="Comissão"
+              label="Comissão da administradora"
               value={form.comissaoAdministradora}
               onChange={(comissaoAdministradora) => setForm((current) => ({ ...current, comissaoAdministradora }))}
             />

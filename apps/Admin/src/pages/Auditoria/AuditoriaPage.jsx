@@ -94,7 +94,7 @@ export function AuditoriaPage() {
         <div>
           <span className="eyebrow">Administração</span>
           <h1>Auditoria</h1>
-          <p>Histórico de ações registradas por tenant para rastrear alterações operacionais e administrativas.</p>
+          <p>Histórico de ações da empresa para rastrear alterações operacionais e administrativas.</p>
         </div>
         <button className="icon-button bordered" type="button" onClick={load} title="Atualizar">
           <RotateCcw size={18} />

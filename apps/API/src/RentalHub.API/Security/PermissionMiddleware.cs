@@ -24,7 +24,10 @@ public sealed class PermissionMiddleware
     {
         "buscaglobal",
         "notificacoes",
-        "portalproprietario"
+        "portalproprietario",
+        "lgpd",
+        "sistema",
+        "suporte"
     };
 
     private static readonly Dictionary<string, string> ResourceBySegment = new(StringComparer.OrdinalIgnoreCase)

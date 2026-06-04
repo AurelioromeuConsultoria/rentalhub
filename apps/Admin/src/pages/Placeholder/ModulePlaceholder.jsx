@@ -6,10 +6,9 @@ export function ModulePlaceholder({ title, description }) {
       <div className="placeholder-icon">
         <Construction size={24} />
       </div>
-      <span className="eyebrow">Próxima sprint</span>
+      <span className="eyebrow">Em preparação</span>
       <h1>{title}</h1>
       <p>{description}</p>
     </section>
   );
 }
-

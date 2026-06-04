@@ -23,7 +23,15 @@ Somente usuários com `IsPlatformAdmin=true` podem listar, criar, editar, inativ
 
 ## Observação
 
-Ao criar um tenant, o sistema cria automaticamente um perfil `Administrador` com todas as permissões. O usuário administrador inicial é opcional para permitir provisionamento em etapas.
+Ao criar um tenant, o sistema executa o onboarding inicial automaticamente:
+
+- cria os perfis base `Administrador`, `Financeiro`, `Operacional` e `Proprietário`;
+- cria as categorias financeiras padrão de receitas e despesas;
+- cria o usuário administrador inicial, quando e-mail é informado;
+- gera convite para o admin definir a própria senha, sem exigir senha manual no cadastro da empresa;
+- retorna status e checklist de onboarding para a tela de Empresas.
+
+O usuário administrador inicial continua opcional para permitir provisionamento em etapas. Quando SMTP não estiver configurado, o link de convite é exibido na tela para cópia manual.
 
 ## Validações Executadas
 

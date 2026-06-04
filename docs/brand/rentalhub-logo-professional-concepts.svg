@@ -1,0 +1,60 @@
+<svg width="1440" height="920" viewBox="0 0 1440 920" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="920" rx="42" fill="#070D18"/>
+  <text x="80" y="94" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="800">RentalHub</text>
+  <text x="80" y="132" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">propostas de marca mais minimalistas e profissionais</text>
+
+  <g transform="translate(80 190)">
+    <rect width="1280" height="190" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(44 42)">
+      <rect width="106" height="106" rx="28" fill="url(#blueTeal)"/>
+      <path d="M33 77V39C33 31.268 39.268 25 47 25H73" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M73 29V77" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M33 53H73" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M51 77V61C51 56.582 54.582 53 59 53H73" stroke="#B8F3EA" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="83" cy="80" r="8" fill="#B8F3EA"/>
+    </g>
+    <text x="188" y="91" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800">RentalHub</text>
+    <text x="191" y="132" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="650" letter-spacing="1.2">MONOGRAMA RH + GESTAO CENTRALIZADA</text>
+    <text x="760" y="82" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Direcao A</text>
+    <text x="760" y="116" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18">Mais marca SaaS. Menos literal. Funciona bem pequeno.</text>
+  </g>
+
+  <g transform="translate(80 410)">
+    <rect width="1280" height="190" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(44 42)">
+      <rect width="106" height="106" rx="28" fill="#111D31" stroke="#315C7E" stroke-width="2"/>
+      <path d="M30 65C30 45.118 46.118 29 66 29H78V41H66C52.745 41 42 51.745 42 65C42 78.255 52.745 89 66 89H78V101H66C46.118 101 30 84.882 30 65Z" fill="#8EC7FF"/>
+      <path d="M63 34L86 53.5V96H74V59L56 44L63 34Z" fill="#F8FAFC"/>
+      <path d="M49 68H78" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <text x="188" y="91" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800">RentalHub</text>
+    <text x="191" y="132" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="650" letter-spacing="1.2">PORTA + HUB + RESERVA</text>
+    <text x="760" y="82" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Direcao B</text>
+    <text x="760" y="116" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18">Mais imobiliaria premium. Ainda simples para favicon.</text>
+  </g>
+
+  <g transform="translate(80 630)">
+    <rect width="1280" height="190" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(44 42)">
+      <rect width="106" height="106" rx="28" fill="#0B1220" stroke="#35557C" stroke-width="2"/>
+      <path d="M31 76V34H46C57.598 34 67 43.402 67 55V76" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M75 34V76" stroke="#8EC7FF" stroke-width="8" stroke-linecap="round"/>
+      <path d="M45 55H75" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="31" cy="76" r="7" fill="#8EC7FF"/>
+      <circle cx="75" cy="34" r="7" fill="#55D6C5"/>
+      <circle cx="75" cy="76" r="7" fill="#F8FAFC"/>
+    </g>
+    <text x="188" y="91" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800">RentalHub</text>
+    <text x="191" y="132" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="650" letter-spacing="1.2">SISTEMA + CONEXOES + OPERACAO</text>
+    <text x="760" y="82" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Direcao C</text>
+    <text x="760" y="116" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18">Mais tecnologia. Boa para produto B2B e plataforma.</text>
+  </g>
+
+  <defs>
+    <linearGradient id="blueTeal" x1="0" y1="0" x2="106" y2="106" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.54" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+  </defs>
+</svg>

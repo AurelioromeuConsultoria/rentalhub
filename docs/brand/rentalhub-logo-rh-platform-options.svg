@@ -1,0 +1,78 @@
+<svg width="1440" height="1040" viewBox="0 0 1440 1040" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="1040" rx="42" fill="#070D18"/>
+  <text x="80" y="94" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="800">RentalHub</text>
+  <text x="80" y="132" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">variacoes do conceito plataforma, com RH mais legivel</text>
+
+  <g transform="translate(80 190)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="#0B1220" stroke="#35557C" stroke-width="2"/>
+      <path d="M31 77V31H51C62.598 31 72 40.402 72 52C72 63.598 62.598 73 51 73H31" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M58 70L76 77" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <path d="M82 31V77" stroke="#8EC7FF" stroke-width="8" stroke-linecap="round"/>
+      <path d="M66 54H82" stroke="#8EC7FF" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">A1 · RH desenhado por linhas, mais legivel</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais clara</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">O R fica evidente, e o H entra como coluna de plataforma.</text>
+  </g>
+
+  <g transform="translate(80 390)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="url(#deepGradient)"/>
+      <path d="M29 78V29H51C62.046 29 71 37.954 71 49C71 60.046 62.046 69 51 69H29" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M54 68L72 78" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M79 29V78" stroke="#B8F3EA" stroke-width="8" stroke-linecap="round"/>
+      <path d="M63 53H79" stroke="#B8F3EA" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="79" cy="29" r="5" fill="#55D6C5"/>
+      <circle cx="79" cy="78" r="5" fill="#55D6C5"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">A2 · RH compacto em bloco premium</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais produto</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Boa para sidebar, favicon e tela de login.</text>
+  </g>
+
+  <g transform="translate(80 590)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="#0B1220" stroke="#35557C" stroke-width="2"/>
+      <path d="M30 79V30H48C59.598 30 69 39.402 69 51C69 62.598 59.598 72 48 72H30" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M53 69L69 79" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <path d="M78 30V79" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M30 54H78" stroke="#8EC7FF" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="30" cy="54" r="5" fill="#55D6C5"/>
+      <circle cx="78" cy="54" r="5" fill="#55D6C5"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">A3 · RH com eixo de conexao</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais hub</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">A barra central comunica centralizacao de operacao.</text>
+  </g>
+
+  <g transform="translate(80 790)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="url(#deepGradient)"/>
+      <path d="M28 79V30H48C60.15 30 70 39.85 70 52C70 64.15 60.15 74 48 74H28" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M53 72L70 79" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <path d="M80 30V79" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M64 54H80" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M30 30L42 19H73L85 30" stroke="#8EC7FF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">A4 · RH + teto sutil</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais segmento</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Traz imovel de forma discreta, sem virar desenho de casa.</text>
+  </g>
+
+  <defs>
+    <linearGradient id="deepGradient" x1="0" y1="0" x2="106" y2="106" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.58" stop-color="#123A6F"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+  </defs>
+</svg>

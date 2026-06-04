@@ -2,6 +2,7 @@ import { CheckCircle2, Edit3, Plus, RotateCcw, Save, Trash2, Wrench } from 'luci
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi } from '@/api/cadastros';
 import { manutencoesApi } from '@/api/operacional';
+import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
 
 const statusOptions = [
@@ -54,6 +55,10 @@ function formatDate(value) {
 
 function labelFor(options, value) {
   return options.find((option) => option.value === Number(value))?.label || '-';
+}
+
+function scrollToForm() {
+  document.getElementById('manutencao-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function Field({ label, children, span = false }) {
@@ -234,7 +239,7 @@ export function ManutencaoPage() {
         <div>
           <span className="eyebrow">Operação diária</span>
           <h1>Manutenção</h1>
-          <p>Controle de ocorrências, responsáveis, prazos, custos estimados e valores realizados.</p>
+          <p>Registre ocorrências, acompanhe responsáveis, prazos, custos estimados e valores realizados.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -305,7 +310,7 @@ export function ManutencaoPage() {
           <div className="resource-panel-heading">
             <div>
               <strong>Ocorrências</strong>
-              <small>Manutenções abertas, em execução e resolvidas.</small>
+              <small>Reparos abertos, em execução e concluídos.</small>
             </div>
             <span>{manutencoes.length} registros</span>
           </div>
@@ -313,11 +318,12 @@ export function ManutencaoPage() {
           {loading ? (
             <div className="loading-line">Carregando manutenções...</div>
           ) : manutencoes.length === 0 ? (
-            <div className="inline-empty">
-              <Wrench size={26} />
-              <strong>Nenhuma manutenção encontrada</strong>
-              <span>Registre uma ocorrência para acompanhar status, custos e responsáveis.</span>
-            </div>
+            <EmptyState
+              icon={<Wrench size={26} />}
+              title="Nenhuma manutenção encontrada"
+              description="Abra ocorrências quando houver reparo, orçamento ou manutenção preventiva."
+              actions={[{ label: 'Nova manutenção', onClick: scrollToForm, icon: <Plus size={17} /> }]}
+            />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -368,7 +374,7 @@ export function ManutencaoPage() {
           )}
         </article>
 
-        <form className="resource-form" onSubmit={save}>
+        <form className="resource-form" id="manutencao-form" onSubmit={save}>
           <div className="form-title">
             <Plus size={18} />
             <strong>{editingId ? 'Editar manutenção' : 'Nova manutenção'}</strong>

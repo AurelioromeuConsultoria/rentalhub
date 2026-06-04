@@ -26,6 +26,7 @@ const routeLabels = {
   empresas: 'Empresas',
   configuracoes: 'Configurações',
   auditoria: 'Auditoria',
+  suporte: 'Suporte',
 };
 
 const notificationTypeLabels = {
@@ -237,7 +238,7 @@ export function Header() {
           {showSearch && search.trim().length >= 2 && (
             <div className="topbar-popover search-popover">
               {searchResults.length === 0 ? (
-                <span className="popover-empty">Nada encontrado</span>
+                <span className="popover-empty">Nenhum resultado encontrado</span>
               ) : (
                 searchResults.map((item) => (
                   <button type="button" key={item.id} onClick={() => navigateTo(item.href)}>
@@ -329,13 +330,13 @@ export function Header() {
                 <strong>Operar empresa</strong>
               </div>
               <button type="button" onClick={() => selectTenant(null)}>
-                <strong>{currentTenant?.nomeExibicao || currentTenant?.nome || 'Meu tenant'}</strong>
-                <span>Tenant do login</span>
+                <strong>{currentTenant?.nomeExibicao || currentTenant?.nome || 'Minha empresa'}</strong>
+                <span>Empresa do meu login</span>
               </button>
               {tenantOptions.map((tenant) => (
                 <button type="button" key={tenant.id} onClick={() => selectTenant(tenant)}>
                   <strong>{tenant.nomeExibicao}</strong>
-                  <span>{tenant.slug}{tenant.ativo ? '' : ' · inativa'}</span>
+                  <span>{tenant.ativo ? 'Empresa ativa' : 'Empresa inativa'}</span>
                 </button>
               ))}
             </div>

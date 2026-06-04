@@ -14,6 +14,8 @@ public sealed class PermissionMiddlewareTests
     [InlineData("/api/perfis-acesso", "GET", Resources.PerfisAcesso, PermissionAccess.View)]
     [InlineData("/api/configuracoes/tenant", "PUT", Resources.Configuracoes, PermissionAccess.Edit)]
     [InlineData("/api/auditoria", "GET", Resources.Auditoria, PermissionAccess.View)]
+    [InlineData("/api/tenants", "GET", Resources.Tenants, PermissionAccess.View)]
+    [InlineData("/api/tenants", "POST", Resources.Tenants, PermissionAccess.Edit)]
     public void TryCreateCheck_ShouldResolveKnownApiResources(
         string path,
         string method,
@@ -32,6 +34,7 @@ public sealed class PermissionMiddlewareTests
     [InlineData("/api/health")]
     [InlineData("/api/notificacoes")]
     [InlineData("/api/buscaglobal")]
+    [InlineData("/api/lgpd/status")]
     [InlineData("/")]
     public void TryCreateCheck_ShouldSkipPublicOrAuthenticatedOnlyRoutes(string path)
     {

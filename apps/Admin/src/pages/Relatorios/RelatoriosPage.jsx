@@ -218,9 +218,9 @@ export function RelatoriosPage() {
         <>
           <section className="kpi-grid secondary-kpis">
             <SummaryCard label="Reservas" value={data?.totalReservas || 0} />
-            <SummaryCard label="Hospedagem" value={money(data?.valorHospedagem)} />
-            <SummaryCard label="Limpeza" value={money(data?.taxaLimpeza)} />
-            <SummaryCard label="Líquido" value={money(data?.valorLiquido)} />
+            <SummaryCard label="Valor da hospedagem" value={money(data?.valorHospedagem)} />
+            <SummaryCard label="Taxas de limpeza" value={money(data?.taxaLimpeza)} />
+            <SummaryCard label="Valor líquido" value={money(data?.valorLiquido)} />
           </section>
 
           <section className="content-grid">

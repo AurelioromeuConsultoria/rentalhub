@@ -9,6 +9,7 @@ import {
   Home,
   Hotel,
   History,
+  LifeBuoy,
   KeyRound,
   Menu,
   PanelLeftClose,
@@ -23,7 +24,9 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { RentalHubMark } from '@/components/Brand/RentalHubMark';
 import { useAuth } from '@/context/AuthContext';
+import { APP_VERSION } from '@/lib/version';
 
 const SIDEBAR_COLLAPSED_KEY = 'rentalhub-sidebar-collapsed';
 
@@ -67,6 +70,12 @@ const menuGroups = [
       { label: 'Auditoria', href: '/auditoria', icon: History, resource: 'auditoria' },
     ],
   },
+  {
+    title: 'Atendimento',
+    items: [
+      { label: 'Suporte', href: '/suporte', icon: LifeBuoy },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -94,7 +103,7 @@ export function Sidebar() {
               return isPlatformAdmin;
             }
 
-            return canView(item.resource);
+            return !item.resource || canView(item.resource);
           }),
         }))
         .filter((group) => group.items.length > 0);
@@ -126,7 +135,7 @@ export function Sidebar() {
       <div className="sidebar-logo-row">
         <div className="brand-block">
           <div className="brand-mark">
-            <Hotel size={20} />
+            <RentalHubMark />
           </div>
           <div className="brand-copy">
             <strong>RentalHub</strong>
@@ -188,8 +197,9 @@ export function Sidebar() {
             <Shield size={16} />
             <strong>Modo plataforma</strong>
           </div>
-          <p>{isOwner ? 'acesso proprietário' : 'tenant: rentalhub'}</p>
+          <p>{isOwner ? 'Portal do proprietário' : isPlatformAdmin ? 'Admin geral' : 'Empresa ativa'}</p>
         </div>
+        <span className="app-version">v{APP_VERSION}</span>
         <a href="https://malachdigital.com.br/" target="_blank" rel="noreferrer">
           <span className="malach-mark">M</span>
           <span>Desenvolvido por Malach Digital</span>

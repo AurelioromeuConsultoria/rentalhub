@@ -31,6 +31,8 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<PerfilAcesso> PerfisAcesso => Set<PerfilAcesso>();
     public DbSet<PerfilAcessoPermissao> PerfisAcessoPermissoes => Set<PerfilAcessoPermissao>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<LgpdConsent> LgpdConsents => Set<LgpdConsent>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<Proprietario> Proprietarios => Set<Proprietario>();
     public DbSet<Imovel> Imoveis => Set<Imovel>();
     public DbSet<ImovelComodidade> ImovelComodidades => Set<ImovelComodidade>();
@@ -73,6 +75,14 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.ComissaoPadraoAdministradora).HasPrecision(8, 2);
             entity.Property(e => e.TaxaLimpezaPadrao).HasPrecision(12, 2);
             entity.Property(e => e.ObservacoesOperacionais).HasMaxLength(1200);
+            entity.Property(e => e.SuporteEmail).HasMaxLength(180);
+            entity.Property(e => e.SuporteWhatsapp).HasMaxLength(40);
+            entity.Property(e => e.SuporteHorario).HasMaxLength(180);
+            entity.Property(e => e.JanelaAtualizacao).HasMaxLength(180);
+            entity.Property(e => e.AvisoAtualizacaoTitulo).HasMaxLength(180);
+            entity.Property(e => e.AvisoAtualizacaoMensagem).HasMaxLength(1200);
+            entity.Property(e => e.AvisoAtualizacaoVersao).HasMaxLength(40);
+            entity.Property(e => e.AvisoAtualizacaoAtivo).IsRequired();
             entity.Property(e => e.IsRootTenant).IsRequired();
             entity.Property(e => e.Ativo).IsRequired();
             entity.Property(e => e.DataCriacao).IsRequired();
@@ -147,8 +157,12 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.IsPlatformAdmin).IsRequired();
             entity.Property(e => e.Ativo).IsRequired();
             entity.Property(e => e.RefreshTokenHash).HasMaxLength(200);
+            entity.Property(e => e.ConviteTokenHash).HasMaxLength(200);
+            entity.Property(e => e.ResetSenhaTokenHash).HasMaxLength(200);
             entity.Property(e => e.DataCriacao).IsRequired();
             entity.HasIndex(e => new { e.TenantId, e.Email }).IsUnique();
+            entity.HasIndex(e => e.ConviteTokenHash);
+            entity.HasIndex(e => e.ResetSenhaTokenHash);
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.PerfilAcesso).WithMany().HasForeignKey(e => e.PerfilAcessoId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Proprietario).WithMany().HasForeignKey(e => e.ProprietarioId).OnDelete(DeleteBehavior.SetNull);
@@ -168,6 +182,41 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<LgpdConsent>(entity =>
+        {
+            entity.ToTable("LgpdConsents");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.UsuarioId).IsRequired();
+            entity.Property(e => e.TermsVersion).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.PrivacyVersion).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.AcceptedAt).IsRequired();
+            entity.Property(e => e.IpAddress).HasMaxLength(60);
+            entity.Property(e => e.UserAgent).HasMaxLength(500);
+            entity.HasIndex(e => new { e.TenantId, e.UsuarioId, e.AcceptedAt });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Usuario).WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.ToTable("SupportTickets");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.CreatedByNome).IsRequired().HasMaxLength(150);
+            entity.Property(e => e.CreatedByEmail).IsRequired().HasMaxLength(180);
+            entity.Property(e => e.Titulo).IsRequired().HasMaxLength(160);
+            entity.Property(e => e.Descricao).IsRequired().HasMaxLength(2000);
+            entity.Property(e => e.Modulo).IsRequired().HasMaxLength(80);
+            entity.Property(e => e.Prioridade).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.Status, e.DataCriacao });
+            entity.HasIndex(e => new { e.TenantId, e.CreatedByUsuarioId, e.DataCriacao });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.CreatedByUsuario).WithMany().HasForeignKey(e => e.CreatedByUsuarioId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Proprietario>(entity =>

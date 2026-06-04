@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using RentalHub.Application.Services;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Security;
 using RentalHub.Infrastructure.Data;
@@ -13,10 +14,12 @@ namespace RentalHub.API.Controllers;
 public sealed class PerfisAcessoController : ControllerBase
 {
     private readonly RentalHubDbContext _dbContext;
+    private readonly ICurrentUserContext _currentUserContext;
 
-    public PerfisAcessoController(RentalHubDbContext dbContext)
+    public PerfisAcessoController(RentalHubDbContext dbContext, ICurrentUserContext currentUserContext)
     {
         _dbContext = dbContext;
+        _currentUserContext = currentUserContext;
     }
 
     [HttpGet]
@@ -26,22 +29,9 @@ public sealed class PerfisAcessoController : ControllerBase
             .AsNoTracking()
             .Include(p => p.Permissoes)
             .OrderBy(p => p.Nome)
-            .Select(p => new PerfilAcessoResponse(
-                p.Id,
-                p.Nome,
-                p.Descricao,
-                p.Ativo,
-                p.Permissoes
-                    .OrderBy(permissao => permissao.Recurso)
-                    .Select(permissao => new PerfilAcessoPermissaoResponse(
-                        permissao.Recurso,
-                        permissao.PodeVer,
-                        permissao.PodeEditar,
-                        permissao.PodeExcluir))
-                    .ToList()))
             .ToListAsync(cancellationToken);
 
-        return Ok(perfis);
+        return Ok(perfis.Select(ToResponse).ToList());
     }
 
     [HttpPost]
@@ -136,20 +126,24 @@ public sealed class PerfisAcessoController : ControllerBase
         return NoContent();
     }
 
-    private static ActionResult? ValidateRequest(PerfilAcessoRequest request)
+    private ActionResult? ValidateRequest(PerfilAcessoRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Nome))
         {
             return new BadRequestObjectResult(new { message = "Nome do perfil é obrigatório." });
         }
 
+        var allowedResources = _currentUserContext.IsPlatformAdmin
+            ? Resources.All
+            : Resources.All.Where(resource => resource != Resources.Tenants).ToArray();
+
         var invalidResource = (request.Permissoes ?? [])
             .Select(p => NormalizeResource(p.Recurso))
-            .FirstOrDefault(resource => !Resources.All.Contains(resource, StringComparer.OrdinalIgnoreCase));
+            .FirstOrDefault(resource => !allowedResources.Contains(resource, StringComparer.OrdinalIgnoreCase));
 
         return invalidResource is null
             ? null
-            : new BadRequestObjectResult(new { message = $"Recurso inválido: {invalidResource}." });
+            : new BadRequestObjectResult(new { message = $"Recurso inválido ou restrito: {invalidResource}." });
     }
 
     private void ApplyPermissions(PerfilAcesso perfil, IReadOnlyCollection<PerfilAcessoPermissaoRequest>? requestedPermissions)
@@ -191,14 +185,18 @@ public sealed class PerfisAcessoController : ControllerBase
         }
     }
 
-    private static PerfilAcessoResponse ToResponse(PerfilAcesso perfil)
+    private PerfilAcessoResponse ToResponse(PerfilAcesso perfil)
     {
+        var permissions = _currentUserContext.IsPlatformAdmin
+            ? perfil.Permissoes
+            : perfil.Permissoes.Where(permission => permission.Recurso != Resources.Tenants);
+
         return new PerfilAcessoResponse(
             perfil.Id,
             perfil.Nome,
             perfil.Descricao,
             perfil.Ativo,
-            perfil.Permissoes
+            permissions
                 .OrderBy(permission => permission.Recurso)
                 .Select(permission => new PerfilAcessoPermissaoResponse(
                     permission.Recurso,

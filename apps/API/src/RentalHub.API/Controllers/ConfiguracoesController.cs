@@ -106,6 +106,17 @@ public sealed class ConfiguracoesController : ControllerBase
         tenant.ComissaoPadraoAdministradora = request.ComissaoPadraoAdministradora;
         tenant.TaxaLimpezaPadrao = request.TaxaLimpezaPadrao;
         tenant.ObservacoesOperacionais = NormalizeOptional(request.ObservacoesOperacionais);
+        tenant.SuporteEmail = NormalizeOptional(request.SuporteEmail);
+        tenant.SuporteWhatsapp = NormalizeOptional(request.SuporteWhatsapp);
+        tenant.SuporteHorario = NormalizeOptional(request.SuporteHorario);
+        tenant.JanelaAtualizacao = NormalizeOptional(request.JanelaAtualizacao);
+        tenant.AvisoAtualizacaoTitulo = NormalizeOptional(request.AvisoAtualizacaoTitulo);
+        tenant.AvisoAtualizacaoMensagem = NormalizeOptional(request.AvisoAtualizacaoMensagem);
+        tenant.AvisoAtualizacaoVersao = NormalizeOptional(request.AvisoAtualizacaoVersao);
+        tenant.AvisoAtualizacaoAtivo = request.AvisoAtualizacaoAtivo;
+        tenant.AvisoAtualizacaoPublicadoEm = request.AvisoAtualizacaoAtivo
+            ? (tenant.AvisoAtualizacaoPublicadoEm ?? DateTime.UtcNow)
+            : null;
         tenant.Ativo = request.Ativo;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -137,6 +148,15 @@ public sealed class ConfiguracoesController : ControllerBase
             tenant.ComissaoPadraoAdministradora,
             tenant.TaxaLimpezaPadrao,
             tenant.ObservacoesOperacionais,
+            tenant.SuporteEmail,
+            tenant.SuporteWhatsapp,
+            tenant.SuporteHorario,
+            tenant.JanelaAtualizacao,
+            tenant.AvisoAtualizacaoTitulo,
+            tenant.AvisoAtualizacaoMensagem,
+            tenant.AvisoAtualizacaoVersao,
+            tenant.AvisoAtualizacaoAtivo,
+            tenant.AvisoAtualizacaoPublicadoEm,
             tenant.IsRootTenant,
             tenant.Ativo,
             tenant.Domains
@@ -178,6 +198,14 @@ public sealed record TenantConfiguracaoRequest(
     decimal? ComissaoPadraoAdministradora = null,
     decimal? TaxaLimpezaPadrao = null,
     string? ObservacoesOperacionais = null,
+    string? SuporteEmail = null,
+    string? SuporteWhatsapp = null,
+    string? SuporteHorario = null,
+    string? JanelaAtualizacao = null,
+    string? AvisoAtualizacaoTitulo = null,
+    string? AvisoAtualizacaoMensagem = null,
+    string? AvisoAtualizacaoVersao = null,
+    bool AvisoAtualizacaoAtivo = false,
     bool Ativo = true);
 
 public sealed record ConfiguracoesResumoResponse(
@@ -210,6 +238,15 @@ public sealed record TenantConfiguracaoResponse(
     decimal? ComissaoPadraoAdministradora,
     decimal? TaxaLimpezaPadrao,
     string? ObservacoesOperacionais,
+    string? SuporteEmail,
+    string? SuporteWhatsapp,
+    string? SuporteHorario,
+    string? JanelaAtualizacao,
+    string? AvisoAtualizacaoTitulo,
+    string? AvisoAtualizacaoMensagem,
+    string? AvisoAtualizacaoVersao,
+    bool AvisoAtualizacaoAtivo,
+    DateTime? AvisoAtualizacaoPublicadoEm,
     bool IsRootTenant,
     bool Ativo,
     IReadOnlyCollection<string> Domains,

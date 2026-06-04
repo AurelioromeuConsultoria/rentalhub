@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RentalHub.Application.Security;
+using RentalHub.Application.Services;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Enums;
 using RentalHub.Domain.Security;
@@ -17,6 +18,9 @@ public sealed class TenantsController : ControllerBase
 {
     private readonly RentalHubDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ITokenService _tokenService;
+    private readonly IEmailSender _emailSender;
+    private readonly IConfiguration _configuration;
     private static readonly (string Nome, MovimentacaoFinanceiraTipo Tipo)[] DefaultFinancialCategories =
     [
         ("Reservas Airbnb", MovimentacaoFinanceiraTipo.Receita),
@@ -35,10 +39,18 @@ public sealed class TenantsController : ControllerBase
         ("Outros custos", MovimentacaoFinanceiraTipo.Despesa)
     ];
 
-    public TenantsController(RentalHubDbContext dbContext, IPasswordHasher passwordHasher)
+    public TenantsController(
+        RentalHubDbContext dbContext,
+        IPasswordHasher passwordHasher,
+        ITokenService tokenService,
+        IEmailSender emailSender,
+        IConfiguration configuration)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
+        _tokenService = tokenService;
+        _emailSender = emailSender;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -77,12 +89,28 @@ public sealed class TenantsController : ControllerBase
             .Select(g => new { TenantId = g.Key, Total = g.Count() })
             .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
 
+        var perfisPorTenant = await _dbContext.PerfisAcesso
+            .IgnoreQueryFilters()
+            .Where(p => tenantIds.Contains(p.TenantId))
+            .GroupBy(p => p.TenantId)
+            .Select(g => new { TenantId = g.Key, Total = g.Count() })
+            .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
+
+        var categoriasPorTenant = await _dbContext.CategoriasFinanceiras
+            .IgnoreQueryFilters()
+            .Where(c => tenantIds.Contains(c.TenantId))
+            .GroupBy(c => c.TenantId)
+            .Select(g => new { TenantId = g.Key, Total = g.Count() })
+            .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
+
         return Ok(tenants
             .Select(t => ToResponse(
                 t,
                 usuariosPorTenant.GetValueOrDefault(t.Id),
                 imoveisPorTenant.GetValueOrDefault(t.Id),
-                reservasPorTenant.GetValueOrDefault(t.Id)))
+                reservasPorTenant.GetValueOrDefault(t.Id),
+                perfisPorTenant.GetValueOrDefault(t.Id),
+                categoriasPorTenant.GetValueOrDefault(t.Id)))
             .ToList());
     }
 
@@ -107,8 +135,10 @@ public sealed class TenantsController : ControllerBase
         var usuarios = await _dbContext.Usuarios.IgnoreQueryFilters().CountAsync(u => u.TenantId == id, cancellationToken);
         var imoveis = await _dbContext.Imoveis.IgnoreQueryFilters().CountAsync(i => i.TenantId == id, cancellationToken);
         var reservas = await _dbContext.Reservas.IgnoreQueryFilters().CountAsync(r => r.TenantId == id, cancellationToken);
+        var perfis = await _dbContext.PerfisAcesso.IgnoreQueryFilters().CountAsync(p => p.TenantId == id, cancellationToken);
+        var categorias = await _dbContext.CategoriasFinanceiras.IgnoreQueryFilters().CountAsync(c => c.TenantId == id, cancellationToken);
 
-        return Ok(ToResponse(tenant, usuarios, imoveis, reservas));
+        return Ok(ToResponse(tenant, usuarios, imoveis, reservas, perfis, categorias));
     }
 
     [HttpPost]
@@ -150,6 +180,8 @@ public sealed class TenantsController : ControllerBase
 
         TenantResponse? createdTenant = null;
         var createdTenantId = 0;
+        Usuario? invitedAdmin = null;
+        string? adminInviteUrl = null;
 
         try
         {
@@ -172,36 +204,60 @@ public sealed class TenantsController : ControllerBase
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
                 ApplyDomains(tenant, domains);
-                var perfil = CreateAdminProfile(tenant.Id);
-                _dbContext.PerfisAcesso.Add(perfil);
-                _dbContext.CategoriasFinanceiras.AddRange(CreateDefaultFinancialCategories(tenant.Id));
+                var perfis = CreateDefaultAccessProfiles(tenant.Id);
+                var adminProfile = perfis.First(p => p.Nome == "Administrador");
+                var categorias = CreateDefaultFinancialCategories(tenant.Id).ToList();
+                _dbContext.PerfisAcesso.AddRange(perfis);
+                _dbContext.CategoriasFinanceiras.AddRange(categorias);
 
                 if (!string.IsNullOrWhiteSpace(request.AdminEmail))
                 {
-                    _dbContext.Usuarios.Add(new Usuario
+                    invitedAdmin = new Usuario
                     {
                         TenantId = tenant.Id,
-                        PerfilAcesso = perfil,
+                        PerfilAcesso = adminProfile,
                         Nome = string.IsNullOrWhiteSpace(request.AdminNome) ? request.NomeExibicao.Trim() : request.AdminNome.Trim(),
                         Email = request.AdminEmail.Trim().ToLowerInvariant(),
-                        SenhaHash = _passwordHasher.HashPassword(request.AdminSenha!.Trim()),
+                        SenhaHash = _passwordHasher.HashPassword(
+                            string.IsNullOrWhiteSpace(request.AdminSenha)
+                                ? _tokenService.GenerateRefreshToken()
+                                : request.AdminSenha.Trim()),
                         TipoUsuario = TipoUsuario.Administrador,
                         IsPlatformAdmin = false,
                         Ativo = true,
                         DataCriacao = DateTime.UtcNow
-                    });
+                    };
+
+                    if (request.EnviarConviteAdmin)
+                    {
+                        adminInviteUrl = ApplyInviteToken(invitedAdmin);
+                    }
+
+                    _dbContext.Usuarios.Add(invitedAdmin);
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
                 createdTenantId = tenant.Id;
-                createdTenant = ToResponse(tenant, string.IsNullOrWhiteSpace(request.AdminEmail) ? 0 : 1, 0, 0);
+                createdTenant = ToResponse(
+                    tenant,
+                    string.IsNullOrWhiteSpace(request.AdminEmail) ? 0 : 1,
+                    0,
+                    0,
+                    perfis.Count,
+                    categorias.Count,
+                    adminInviteUrl);
             });
         }
         catch (DbUpdateException)
         {
             return Conflict(new { message = "Não foi possível criar a empresa. Verifique slug, domínios e e-mail do admin." });
+        }
+
+        if (invitedAdmin is not null && adminInviteUrl is not null)
+        {
+            await SendInviteEmailAsync(invitedAdmin, adminInviteUrl, cancellationToken);
         }
 
         return CreatedAtAction(nameof(GetById), new { id = createdTenantId }, createdTenant);
@@ -268,8 +324,10 @@ public sealed class TenantsController : ControllerBase
         var usuarios = await _dbContext.Usuarios.IgnoreQueryFilters().CountAsync(u => u.TenantId == id, cancellationToken);
         var imoveis = await _dbContext.Imoveis.IgnoreQueryFilters().CountAsync(i => i.TenantId == id, cancellationToken);
         var reservas = await _dbContext.Reservas.IgnoreQueryFilters().CountAsync(r => r.TenantId == id, cancellationToken);
+        var perfis = await _dbContext.PerfisAcesso.IgnoreQueryFilters().CountAsync(p => p.TenantId == id, cancellationToken);
+        var categorias = await _dbContext.CategoriasFinanceiras.IgnoreQueryFilters().CountAsync(c => c.TenantId == id, cancellationToken);
 
-        return Ok(ToResponse(tenant, usuarios, imoveis, reservas));
+        return Ok(ToResponse(tenant, usuarios, imoveis, reservas, perfis, categorias));
     }
 
     [HttpDelete("{id:int}")]
@@ -312,8 +370,22 @@ public sealed class TenantsController : ControllerBase
             return BadRequest(new { message = "Nome e nome de exibição são obrigatórios." });
         }
 
-        if (validateAdmin && !string.IsNullOrWhiteSpace(request.AdminEmail) &&
-            (string.IsNullOrWhiteSpace(request.AdminSenha) || request.AdminSenha.Trim().Length < 8))
+        if (!validateAdmin || string.IsNullOrWhiteSpace(request.AdminEmail))
+        {
+            return null;
+        }
+
+        if (request.EnviarConviteAdmin && !string.IsNullOrWhiteSpace(request.AdminSenha))
+        {
+            return BadRequest(new { message = "Use convite ou senha do admin, não os dois ao mesmo tempo." });
+        }
+
+        if (!request.EnviarConviteAdmin && string.IsNullOrWhiteSpace(request.AdminSenha))
+        {
+            return BadRequest(new { message = "Informe uma senha ou mantenha o convite de admin ativado." });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.AdminSenha) && request.AdminSenha.Trim().Length < 8)
         {
             return BadRequest(new { message = "A senha do admin deve ter pelo menos 8 caracteres." });
         }
@@ -336,22 +408,61 @@ public sealed class TenantsController : ControllerBase
             .ToList();
     }
 
-    private static PerfilAcesso CreateAdminProfile(int tenantId)
+    private static IReadOnlyList<PerfilAcesso> CreateDefaultAccessProfiles(int tenantId)
+    {
+        var tenantAdminResources = Resources.All
+            .Where(resource => resource != Resources.Tenants)
+            .ToArray();
+
+        return
+        [
+            CreateProfile(tenantId, "Administrador", "Acesso total ao tenant.", tenantAdminResources, canEdit: true, canDelete: true),
+            CreateProfile(
+                tenantId,
+                "Financeiro",
+                "Acesso aos módulos financeiros, repasses e relatórios.",
+                [Resources.Dashboard, Resources.Financeiro, Resources.Repasses, Resources.Relatorios, Resources.Imoveis, Resources.Proprietarios, Resources.Reservas],
+                canEdit: true,
+                canDelete: false),
+            CreateProfile(
+                tenantId,
+                "Operacional",
+                "Acesso a reservas, calendário, limpeza e manutenção.",
+                [Resources.Dashboard, Resources.Imoveis, Resources.Hospedes, Resources.Reservas, Resources.Calendario, Resources.Limpezas, Resources.Manutencoes],
+                canEdit: true,
+                canDelete: false),
+            CreateProfile(
+                tenantId,
+                "Proprietário",
+                "Acesso restrito ao portal do proprietário.",
+                [Resources.PortalProprietario],
+                canEdit: false,
+                canDelete: false)
+        ];
+    }
+
+    private static PerfilAcesso CreateProfile(
+        int tenantId,
+        string nome,
+        string descricao,
+        IReadOnlyCollection<string> resources,
+        bool canEdit,
+        bool canDelete)
     {
         return new PerfilAcesso
         {
             TenantId = tenantId,
-            Nome = "Administrador",
-            Descricao = "Acesso total ao tenant.",
+            Nome = nome,
+            Descricao = descricao,
             Ativo = true,
             DataCriacao = DateTime.UtcNow,
-            Permissoes = Resources.All.Select(resource => new PerfilAcessoPermissao
+            Permissoes = resources.Select(resource => new PerfilAcessoPermissao
             {
                 TenantId = tenantId,
                 Recurso = resource,
                 PodeVer = true,
-                PodeEditar = true,
-                PodeExcluir = true
+                PodeEditar = canEdit,
+                PodeExcluir = canDelete
             }).ToList()
         };
     }
@@ -400,8 +511,63 @@ public sealed class TenantsController : ControllerBase
         }
     }
 
-    private static TenantResponse ToResponse(Tenant tenant, int usuarios, int imoveis, int reservas)
+    private string ApplyInviteToken(Usuario usuario)
     {
+        var token = _tokenService.GenerateRefreshToken();
+        usuario.ConviteTokenHash = _tokenService.HashRefreshToken(token);
+        usuario.ConviteExpiraEm = DateTime.UtcNow.AddDays(7);
+        usuario.ResetSenhaTokenHash = null;
+        usuario.ResetSenhaExpiraEm = null;
+
+        return BuildPasswordUrl(token);
+    }
+
+    private string BuildPasswordUrl(string token)
+    {
+        var configuredAdminUrl = _configuration["App:AdminUrl"] ?? _configuration["Frontend:BaseUrl"];
+        var origin = Request.Headers.Origin.ToString();
+        var baseUrl = !string.IsNullOrWhiteSpace(configuredAdminUrl)
+            ? configuredAdminUrl
+            : !string.IsNullOrWhiteSpace(origin)
+                ? origin
+                : $"{Request.Scheme}://{Request.Host}";
+
+        return $"{baseUrl.TrimEnd('/')}/definir-senha?token={Uri.EscapeDataString(token)}";
+    }
+
+    private async Task SendInviteEmailAsync(Usuario usuario, string conviteUrl, CancellationToken cancellationToken)
+    {
+        var text = $"""
+            Olá, {usuario.Nome}.
+
+            Sua empresa foi ativada no RentalHub.
+
+            Definir senha: {conviteUrl}
+
+            Este link expira em 7 dias.
+            """;
+
+        var html = $"""
+            <p>Olá, {usuario.Nome}.</p>
+            <p>Sua empresa foi ativada no RentalHub.</p>
+            <p><a href="{conviteUrl}">Definir senha</a></p>
+            <p>Este link expira em 7 dias.</p>
+            """;
+
+        await _emailSender.SendAsync(usuario.Email, "Sua empresa foi ativada no RentalHub", html, text, cancellationToken);
+    }
+
+    private static TenantResponse ToResponse(
+        Tenant tenant,
+        int usuarios,
+        int imoveis,
+        int reservas,
+        int perfis,
+        int categorias,
+        string? adminConviteUrl = null)
+    {
+        var checklist = BuildOnboardingChecklist(usuarios, imoveis, reservas, perfis, categorias);
+
         return new TenantResponse(
             tenant.Id,
             tenant.Nome,
@@ -418,7 +584,55 @@ public sealed class TenantsController : ControllerBase
             usuarios,
             imoveis,
             reservas,
+            perfis,
+            categorias,
+            ResolveOnboardingStatus(usuarios, imoveis, reservas, perfis, categorias),
+            checklist,
+            adminConviteUrl,
             tenant.DataCriacao);
+    }
+
+    private static IReadOnlyCollection<TenantOnboardingItemResponse> BuildOnboardingChecklist(
+        int usuarios,
+        int imoveis,
+        int reservas,
+        int perfis,
+        int categorias)
+    {
+        return
+        [
+            new TenantOnboardingItemResponse("tenant", "Empresa criada", true),
+            new TenantOnboardingItemResponse("perfis", "Perfis base criados", perfis >= 4),
+            new TenantOnboardingItemResponse("categorias", "Categorias financeiras criadas", categorias >= DefaultFinancialCategories.Length),
+            new TenantOnboardingItemResponse("admin", "Admin convidado", usuarios > 0),
+            new TenantOnboardingItemResponse("imovel", "Primeiro imóvel cadastrado", imoveis > 0),
+            new TenantOnboardingItemResponse("reserva", "Primeira reserva criada", reservas > 0)
+        ];
+    }
+
+    private static string ResolveOnboardingStatus(int usuarios, int imoveis, int reservas, int perfis, int categorias)
+    {
+        if (perfis < 4 || categorias < DefaultFinancialCategories.Length)
+        {
+            return "base-pendente";
+        }
+
+        if (usuarios == 0)
+        {
+            return "aguardando-admin";
+        }
+
+        if (imoveis == 0)
+        {
+            return "aguardando-imovel";
+        }
+
+        if (reservas == 0)
+        {
+            return "aguardando-reserva";
+        }
+
+        return "operacional";
     }
 }
 
@@ -430,7 +644,8 @@ public sealed record TenantRequest(
     bool Ativo = true,
     string? AdminNome = null,
     string? AdminEmail = null,
-    string? AdminSenha = null);
+    string? AdminSenha = null,
+    bool EnviarConviteAdmin = true);
 
 public sealed record TenantResponse(
     int Id,
@@ -443,4 +658,11 @@ public sealed record TenantResponse(
     int Usuarios,
     int Imoveis,
     int Reservas,
+    int Perfis,
+    int Categorias,
+    string OnboardingStatus,
+    IReadOnlyCollection<TenantOnboardingItemResponse> OnboardingChecklist,
+    string? AdminConviteUrl,
     DateTime DataCriacao);
+
+public sealed record TenantOnboardingItemResponse(string Key, string Label, bool Done);

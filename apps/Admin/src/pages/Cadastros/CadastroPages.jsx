@@ -389,9 +389,9 @@ export function ProprietariosPage() {
   return (
     <div className="resource-page">
       <ResourceHeader
-        eyebrow="Cadastros base"
+        eyebrow="Cadastros"
         title="Proprietários"
-        description="Cadastro dos donos dos imóveis, dados bancários e vínculo operacional para repasses."
+        description="Donos dos imóveis, dados bancários e informações usadas para calcular repasses."
         onCreate={startCreate}
         onRefresh={load}
       />
@@ -579,9 +579,9 @@ export function HospedesPage() {
   return (
     <div className="resource-page">
       <ResourceHeader
-        eyebrow="Cadastros base"
+        eyebrow="Cadastros"
         title="Hóspedes"
-        description="Base de hóspedes com documento, contato, nacionalidade e observações para histórico de reservas."
+        description="Pessoas hospedadas, contatos, documentos e histórico para novas reservas."
         onCreate={startCreate}
         onRefresh={load}
       />
@@ -599,7 +599,7 @@ export function HospedesPage() {
             <EmptyState
               icon={<UserRound size={26} />}
               title="Nenhum hóspede cadastrado"
-              description="Cadastre hóspedes para criar reservas na próxima sprint."
+              description="Cadastre hóspedes para lançar reservas e manter o histórico de estadias."
             />
           ) : (
             <div className="data-table-wrap">
@@ -939,9 +939,9 @@ export function ImoveisPage() {
   return (
     <div className="resource-page">
       <ResourceHeader
-        eyebrow="Cadastros base"
+        eyebrow="Cadastros"
         title="Imóveis"
-        description="Cadastro operacional dos imóveis, vínculo com proprietário, capacidades, status, comodidades e fotos."
+        description="Imóveis disponíveis para locação, com proprietário, endereço, capacidade, comodidades e fotos."
         onCreate={startCreate}
         onRefresh={load}
       />

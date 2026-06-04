@@ -1,0 +1,60 @@
+<svg width="1440" height="920" viewBox="0 0 1440 920" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="920" rx="42" fill="#070D18"/>
+  <text x="80" y="94" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="800">RentalHub</text>
+  <text x="80" y="132" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">A2 refinado: letras mais legiveis com fundo mais sobrio</text>
+
+  <g transform="translate(80 190)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="#0B1220" stroke="#35557C" stroke-width="2"/>
+      <path d="M29 78V29H51C62.046 29 71 37.954 71 49C71 60.046 62.046 69 51 69H29" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M54 68L72 78" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <path d="M79 29V78" stroke="#B8F3EA" stroke-width="8" stroke-linecap="round"/>
+      <path d="M63 53H79" stroke="#B8F3EA" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="79" cy="29" r="5" fill="#55D6C5"/>
+      <circle cx="79" cy="78" r="5" fill="#55D6C5"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">B1 · A2 sobre fundo sobrio</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais elegante</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Minha recomendacao: premium, legivel e sem excesso de efeito.</text>
+  </g>
+
+  <g transform="translate(80 390)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="#111D31" stroke="#315C7E" stroke-width="2"/>
+      <rect x="11" y="11" width="84" height="84" rx="21" fill="#0B1220" fill-opacity="0.5"/>
+      <path d="M29 78V29H51C62.046 29 71 37.954 71 49C71 60.046 62.046 69 51 69H29" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M54 68L72 78" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <path d="M79 29V78" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M63 53H79" stroke="#8EC7FF" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">B2 · fundo card, letras brancas</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais corporativa</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Um pouco mais seria. Boa se quisermos menos cor no simbolo.</text>
+  </g>
+
+  <g transform="translate(80 590)">
+    <rect width="1280" height="170" rx="28" fill="#0D1728" stroke="#24334C" stroke-width="2"/>
+    <g transform="translate(42 32)">
+      <rect width="106" height="106" rx="28" fill="#0B1220" stroke="#35557C" stroke-width="2"/>
+      <path d="M29 78V29H51C62.046 29 71 37.954 71 49C71 60.046 62.046 69 51 69H29" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M54 68L72 78" stroke="#55D6C5" stroke-width="8" stroke-linecap="round"/>
+      <path d="M79 29V78" stroke="#F8FAFC" stroke-width="8" stroke-linecap="round"/>
+      <path d="M63 53H79" stroke="#8EC7FF" stroke-width="8" stroke-linecap="round"/>
+      <path d="M29 53H79" stroke="#55D6C5" stroke-width="3" stroke-linecap="round" stroke-opacity="0.75"/>
+    </g>
+    <text x="188" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800">RentalHub</text>
+    <text x="190" y="118" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" letter-spacing="1.2">B3 · A2 + linha hub discreta</text>
+    <text x="760" y="74" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Mais plataforma</text>
+    <text x="760" y="106" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Mantem RH legivel e adiciona a ideia de conexao centralizada.</text>
+  </g>
+
+  <g transform="translate(80 795)">
+    <rect width="1280" height="70" rx="22" fill="#111D31" stroke="#253754" stroke-width="2"/>
+    <text x="28" y="44" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="700">Resumo:</text>
+    <text x="126" y="44" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="21" font-weight="500">eu escolheria B1 para marca principal, ou B3 se quisermos reforcar o conceito de hub.</text>
+  </g>
+</svg>

@@ -19,6 +19,10 @@ public sealed class Usuario : ITenantEntity
     public bool Ativo { get; set; } = true;
     public string? RefreshTokenHash { get; set; }
     public DateTime? RefreshTokenExpiraEm { get; set; }
+    public string? ConviteTokenHash { get; set; }
+    public DateTime? ConviteExpiraEm { get; set; }
+    public string? ResetSenhaTokenHash { get; set; }
+    public DateTime? ResetSenhaExpiraEm { get; set; }
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
     public DateTime? DataAtualizacao { get; set; }
 }

@@ -5,6 +5,7 @@ using RentalHub.Application.Security;
 using RentalHub.Application.Services;
 using RentalHub.Infrastructure.Data;
 using RentalHub.Infrastructure.Security;
+using RentalHub.Infrastructure.Services;
 
 namespace RentalHub.Infrastructure;
 
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext, DefaultTenantContext>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         services.AddDbContext<RentalHubDbContext>(options =>
         {

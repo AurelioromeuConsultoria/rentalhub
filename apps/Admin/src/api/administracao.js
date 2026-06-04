@@ -7,6 +7,7 @@ export const usuariosApi = {
   create: (payload) => api.post('/usuarios', payload),
   update: (id, payload) => api.put(`/usuarios/${id}`, payload),
   deactivate: (id) => api.delete(`/usuarios/${id}`),
+  generateInvite: (id) => api.post(`/usuarios/${id}/convite`),
 };
 
 export const perfisAcessoApi = {

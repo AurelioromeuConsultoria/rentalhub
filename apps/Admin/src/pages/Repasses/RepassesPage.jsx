@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
 import { relatoriosApi } from '@/api/relatorios';
 import { repassesApi } from '@/api/repasses';
+import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
 
 const statusOptions = [
@@ -55,6 +56,10 @@ function formatDate(value) {
 
 function labelFor(options, value) {
   return options.find((option) => option.value === Number(value))?.label || '-';
+}
+
+function scrollToForm() {
+  document.getElementById('repasse-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function Field({ label, children, span = false }) {
@@ -344,11 +349,12 @@ export function RepassesPage() {
           {loading ? (
             <div className="loading-line">Carregando repasses...</div>
           ) : repasses.length === 0 ? (
-            <div className="inline-empty">
-              <FileText size={26} />
-              <strong>Nenhum repasse gerado</strong>
-              <span>Gere o primeiro demonstrativo a partir das reservas e custos do período.</span>
-            </div>
+            <EmptyState
+              icon={<FileText size={26} />}
+              title="Nenhum repasse gerado"
+              description="Gere um demonstrativo do período com receitas, descontos, custos e saldo a repassar."
+              actions={[{ label: 'Gerar repasse', onClick: scrollToForm, icon: <Plus size={17} /> }]}
+            />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -407,7 +413,7 @@ export function RepassesPage() {
         </article>
 
         <aside className="financial-side">
-          <form className="resource-form" onSubmit={gerar}>
+          <form className="resource-form" id="repasse-form" onSubmit={gerar}>
             <div className="form-title">
               <Plus size={18} />
               <strong>Gerar repasse</strong>

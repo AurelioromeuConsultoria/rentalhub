@@ -1,0 +1,49 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" rx="48" fill="#08111F"/>
+  <rect x="80" y="80" width="1120" height="560" rx="36" fill="#0D1728" stroke="#23314A" stroke-width="2"/>
+
+  <g transform="translate(180 188)">
+    <rect x="0" y="0" width="176" height="176" rx="38" fill="url(#markFill)"/>
+    <rect x="13" y="13" width="150" height="150" rx="30" stroke="#8EC7FF" stroke-opacity="0.34" stroke-width="2"/>
+
+    <path d="M55 72L88 45L121 72V126C121 132.627 115.627 138 109 138H67C60.373 138 55 132.627 55 126V72Z" stroke="#EEF6FF" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M77 138V104C77 97.373 82.373 92 89 92H91C97.627 92 103 97.373 103 104V138" stroke="#EEF6FF" stroke-width="9" stroke-linecap="round"/>
+
+    <path d="M42 52H65" stroke="#67E8F9" stroke-width="9" stroke-linecap="round"/>
+    <path d="M42 84H55" stroke="#67E8F9" stroke-width="9" stroke-linecap="round"/>
+    <path d="M42 116H55" stroke="#67E8F9" stroke-width="9" stroke-linecap="round"/>
+    <path d="M111 52H134" stroke="#67E8F9" stroke-width="9" stroke-linecap="round"/>
+    <path d="M121 84H134" stroke="#67E8F9" stroke-width="9" stroke-linecap="round"/>
+    <path d="M121 116H134" stroke="#67E8F9" stroke-width="9" stroke-linecap="round"/>
+
+    <circle cx="139" cy="137" r="20" fill="#55D6C5"/>
+    <circle cx="139" cy="137" r="8" fill="#08111F"/>
+  </g>
+
+  <g transform="translate(410 226)">
+    <text x="0" y="78" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800" letter-spacing="0">RentalHub</text>
+    <text x="3" y="132" fill="#9FB0C8" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="600" letter-spacing="1.6">GESTAO DE LOCACOES POR TEMPORADA</text>
+  </g>
+
+  <g transform="translate(180 440)">
+    <rect x="0" y="0" width="920" height="92" rx="24" fill="#111D31" stroke="#253754" stroke-width="2"/>
+    <text x="32" y="57" fill="#D7E3F4" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">Direcao:</text>
+    <text x="154" y="57" fill="#9FB0C8" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="500">confiavel, operacional e premium sem perder leitura em tamanho pequeno</text>
+  </g>
+
+  <g transform="translate(986 180)">
+    <rect x="0" y="0" width="88" height="88" rx="22" fill="url(#markFill)"/>
+    <path d="M28 38L44 25L60 38V64C60 67.314 57.314 70 54 70H34C30.686 70 28 67.314 28 64V38Z" stroke="#EEF6FF" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M39 70V53C39 49.686 41.686 47 45 47C48.314 47 51 49.686 51 53V70" stroke="#EEF6FF" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="70" cy="69" r="10" fill="#55D6C5"/>
+  </g>
+  <text x="986" y="306" fill="#9FB0C8" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">App icon</text>
+
+  <defs>
+    <linearGradient id="markFill" x1="0" y1="0" x2="176" y2="176" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.48" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+  </defs>
+</svg>

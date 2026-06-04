@@ -27,6 +27,15 @@ public sealed class Tenant
     public decimal? ComissaoPadraoAdministradora { get; set; }
     public decimal? TaxaLimpezaPadrao { get; set; }
     public string? ObservacoesOperacionais { get; set; }
+    public string? SuporteEmail { get; set; }
+    public string? SuporteWhatsapp { get; set; }
+    public string? SuporteHorario { get; set; }
+    public string? JanelaAtualizacao { get; set; }
+    public string? AvisoAtualizacaoTitulo { get; set; }
+    public string? AvisoAtualizacaoMensagem { get; set; }
+    public string? AvisoAtualizacaoVersao { get; set; }
+    public DateTime? AvisoAtualizacaoPublicadoEm { get; set; }
+    public bool AvisoAtualizacaoAtivo { get; set; }
     public bool IsRootTenant { get; set; }
     public bool Ativo { get; set; } = true;
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;

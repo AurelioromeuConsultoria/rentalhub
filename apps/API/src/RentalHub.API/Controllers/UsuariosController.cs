@@ -18,15 +18,24 @@ public sealed class UsuariosController : ControllerBase
     private readonly RentalHubDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserContext _currentUserContext;
+    private readonly ITokenService _tokenService;
+    private readonly IEmailSender _emailSender;
+    private readonly IConfiguration _configuration;
 
     public UsuariosController(
         RentalHubDbContext dbContext,
         IPasswordHasher passwordHasher,
-        ICurrentUserContext currentUserContext)
+        ICurrentUserContext currentUserContext,
+        ITokenService tokenService,
+        IEmailSender emailSender,
+        IConfiguration configuration)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
         _currentUserContext = currentUserContext;
+        _tokenService = tokenService;
+        _emailSender = emailSender;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -73,7 +82,7 @@ public sealed class UsuariosController : ControllerBase
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResponse<UsuarioResponse>(
-            usuarios.Select(ToResponse).ToList(),
+            usuarios.Select(usuario => ToResponse(usuario)).ToList(),
             page,
             pageSize,
             totalItems,
@@ -102,11 +111,15 @@ public sealed class UsuariosController : ControllerBase
         UsuarioRequest request,
         CancellationToken cancellationToken)
     {
-        var validation = await ValidateRequest(request, requirePassword: true, cancellationToken);
+        var validation = await ValidateRequest(request, requirePassword: !request.EnviarConvite, cancellationToken);
         if (validation is not null)
         {
             return validation;
         }
+
+        var password = string.IsNullOrWhiteSpace(request.Senha)
+            ? _tokenService.GenerateRefreshToken()
+            : request.Senha.Trim();
 
         var usuario = new Usuario
         {
@@ -115,12 +128,18 @@ public sealed class UsuariosController : ControllerBase
             ProprietarioId = request.TipoUsuario == TipoUsuario.Proprietario ? request.ProprietarioId : null,
             Nome = request.Nome.Trim(),
             Email = request.Email.Trim().ToLowerInvariant(),
-            SenhaHash = _passwordHasher.HashPassword(request.Senha!.Trim()),
+            SenhaHash = _passwordHasher.HashPassword(password),
             TipoUsuario = request.TipoUsuario,
             IsPlatformAdmin = request.IsPlatformAdmin,
             Ativo = request.Ativo,
             DataCriacao = DateTime.UtcNow
         };
+
+        string? conviteUrl = null;
+        if (request.EnviarConvite)
+        {
+            conviteUrl = ApplyInviteToken(usuario);
+        }
 
         _dbContext.Usuarios.Add(usuario);
 
@@ -134,7 +153,41 @@ public sealed class UsuariosController : ControllerBase
         }
 
         await LoadNavigation(usuario, cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = usuario.Id }, ToResponse(usuario));
+        if (conviteUrl is not null)
+        {
+            await SendInviteEmailAsync(usuario, conviteUrl, cancellationToken);
+        }
+
+        return CreatedAtAction(nameof(GetById), new { id = usuario.Id }, ToResponse(usuario, conviteUrl));
+    }
+
+    [HttpPost("{id:int}/convite")]
+    public async Task<ActionResult<UsuarioAccessLinkResponse>> GenerateInvite(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var usuario = await _dbContext.Usuarios
+            .Include(u => u.Tenant)
+            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+
+        if (usuario is null)
+        {
+            return NotFound();
+        }
+
+        if (usuario.IsPlatformAdmin && !_currentUserContext.IsPlatformAdmin)
+        {
+            return Forbid();
+        }
+
+        var conviteUrl = ApplyInviteToken(usuario);
+        usuario.RefreshTokenHash = null;
+        usuario.RefreshTokenExpiraEm = null;
+        usuario.DataAtualizacao = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await SendInviteEmailAsync(usuario, conviteUrl, cancellationToken);
+
+        return Ok(new UsuarioAccessLinkResponse(conviteUrl, usuario.ConviteExpiraEm!.Value));
     }
 
     [HttpPut("{id:int}")]
@@ -231,6 +284,11 @@ public sealed class UsuariosController : ControllerBase
             return Forbid();
         }
 
+        if (request.EnviarConvite && !string.IsNullOrWhiteSpace(request.Senha))
+        {
+            return BadRequest(new { message = "Use senha ou convite, não os dois ao mesmo tempo." });
+        }
+
         if (requirePassword && string.IsNullOrWhiteSpace(request.Senha))
         {
             return BadRequest(new { message = "Senha é obrigatória para novo usuário." });
@@ -277,7 +335,7 @@ public sealed class UsuariosController : ControllerBase
         await _dbContext.Entry(usuario).Reference(u => u.Proprietario).LoadAsync(cancellationToken);
     }
 
-    private static UsuarioResponse ToResponse(Usuario usuario)
+    private UsuarioResponse ToResponse(Usuario usuario, string? conviteUrl = null)
     {
         return new UsuarioResponse(
             usuario.Id,
@@ -291,7 +349,54 @@ public sealed class UsuariosController : ControllerBase
             usuario.IsPlatformAdmin,
             usuario.Ativo,
             usuario.DataCriacao,
-            usuario.DataAtualizacao);
+            usuario.DataAtualizacao,
+            conviteUrl);
+    }
+
+    private string ApplyInviteToken(Usuario usuario)
+    {
+        var token = _tokenService.GenerateRefreshToken();
+        usuario.ConviteTokenHash = _tokenService.HashRefreshToken(token);
+        usuario.ConviteExpiraEm = DateTime.UtcNow.AddDays(7);
+        usuario.ResetSenhaTokenHash = null;
+        usuario.ResetSenhaExpiraEm = null;
+
+        return BuildPasswordUrl(token);
+    }
+
+    private string BuildPasswordUrl(string token)
+    {
+        var configuredAdminUrl = _configuration["App:AdminUrl"] ?? _configuration["Frontend:BaseUrl"];
+        var origin = Request.Headers.Origin.ToString();
+        var baseUrl = !string.IsNullOrWhiteSpace(configuredAdminUrl)
+            ? configuredAdminUrl
+            : !string.IsNullOrWhiteSpace(origin)
+                ? origin
+                : $"{Request.Scheme}://{Request.Host}";
+
+        return $"{baseUrl.TrimEnd('/')}/definir-senha?token={Uri.EscapeDataString(token)}";
+    }
+
+    private async Task SendInviteEmailAsync(Usuario usuario, string conviteUrl, CancellationToken cancellationToken)
+    {
+        var text = $"""
+            Olá, {usuario.Nome}.
+
+            Você recebeu um convite para acessar o RentalHub.
+
+            Definir senha: {conviteUrl}
+
+            Este link expira em 7 dias.
+            """;
+
+        var html = $"""
+            <p>Olá, {usuario.Nome}.</p>
+            <p>Você recebeu um convite para acessar o RentalHub.</p>
+            <p><a href="{conviteUrl}">Definir senha</a></p>
+            <p>Este link expira em 7 dias.</p>
+            """;
+
+        await _emailSender.SendAsync(usuario.Email, "Convite para acessar o RentalHub", html, text, cancellationToken);
     }
 }
 
@@ -303,7 +408,8 @@ public sealed record UsuarioRequest(
     int? PerfilAcessoId,
     int? ProprietarioId,
     bool IsPlatformAdmin = false,
-    bool Ativo = true);
+    bool Ativo = true,
+    bool EnviarConvite = false);
 
 public sealed record UsuarioResponse(
     int Id,
@@ -317,4 +423,7 @@ public sealed record UsuarioResponse(
     bool IsPlatformAdmin,
     bool Ativo,
     DateTime DataCriacao,
-    DateTime? DataAtualizacao);
+    DateTime? DataAtualizacao,
+    string? ConviteUrl = null);
+
+public sealed record UsuarioAccessLinkResponse(string Url, DateTime ExpiraEm);

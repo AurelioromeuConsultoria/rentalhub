@@ -10,11 +10,14 @@ import { Dashboard } from '@/pages/Dashboard/Dashboard';
 import { FinanceiroPage } from '@/pages/Financeiro/FinanceiroPage';
 import { LimpezaPage } from '@/pages/Limpeza/LimpezaPage';
 import { Login } from '@/pages/Login/Login';
+import { SetPassword } from '@/pages/Login/SetPassword';
+import { PrivacyPage, TermsPage } from '@/pages/Legal/LegalPages';
 import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
 import { PortalProprietarioPage } from '@/pages/PortalProprietario/PortalProprietarioPage';
 import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
+import { SuportePage } from '@/pages/Suporte/SuportePage';
 import { useAuth } from '@/context/AuthContext';
 import { ConfiguracoesPage, EmpresasPage, PerfisPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
 
@@ -34,6 +37,7 @@ const internalRoutes = [
   { path: '/empresas', resource: 'tenants' },
   { path: '/configuracoes', resource: 'configuracoes' },
   { path: '/auditoria', resource: 'auditoria' },
+  { path: '/suporte' },
 ];
 
 function HomeRoute() {
@@ -75,6 +79,9 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/definir-senha" element={<SetPassword />} />
+          <Route path="/termos-de-uso" element={<TermsPage />} />
+          <Route path="/privacidade" element={<PrivacyPage />} />
           <Route
             path="/"
             element={
@@ -109,6 +116,7 @@ export default function App() {
             />
             <Route path="configuracoes" element={<ProtectedRoute resource="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
             <Route path="auditoria" element={<ProtectedRoute resource="auditoria"><AuditoriaPage /></ProtectedRoute>} />
+            <Route path="suporte" element={<SuportePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

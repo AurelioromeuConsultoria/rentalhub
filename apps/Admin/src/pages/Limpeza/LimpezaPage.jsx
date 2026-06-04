@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi } from '@/api/cadastros';
 import { limpezasApi } from '@/api/operacional';
 import { reservasApi } from '@/api/reservas';
+import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
 
 const statusOptions = [
@@ -51,6 +52,10 @@ function formatDate(value) {
 
 function labelFor(options, value) {
   return options.find((option) => option.value === Number(value))?.label || '-';
+}
+
+function scrollToForm() {
+  document.getElementById('limpeza-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function Field({ label, children, span = false }) {
@@ -245,7 +250,7 @@ export function LimpezaPage() {
         <div>
           <span className="eyebrow">Operação diária</span>
           <h1>Limpeza</h1>
-          <p>Agenda e execução das limpezas por imóvel, reserva, responsável, valor e status.</p>
+          <p>Planeje limpezas por imóvel, vincule reservas e acompanhe responsável, custo e andamento.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -315,7 +320,7 @@ export function LimpezaPage() {
           <div className="resource-panel-heading">
             <div>
               <strong>Agenda de limpeza</strong>
-              <small>Limpezas planejadas e em execução.</small>
+              <small>Próximas limpezas e tarefas em execução.</small>
             </div>
             <span>{limpezas.length} registros</span>
           </div>
@@ -324,11 +329,12 @@ export function LimpezaPage() {
           {loading ? (
             <div className="loading-line">Carregando limpezas...</div>
           ) : limpezas.length === 0 ? (
-            <div className="inline-empty">
-              <Sparkles size={26} />
-              <strong>Nenhuma limpeza encontrada</strong>
-              <span>Crie uma limpeza vinculada ao imóvel e, se fizer sentido, à reserva.</span>
-            </div>
+            <EmptyState
+              icon={<Sparkles size={26} />}
+              title="Nenhuma limpeza encontrada"
+              description="Planeje a próxima limpeza por imóvel e acompanhe responsável, data e custo."
+              actions={[{ label: 'Nova limpeza', onClick: scrollToForm, icon: <Plus size={17} /> }]}
+            />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -373,7 +379,7 @@ export function LimpezaPage() {
           )}
         </article>
 
-        <form className="resource-form" onSubmit={save}>
+        <form className="resource-form" id="limpeza-form" onSubmit={save}>
           <div className="form-title">
             <Plus size={18} />
             <strong>{editingId ? 'Editar limpeza' : 'Nova limpeza'}</strong>

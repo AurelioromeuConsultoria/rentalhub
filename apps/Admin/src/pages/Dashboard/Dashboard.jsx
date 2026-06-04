@@ -11,7 +11,9 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { dashboardApi } from '@/api/dashboard';
+import { EmptyState } from '@/components/EmptyState';
 
 const currentMonthStart = new Date();
 currentMonthStart.setDate(1);
@@ -56,6 +58,11 @@ function FlowChart({ items }) {
     ...items.map((item) => Math.max(Number(item.receita || 0), Number(item.despesa || 0))),
     1,
   );
+  const barHeight = (value) => {
+    const numericValue = Number(value || 0);
+
+    return numericValue <= 0 ? 0 : Math.max(6, (numericValue / maxValue) * 100);
+  };
 
   return (
     <article className="panel">
@@ -64,11 +71,13 @@ function FlowChart({ items }) {
         <span>Receita x despesa</span>
       </div>
       {items.length === 0 ? (
-        <div className="inline-empty compact">
-          <BarChart3 size={24} />
-          <strong>Sem movimentações</strong>
-          <span>Registre receitas e despesas para montar o gráfico.</span>
-        </div>
+        <EmptyState
+          compact
+          icon={<BarChart3 size={24} />}
+          title="Sem movimentações"
+          description="Registre receitas e despesas para montar o gráfico."
+          actions={[{ label: 'Ir para financeiro', to: '/financeiro', variant: 'secondary' }]}
+        />
       ) : (
         <div className="flow-chart" aria-label="Fluxo diário de receitas e despesas">
           {items.map((item) => (
@@ -77,12 +86,12 @@ function FlowChart({ items }) {
                 <span
                   className="income"
                   title={`Receita ${money(item.receita)}`}
-                  style={{ height: `${Math.max(3, (Number(item.receita || 0) / maxValue) * 100)}%` }}
+                  style={{ height: `${barHeight(item.receita)}%` }}
                 />
                 <span
                   className="expense"
                   title={`Despesa ${money(item.despesa)}`}
-                  style={{ height: `${Math.max(3, (Number(item.despesa || 0) / maxValue) * 100)}%` }}
+                  style={{ height: `${barHeight(item.despesa)}%` }}
                 />
               </div>
               <small>{shortDate(item.data)}</small>
@@ -104,11 +113,13 @@ function OriginChart({ items }) {
         <span>Canais</span>
       </div>
       {items.length === 0 ? (
-        <div className="inline-empty compact">
-          <PieChart size={24} />
-          <strong>Sem reservas</strong>
-          <span>As origens aparecem conforme as reservas entram.</span>
-        </div>
+        <EmptyState
+          compact
+          icon={<PieChart size={24} />}
+          title="Sem reservas"
+          description="As origens aparecem conforme as reservas entram."
+          actions={[{ label: 'Criar reserva', to: '/reservas', variant: 'secondary' }]}
+        />
       ) : (
         <div className="origin-chart">
           {items.map((item) => {
@@ -141,11 +152,7 @@ function PerformanceList({ title, badge, items, emptyText }) {
         <span>{badge}</span>
       </div>
       {items.length === 0 ? (
-        <div className="inline-empty compact">
-          <Home size={24} />
-          <strong>Sem dados no período</strong>
-          <span>{emptyText}</span>
-        </div>
+        <EmptyState compact icon={<Home size={24} />} title="Sem dados no período" description={emptyText} />
       ) : (
         <div className="performance-list">
           {items.map((item) => {
@@ -217,6 +224,46 @@ export function Dashboard() {
     { label: 'Lucro do período', value: money(data.lucroMes), icon: WalletCards, tone: 'blue' },
     { label: 'Reservas do período', value: String(data.reservasMes || 0), icon: CalendarCheck, tone: 'yellow' },
   ];
+  const lucro = Number(data.lucroMes || 0);
+  const receita = Number(data.receitaMes || 0);
+  const reservas = Number(data.reservasMes || 0);
+  const ocupacao = Number(data.taxaOcupacao || 0);
+  const repasses = Number(data.repassesPendentes || 0);
+  const limpezas = Number(data.limpezasPendentes || 0);
+  const manutencoes = Number(data.manutencoesPendentes || 0);
+  const blockers = [repasses > 0, limpezas > 0, manutencoes > 0].filter(Boolean).length;
+  const healthLabel = blockers > 1 || lucro < 0 ? 'Atenção operacional' : reservas === 0 ? 'Primeira operação' : 'Operação sob controle';
+  const healthTone = blockers > 1 || lucro < 0 ? 'warning' : reservas === 0 ? 'neutral' : 'healthy';
+  const nextActions = [
+    {
+      title: reservas === 0 ? 'Cadastre a primeira reserva' : 'Acompanhe a agenda',
+      description: reservas === 0 ? 'Transforme um imóvel cadastrado em operação real.' : 'Veja disponibilidade, check-ins, check-outs e bloqueios.',
+      to: reservas === 0 ? '/reservas' : '/calendario',
+      label: reservas === 0 ? 'Nova reserva' : 'Abrir calendário',
+      tone: reservas === 0 ? 'primary' : 'blue',
+    },
+    {
+      title: limpezas > 0 ? 'Limpezas pendentes' : 'Limpeza em dia',
+      description: limpezas > 0 ? `${limpezas} tarefa(s) precisam de execução ou conclusão.` : 'Mantenha a agenda pronta para próximos check-ins.',
+      to: '/limpeza',
+      label: 'Ver limpeza',
+      tone: limpezas > 0 ? 'warning' : 'green',
+    },
+    {
+      title: repasses > 0 ? 'Repasses em aberto' : 'Repasses sem alerta',
+      description: repasses > 0 ? `${money(repasses)} aguardando pagamento ou baixa.` : 'Gere demonstrativos quando fechar um período.',
+      to: '/repasses',
+      label: 'Ver repasses',
+      tone: repasses > 0 ? 'warning' : 'green',
+    },
+    {
+      title: manutencoes > 0 ? 'Manutenção pendente' : 'Imóveis operacionais',
+      description: manutencoes > 0 ? `${manutencoes} ocorrência(s) abertas ou em andamento.` : 'Sem ocorrência crítica no período selecionado.',
+      to: '/manutencao',
+      label: 'Ver manutenção',
+      tone: manutencoes > 0 ? 'danger' : 'green',
+    },
+  ];
 
   return (
     <div className="dashboard-page">
@@ -261,6 +308,42 @@ export function Dashboard() {
             </article>
           );
         })}
+      </section>
+
+      <section className="executive-pulse" aria-label="Central operacional">
+        <article className={`operation-health ${healthTone}`}>
+          <span className="eyebrow">Central operacional</span>
+          <h2>{healthLabel}</h2>
+          <p>
+            {reservas === 0
+              ? 'Comece pela reserva: ela movimenta calendário, financeiro, limpeza e repasses.'
+              : `No período, você tem ${reservas} reserva(s), ${percent(ocupacao)} de ocupação e ${money(receita)} em receita.`}
+          </p>
+          <div className="health-metrics">
+            <span>
+              <strong>{money(lucro)}</strong>
+              Lucro
+            </span>
+            <span>
+              <strong>{blockers}</strong>
+              Alertas
+            </span>
+            <span>
+              <strong>{percent(ocupacao)}</strong>
+              Ocupação
+            </span>
+          </div>
+        </article>
+
+        <div className="next-action-grid">
+          {nextActions.map((action) => (
+            <Link className={`next-action-card ${action.tone}`} key={action.title} to={action.to}>
+              <strong>{action.title}</strong>
+              <span>{action.description}</span>
+              <small>{action.label}</small>
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="kpi-grid secondary-kpis" aria-label="Indicadores operacionais">

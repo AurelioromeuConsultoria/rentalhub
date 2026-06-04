@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using RentalHub.API.Health;
+using RentalHub.API.Middleware;
 using RentalHub.API.Security;
 using RentalHub.API.Services;
 using RentalHub.Application.Services;
@@ -74,6 +75,10 @@ builder.Services
     .AddCheck<DatabaseHealthCheck>(
         "database",
         failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready"])
+    .AddCheck<StorageHealthCheck>(
+        "storage",
+        failureStatus: HealthStatus.Degraded,
         tags: ["ready"]);
 
 var app = builder.Build();
@@ -84,6 +89,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Admin");
+app.UseMiddleware<ErrorHandlingMiddleware>();
 var webRootPath = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(webRootPath);
 app.UseStaticFiles(new StaticFileOptions
@@ -100,6 +106,8 @@ app.Use(async (context, next) =>
         path.StartsWithSegments("/api/portalproprietario", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/api/notificacoes", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/api/buscaglobal", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api/sistema", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api/suporte", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/api/health", StringComparison.OrdinalIgnoreCase);
 
     if (isOwner && path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !isAllowedOwnerPath)
@@ -115,6 +123,14 @@ app.UseRentalHubPermissions();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapGet("/api/health/live", (IHostEnvironment environment) => Results.Ok(new
+{
+    status = "Healthy",
+    environment = environment.EnvironmentName,
+    checkedAt = DateTimeOffset.UtcNow,
+    version = typeof(Program).Assembly.GetName().Version?.ToString()
+})).AllowAnonymous();
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -133,11 +149,17 @@ app.MapHealthChecks("/api/health", new HealthCheckOptions
         var payload = new
         {
             status = report.Status.ToString(),
+            checkedAt = DateTimeOffset.UtcNow,
+            environment = app.Environment.EnvironmentName,
+            version = typeof(Program).Assembly.GetName().Version?.ToString(),
+            totalDurationMs = Math.Round(report.TotalDuration.TotalMilliseconds, 2),
             checks = report.Entries.Select(entry => new
             {
                 name = entry.Key,
                 status = entry.Value.Status.ToString(),
-                description = entry.Value.Description
+                description = entry.Value.Description,
+                durationMs = Math.Round(entry.Value.Duration.TotalMilliseconds, 2),
+                tags = entry.Value.Tags
             })
         };
 

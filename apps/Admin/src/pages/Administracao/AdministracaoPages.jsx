@@ -1,27 +1,41 @@
 import {
+  Activity,
+  AlertTriangle,
   Building2,
   CheckCircle2,
   ClipboardList,
+  Copy,
+  Database,
   DollarSign,
   Edit3,
+  FileDown,
+  HardDrive,
   KeyRound,
   MapPin,
+  Megaphone,
+  PackageCheck,
   Phone,
   RotateCcw,
   Save,
   Search,
+  Send,
+  Server,
   Settings,
   ShieldCheck,
   Trash2,
   UserCog,
+  UserX,
   Users,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { configuracoesApi, perfisAcessoApi, tenantsApi, usuariosApi } from '@/api/administracao';
 import { proprietariosApi } from '@/api/cadastros';
+import { healthApi } from '@/api/health';
+import { lgpdApi } from '@/api/lgpd';
 import { useAuth } from '@/context/AuthContext';
 import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
 import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
+import { APP_VERSION } from '@/lib/version';
 
 const tipoUsuarioOptions = [
   { value: 1, label: 'Administrador' },
@@ -59,6 +73,7 @@ const emptyUsuario = {
   proprietarioId: '',
   isPlatformAdmin: false,
   ativo: true,
+  enviarConvite: false,
 };
 
 const emptyPerfil = {
@@ -77,6 +92,7 @@ const emptyTenant = {
   adminNome: '',
   adminEmail: '',
   adminSenha: '',
+  enviarConviteAdmin: true,
 };
 
 function extractItems(response) {
@@ -96,6 +112,68 @@ function splitLines(value) {
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function onboardingLabel(status) {
+  const labels = {
+    'base-pendente': 'Base pendente',
+    'aguardando-admin': 'Admin pendente',
+    'aguardando-imovel': 'Aguardando imóvel',
+    'aguardando-reserva': 'Aguardando reserva',
+    operacional: 'Operacional',
+  };
+  return labels[status] || 'Em implantação';
+}
+
+function onboardingClass(status) {
+  if (status === 'operacional') {
+    return 'active';
+  }
+  if (status === 'base-pendente') {
+    return 'inactive';
+  }
+  return 'pending';
+}
+
+function onboardingProgress(checklist = []) {
+  const done = checklist.filter((item) => item.done).length;
+  return `${done}/${checklist.length || 0}`;
+}
+
+function translateHealthStatus(status) {
+  const normalizedStatus = String(status || '').toLowerCase();
+  if (normalizedStatus === 'healthy') {
+    return 'Saudável';
+  }
+  if (normalizedStatus === 'degraded') {
+    return 'Atenção';
+  }
+  if (normalizedStatus === 'unhealthy') {
+    return 'Indisponível';
+  }
+  return status || 'Desconhecido';
+}
+
+function healthStatusClass(status) {
+  const normalizedStatus = String(status || '').toLowerCase();
+  if (normalizedStatus === 'healthy') {
+    return 'healthy';
+  }
+  if (normalizedStatus === 'degraded') {
+    return 'degraded';
+  }
+  return 'unhealthy';
+}
+
+function formatCheckedAt(value) {
+  if (!value) {
+    return 'Não verificado';
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(new Date(value));
 }
 
 function buildPermissionMap(resources, permissoes = []) {
@@ -195,6 +273,7 @@ export function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [accessLink, setAccessLink] = useState(null);
 
   const tipoUsuarioLabel = useMemo(
     () => Object.fromEntries(tipoUsuarioOptions.map((option) => [option.value, option.label])),
@@ -229,6 +308,7 @@ export function UsuariosPage() {
   const startCreate = () => {
     setEditingId(null);
     setForm(emptyUsuario);
+    setAccessLink(null);
   };
 
   const startEdit = (usuario) => {
@@ -242,7 +322,25 @@ export function UsuariosPage() {
       proprietarioId: usuario.proprietarioId || '',
       isPlatformAdmin: usuario.isPlatformAdmin,
       ativo: usuario.ativo,
+      enviarConvite: false,
     });
+    setAccessLink(null);
+  };
+
+  const copyAccessLink = async () => {
+    if (!accessLink?.url) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(accessLink.url);
+      setAccessLink((current) => current ? { ...current, copied: true } : current);
+      setTimeout(() => {
+        setAccessLink((current) => current ? { ...current, copied: false } : current);
+      }, 1600);
+    } catch {
+      setError('Não foi possível copiar o link automaticamente.');
+    }
   };
 
   const save = async (event) => {
@@ -259,20 +357,39 @@ export function UsuariosPage() {
       proprietarioId: Number(form.tipoUsuario) === 4 ? normalizeId(form.proprietarioId) : null,
       isPlatformAdmin: form.isPlatformAdmin,
       ativo: form.ativo,
+      enviarConvite: !editingId && form.enviarConvite,
     };
 
     try {
+      let response;
       if (editingId) {
-        await usuariosApi.update(editingId, payload);
+        response = await usuariosApi.update(editingId, payload);
       } else {
-        await usuariosApi.create(payload);
+        response = await usuariosApi.create(payload);
       }
       startCreate();
+      if (response?.data?.conviteUrl) {
+        setAccessLink({ url: response.data.conviteUrl, expiraEm: response.data.conviteExpiraEm || null });
+      }
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const generateInvite = async (usuario) => {
+    setError('');
+    try {
+      const response = await usuariosApi.generateInvite(usuario.id);
+      setAccessLink({
+        url: response.data?.url,
+        expiraEm: response.data?.expiraEm,
+        usuario: usuario.nome,
+      });
+    } catch (inviteError) {
+      setError(getErrorMessage(inviteError));
     }
   };
 
@@ -348,6 +465,9 @@ export function UsuariosPage() {
                           <button type="button" aria-label="Editar" onClick={() => startEdit(usuario)}>
                             <Edit3 size={16} />
                           </button>
+                          <button type="button" aria-label="Gerar convite" onClick={() => generateInvite(usuario)}>
+                            <KeyRound size={16} />
+                          </button>
                           <button type="button" aria-label="Inativar" onClick={() => deactivate(usuario.id)}>
                             <Trash2 size={16} />
                           </button>
@@ -366,16 +486,43 @@ export function UsuariosPage() {
             <UserCog size={18} />
             <strong>{editingId ? 'Editar usuário' : 'Novo usuário'}</strong>
           </div>
+          {accessLink?.url && (
+            <div className="form-info span-2">
+              <div>
+                <strong>Link de acesso gerado{accessLink.usuario ? ` para ${accessLink.usuario}` : ''}</strong>
+                <span>Envie este link para o usuário definir a senha.</span>
+              </div>
+              <div className="link-copy-row">
+                <input value={accessLink.url} readOnly aria-label="Link de acesso" />
+                <button type="button" onClick={copyAccessLink}>
+                  <Copy size={16} />
+                  {accessLink.copied ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="form-grid">
             <TextField label="Nome" value={form.nome} onChange={(nome) => setForm((current) => ({ ...current, nome }))} required />
             <TextField label="E-mail" type="email" value={form.email} onChange={(email) => setForm((current) => ({ ...current, email }))} required />
+            {!editingId && (
+              <CheckboxField
+                label="Enviar convite para definir senha"
+                checked={form.enviarConvite}
+                onChange={(enviarConvite) => setForm((current) => ({
+                  ...current,
+                  enviarConvite,
+                  senha: enviarConvite ? '' : current.senha,
+                }))}
+              />
+            )}
             <TextField
               label={editingId ? 'Nova senha' : 'Senha'}
               type="password"
               value={form.senha}
               onChange={(senha) => setForm((current) => ({ ...current, senha }))}
-              placeholder={editingId ? 'Manter atual' : 'Mínimo 8 caracteres'}
-              required={!editingId}
+              placeholder={form.enviarConvite ? 'Será definida pelo convite' : editingId ? 'Manter atual' : 'Mínimo 8 caracteres'}
+              readOnly={!editingId && form.enviarConvite}
+              required={!editingId && !form.enviarConvite}
             />
             <SelectField
               label="Tipo"
@@ -416,8 +563,8 @@ export function UsuariosPage() {
             )}
           </div>
           <button className="primary-action full" type="submit" disabled={saving}>
-            <Save size={18} />
-            {saving ? 'Salvando...' : 'Salvar usuário'}
+            {form.enviarConvite && !editingId ? <Send size={18} /> : <Save size={18} />}
+            {saving ? 'Salvando...' : form.enviarConvite && !editingId ? 'Criar e convidar' : 'Salvar usuário'}
           </button>
         </form>
       </div>
@@ -457,6 +604,7 @@ export function PerfisPage() {
     } finally {
       setLoading(false);
     }
+
   };
 
   useEffect(() => {
@@ -662,6 +810,7 @@ export function EmpresasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [adminAccessLink, setAdminAccessLink] = useState('');
 
   const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
 
@@ -686,10 +835,12 @@ export function EmpresasPage() {
   const startCreate = () => {
     setEditingId(null);
     setForm(emptyTenant);
+    setAdminAccessLink('');
   };
 
   const startEdit = (empresa) => {
     setEditingId(empresa.id);
+    setAdminAccessLink('');
     setForm({
       nome: empresa.nome || '',
       nomeExibicao: empresa.nomeExibicao || '',
@@ -699,6 +850,7 @@ export function EmpresasPage() {
       adminNome: '',
       adminEmail: '',
       adminSenha: '',
+      enviarConviteAdmin: true,
     });
   };
 
@@ -728,16 +880,21 @@ export function EmpresasPage() {
       adminNome: editingId ? null : form.adminNome.trim() || null,
       adminEmail: editingId ? null : form.adminEmail.trim() || null,
       adminSenha: editingId ? null : form.adminSenha.trim() || null,
+      enviarConviteAdmin: editingId ? true : form.enviarConviteAdmin,
     };
 
     try {
       if (editingId) {
         await tenantsApi.update(editingId, payload);
+        startCreate();
       } else {
-        await tenantsApi.create(payload);
+        const response = await tenantsApi.create(payload);
+        setEditingId(null);
+        setForm(emptyTenant);
+        setAdminAccessLink(response.data?.adminConviteUrl || '');
       }
-      startCreate();
       await load();
+      window.dispatchEvent(new Event(TENANTS_UPDATED_EVENT));
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -765,7 +922,7 @@ export function EmpresasPage() {
       <PageHeader
         eyebrow="Plataforma"
         title="Empresas"
-        description="Gestão de tenants, domínios e empresa operacional para administradores da plataforma."
+        description="Cadastre clientes da plataforma, defina domínios e acompanhe a implantação de cada empresa."
         onRefresh={load}
       />
 
@@ -776,7 +933,7 @@ export function EmpresasPage() {
           <div className="resource-panel-heading">
             <div>
               <strong>Empresas cadastradas</strong>
-              <small>Use uma empresa para operar seus dados isolados</small>
+              <small>Selecione uma empresa para operar os dados dela com isolamento completo</small>
             </div>
             <span>{empresas.length} empresas</span>
           </div>
@@ -787,7 +944,7 @@ export function EmpresasPage() {
             <div className="inline-empty">
               <Building2 size={34} />
               <strong>Nenhuma empresa encontrada</strong>
-              <span>Crie tenants para separar operações de clientes da plataforma.</span>
+              <span>Cadastre o primeiro cliente para liberar o ambiente operacional da empresa.</span>
             </div>
           ) : (
             <div className="data-table-wrap">
@@ -811,9 +968,15 @@ export function EmpresasPage() {
                       <td>
                         <strong>{empresa.usuarios} usuários</strong>
                         <small>{empresa.imoveis} imóveis · {empresa.reservas} reservas</small>
+                        <small>Implantação {onboardingProgress(empresa.onboardingChecklist)}</small>
                       </td>
                       <td>
-                        <StatusPill active={empresa.ativo} label={empresa.ativo ? 'Ativa' : 'Inativa'} />
+                        <div className="tenant-status-stack">
+                          <StatusPill active={empresa.ativo} label={empresa.ativo ? 'Ativa' : 'Inativa'} />
+                          <span className={`status-pill ${onboardingClass(empresa.onboardingStatus)}`}>
+                            {onboardingLabel(empresa.onboardingStatus)}
+                          </span>
+                        </div>
                       </td>
                       <td>
                         <div className="table-actions">
@@ -847,10 +1010,29 @@ export function EmpresasPage() {
             <Building2 size={18} />
             <strong>{editingId ? 'Editar empresa' : 'Nova empresa'}</strong>
           </div>
+          {!editingId && (
+            <div className="form-info">
+              <strong>Implantação automática</strong>
+              <span>Ao salvar, o RentalHub cria perfis, categorias financeiras e envia convite para o administrador definir a senha.</span>
+            </div>
+          )}
+          {adminAccessLink && (
+            <div className="form-info">
+              <strong>Link de convite do admin</strong>
+              <span>Use este link se o envio por e-mail ainda não estiver configurado no servidor.</span>
+              <div className="link-copy-row">
+                <input value={adminAccessLink} readOnly aria-label="Link de convite do admin" />
+                <button type="button" onClick={() => navigator.clipboard?.writeText(adminAccessLink)}>
+                  <Copy size={16} />
+                  Copiar
+                </button>
+              </div>
+            </div>
+          )}
           <div className="form-grid">
             <TextField label="Nome jurídico" value={form.nome} onChange={(nome) => setForm((current) => ({ ...current, nome }))} required />
             <TextField label="Nome de exibição" value={form.nomeExibicao} onChange={(nomeExibicao) => setForm((current) => ({ ...current, nomeExibicao }))} required />
-            <TextField label="Slug" value={form.slug} onChange={(slug) => setForm((current) => ({ ...current, slug }))} placeholder="gerado pelo nome se vazio" />
+            <TextField label="Identificador da empresa" value={form.slug} onChange={(slug) => setForm((current) => ({ ...current, slug }))} placeholder="Gerado automaticamente se ficar vazio" />
             <label className="form-field">
               <span>Domínios</span>
               <textarea
@@ -863,7 +1045,18 @@ export function EmpresasPage() {
               <>
                 <TextField label="Nome do admin" value={form.adminNome} onChange={(adminNome) => setForm((current) => ({ ...current, adminNome }))} />
                 <TextField label="E-mail do admin" type="email" value={form.adminEmail} onChange={(adminEmail) => setForm((current) => ({ ...current, adminEmail }))} />
-                <TextField label="Senha do admin" type="password" value={form.adminSenha} onChange={(adminSenha) => setForm((current) => ({ ...current, adminSenha }))} placeholder="Opcional, mínimo 8" />
+                <CheckboxField
+                  label="Enviar convite para o admin definir senha"
+                  checked={form.enviarConviteAdmin}
+                  onChange={(enviarConviteAdmin) => setForm((current) => ({
+                    ...current,
+                    enviarConviteAdmin,
+                    adminSenha: enviarConviteAdmin ? '' : current.adminSenha,
+                  }))}
+                />
+                {!form.enviarConviteAdmin && (
+                  <TextField label="Senha do admin" type="password" value={form.adminSenha} onChange={(adminSenha) => setForm((current) => ({ ...current, adminSenha }))} placeholder="Mínimo 8 caracteres" />
+                )}
               </>
             )}
             <CheckboxField label="Empresa ativa" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
@@ -900,13 +1093,46 @@ export function ConfiguracoesPage() {
     comissaoPadraoAdministradora: '',
     taxaLimpezaPadrao: '',
     observacoesOperacionais: '',
+    suporteEmail: '',
+    suporteWhatsapp: '',
+    suporteHorario: '',
+    janelaAtualizacao: '',
+    avisoAtualizacaoTitulo: '',
+    avisoAtualizacaoMensagem: '',
+    avisoAtualizacaoVersao: APP_VERSION,
+    avisoAtualizacaoAtivo: false,
     ativo: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [health, setHealth] = useState(null);
+  const [healthError, setHealthError] = useState('');
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const [privacyForm, setPrivacyForm] = useState({
+    tipo: 'hospede',
+    id: '',
+    motivo: '',
+  });
+  const [privacyResult, setPrivacyResult] = useState(null);
+  const [privacyAction, setPrivacyAction] = useState('');
+  const [privacyLoading, setPrivacyLoading] = useState(false);
 
-  const load = async () => {
+  const loadHealth = useCallback(async () => {
+    setCheckingHealth(true);
+    setHealthError('');
+    try {
+      const response = await healthApi.get();
+      setHealth(response.data);
+    } catch (loadHealthError) {
+      setHealth(null);
+      setHealthError(getErrorMessage(loadHealthError));
+    } finally {
+      setCheckingHealth(false);
+    }
+  }, []);
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -932,6 +1158,14 @@ export function ConfiguracoesPage() {
         comissaoPadraoAdministradora: response.data.tenant.comissaoPadraoAdministradora ?? '',
         taxaLimpezaPadrao: response.data.tenant.taxaLimpezaPadrao ?? '',
         observacoesOperacionais: response.data.tenant.observacoesOperacionais || '',
+        suporteEmail: response.data.tenant.suporteEmail || '',
+        suporteWhatsapp: response.data.tenant.suporteWhatsapp || '',
+        suporteHorario: response.data.tenant.suporteHorario || '',
+        janelaAtualizacao: response.data.tenant.janelaAtualizacao || '',
+        avisoAtualizacaoTitulo: response.data.tenant.avisoAtualizacaoTitulo || '',
+        avisoAtualizacaoMensagem: response.data.tenant.avisoAtualizacaoMensagem || '',
+        avisoAtualizacaoVersao: response.data.tenant.avisoAtualizacaoVersao || APP_VERSION,
+        avisoAtualizacaoAtivo: Boolean(response.data.tenant.avisoAtualizacaoAtivo),
         ativo: response.data.tenant.ativo,
       });
     } catch (loadError) {
@@ -939,12 +1173,14 @@ export function ConfiguracoesPage() {
     } finally {
       setLoading(false);
     }
-  };
+
+    await loadHealth();
+  }, [loadHealth]);
 
   useEffect(() => {
     const timeout = setTimeout(load, 0);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [load]);
 
   const save = async (event) => {
     event.preventDefault();
@@ -971,6 +1207,14 @@ export function ConfiguracoesPage() {
         comissaoPadraoAdministradora: form.comissaoPadraoAdministradora === '' ? null : Number(form.comissaoPadraoAdministradora),
         taxaLimpezaPadrao: form.taxaLimpezaPadrao === '' ? null : Number(form.taxaLimpezaPadrao),
         observacoesOperacionais: form.observacoesOperacionais.trim() || null,
+        suporteEmail: form.suporteEmail.trim() || null,
+        suporteWhatsapp: form.suporteWhatsapp.trim() || null,
+        suporteHorario: form.suporteHorario.trim() || null,
+        janelaAtualizacao: form.janelaAtualizacao.trim() || null,
+        avisoAtualizacaoTitulo: form.avisoAtualizacaoTitulo.trim() || null,
+        avisoAtualizacaoMensagem: form.avisoAtualizacaoMensagem.trim() || null,
+        avisoAtualizacaoVersao: form.avisoAtualizacaoVersao.trim() || null,
+        avisoAtualizacaoAtivo: form.avisoAtualizacaoAtivo,
         ativo: form.ativo,
       });
       setData((current) => ({ ...current, tenant: response.data }));
@@ -981,7 +1225,45 @@ export function ConfiguracoesPage() {
     }
   };
 
+  const exportPrivacyData = async () => {
+    setPrivacyLoading(true);
+    setPrivacyAction('');
+    setPrivacyResult(null);
+    try {
+      const response = await lgpdApi.exportData({
+        tipo: privacyForm.tipo,
+        id: Number(privacyForm.id),
+      });
+      setPrivacyResult(response.data);
+      setPrivacyAction('Exportação gerada.');
+    } catch (privacyError) {
+      setPrivacyAction(getErrorMessage(privacyError));
+    } finally {
+      setPrivacyLoading(false);
+    }
+  };
+
+  const anonymizePrivacyData = async () => {
+    setPrivacyLoading(true);
+    setPrivacyAction('');
+    try {
+      const response = await lgpdApi.anonymize({
+        tipo: privacyForm.tipo,
+        id: Number(privacyForm.id),
+        motivo: privacyForm.motivo,
+      });
+      setPrivacyResult(null);
+      setPrivacyAction(response.data?.message || 'Dados anonimizados.');
+    } catch (privacyError) {
+      setPrivacyAction(getErrorMessage(privacyError));
+    } finally {
+      setPrivacyLoading(false);
+    }
+  };
+
   const resumo = data?.resumo || {};
+  const healthChecks = health?.checks || [];
+  const apiStatusClass = healthError ? 'unhealthy' : healthStatusClass(health?.status);
 
   return (
     <section className="resource-page">
@@ -1017,6 +1299,189 @@ export function ConfiguracoesPage() {
             </article>
           </div>
 
+          <section className="resource-panel monitoring-panel">
+            <div className="resource-panel-heading">
+              <div>
+                <strong>Monitoramento</strong>
+                <small>Saúde da API, banco de dados e arquivos enviados pela operação</small>
+              </div>
+              <button className="icon-button bordered" type="button" aria-label="Verificar saúde" onClick={loadHealth} disabled={checkingHealth}>
+                <RotateCcw size={18} />
+              </button>
+            </div>
+
+            <div className="monitor-grid">
+              <article className={`monitor-card ${apiStatusClass}`}>
+                <Server size={20} />
+                <span>API</span>
+                <strong>{healthError ? 'Indisponível' : translateHealthStatus(health?.status)}</strong>
+                <small>{healthError || `Última checagem: ${formatCheckedAt(health?.checkedAt)}`}</small>
+              </article>
+              <article className="monitor-card">
+                <Activity size={20} />
+                <span>Tempo total</span>
+                <strong>{health?.totalDurationMs != null ? `${health.totalDurationMs} ms` : '--'}</strong>
+                <small>{health?.environment ? `Ambiente: ${health.environment}` : 'Aguardando checagem'}</small>
+              </article>
+              <article className="monitor-card">
+                <PackageCheck size={20} />
+                <span>Versão</span>
+                <strong>Admin v{APP_VERSION}</strong>
+                <small>API {health?.version ? `v${health.version}` : 'não verificada'}</small>
+              </article>
+              <article className="monitor-card">
+                <AlertTriangle size={20} />
+                <span>Trace ID</span>
+                <strong>Logs estruturados</strong>
+                <small>Erros críticos registram um identificador para suporte</small>
+              </article>
+            </div>
+
+            <div className="monitor-checks">
+              {healthChecks.length === 0 ? (
+                <div className="inline-empty compact">
+                  <Activity size={28} />
+                  <strong>{checkingHealth ? 'Verificando ambiente...' : 'Monitoramento ainda não consultado'}</strong>
+                  <span>Atualize para consultar API, banco de dados e arquivos enviados.</span>
+                </div>
+              ) : healthChecks.map((check) => {
+                const Icon = check.name === 'database' ? Database : HardDrive;
+                return (
+                  <div className={`monitor-check ${healthStatusClass(check.status)}`} key={check.name}>
+                    <Icon size={18} />
+                    <div>
+                      <strong>{check.name === 'database' ? 'PostgreSQL' : 'Storage de uploads'}</strong>
+                      <span>{check.description || translateHealthStatus(check.status)}</span>
+                    </div>
+                    <small>{translateHealthStatus(check.status)} · {check.durationMs ?? '--'} ms</small>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="resource-panel support-settings-panel">
+            <div className="resource-panel-heading">
+              <div>
+                <strong>Suporte e atualizações</strong>
+                <small>Canais oficiais, janela de atualização e aviso exibido aos usuários</small>
+              </div>
+              <Megaphone size={20} />
+            </div>
+
+            <div className="support-settings-grid">
+              <TextField
+                label="E-mail de suporte"
+                type="email"
+                value={form.suporteEmail}
+                onChange={(suporteEmail) => setForm((current) => ({ ...current, suporteEmail }))}
+                placeholder="suporte@malachdigital.com.br"
+              />
+              <TextField
+                label="WhatsApp de suporte"
+                value={form.suporteWhatsapp}
+                onChange={(suporteWhatsapp) => setForm((current) => ({ ...current, suporteWhatsapp }))}
+                placeholder="(11) 99999-9999"
+              />
+              <TextField
+                label="Horário de suporte"
+                value={form.suporteHorario}
+                onChange={(suporteHorario) => setForm((current) => ({ ...current, suporteHorario }))}
+                placeholder="Segunda a sexta, 09h às 18h"
+              />
+              <TextField
+                label="Janela de atualização"
+                value={form.janelaAtualizacao}
+                onChange={(janelaAtualizacao) => setForm((current) => ({ ...current, janelaAtualizacao }))}
+                placeholder="Terças e quintas após 22h"
+              />
+              <TextField
+                label="Título do aviso"
+                value={form.avisoAtualizacaoTitulo}
+                onChange={(avisoAtualizacaoTitulo) => setForm((current) => ({ ...current, avisoAtualizacaoTitulo }))}
+                placeholder="Nova versão publicada"
+              />
+              <TextField
+                label="Versão do aviso"
+                value={form.avisoAtualizacaoVersao}
+                onChange={(avisoAtualizacaoVersao) => setForm((current) => ({ ...current, avisoAtualizacaoVersao }))}
+                placeholder={APP_VERSION}
+              />
+              <TextAreaField
+                label="Mensagem do aviso"
+                value={form.avisoAtualizacaoMensagem}
+                onChange={(avisoAtualizacaoMensagem) => setForm((current) => ({ ...current, avisoAtualizacaoMensagem }))}
+                placeholder="Informe em linguagem simples o que mudou e se existe alguma ação esperada do usuário."
+              />
+              <CheckboxField
+                label="Exibir aviso de atualização para usuários"
+                checked={form.avisoAtualizacaoAtivo}
+                onChange={(avisoAtualizacaoAtivo) => setForm((current) => ({ ...current, avisoAtualizacaoAtivo }))}
+              />
+            </div>
+          </section>
+
+          <section className="resource-panel privacy-panel">
+            <div className="resource-panel-heading">
+              <div>
+                <strong>Privacidade e LGPD</strong>
+                <small>Exportação e anonimização de dados pessoais por solicitação do titular</small>
+              </div>
+              <span>Termos v2026-06-04</span>
+            </div>
+
+            <div className="privacy-grid">
+              <SelectField
+                label="Titular"
+                value={privacyForm.tipo}
+                onChange={(tipo) => setPrivacyForm((current) => ({ ...current, tipo }))}
+              >
+                <option value="hospede">Hóspede</option>
+                <option value="proprietario">Proprietário</option>
+                <option value="usuario">Usuário</option>
+              </SelectField>
+              <TextField
+                label="ID do cadastro"
+                type="number"
+                value={privacyForm.id}
+                onChange={(id) => setPrivacyForm((current) => ({ ...current, id }))}
+                placeholder="Ex.: 12"
+              />
+              <TextField
+                label="Motivo da anonimização"
+                value={privacyForm.motivo}
+                onChange={(motivo) => setPrivacyForm((current) => ({ ...current, motivo }))}
+                placeholder="Ex.: solicitação formal do titular"
+              />
+            </div>
+
+            <div className="button-row privacy-actions">
+              <button
+                className="secondary-action"
+                type="button"
+                disabled={privacyLoading || !privacyForm.id}
+                onClick={exportPrivacyData}
+              >
+                <FileDown size={18} />
+                Exportar dados
+              </button>
+              <button
+                className="danger-action"
+                type="button"
+                disabled={privacyLoading || !privacyForm.id || privacyForm.motivo.trim().length < 8}
+                onClick={anonymizePrivacyData}
+              >
+                <UserX size={18} />
+                Anonimizar dados
+              </button>
+            </div>
+
+            {privacyAction && <div className="inline-note">{privacyAction}</div>}
+            {privacyResult && (
+              <pre className="json-preview">{JSON.stringify(privacyResult, null, 2)}</pre>
+            )}
+          </section>
+
           <div className="resource-layout">
             <form className="resource-form" onSubmit={save}>
               <div className="form-title">
@@ -1031,7 +1496,7 @@ export function ConfiguracoesPage() {
                 <TextField label="E-mail operacional" type="email" value={form.emailOperacional} onChange={(emailOperacional) => setForm((current) => ({ ...current, emailOperacional }))} />
                 <TextField label="Telefone" value={form.telefoneOperacional} onChange={(telefoneOperacional) => setForm((current) => ({ ...current, telefoneOperacional }))} />
                 <TextField label="WhatsApp" value={form.whatsappOperacional} onChange={(whatsappOperacional) => setForm((current) => ({ ...current, whatsappOperacional }))} />
-                <TextField label="Slug" value={data.tenant.slug} readOnly />
+                <TextField label="Identificador da empresa" value={data.tenant.slug} readOnly />
                 <TextField label="CEP" value={form.cep} onChange={(cep) => setForm((current) => ({ ...current, cep }))} />
                 <TextField label="Logradouro" value={form.logradouro} onChange={(logradouro) => setForm((current) => ({ ...current, logradouro }))} />
                 <TextField label="Número" value={form.numero} onChange={(numero) => setForm((current) => ({ ...current, numero }))} />
@@ -1056,7 +1521,7 @@ export function ConfiguracoesPage() {
                   onChange={(taxaLimpezaPadrao) => setForm((current) => ({ ...current, taxaLimpezaPadrao }))}
                   placeholder="Ex.: 180.00"
                 />
-                <CheckboxField label="Tenant ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
+                <CheckboxField label="Empresa ativa" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
                 <TextAreaField
                   label="Observações operacionais"
                   value={form.observacoesOperacionais}
@@ -1134,11 +1599,11 @@ export function ConfiguracoesPage() {
                 </div>
                 <div>
                   <small>Isolamento</small>
-                  <strong><CheckCircle2 size={16} /> Filtro por tenant no DbContext</strong>
+                  <strong><CheckCircle2 size={16} /> Dados separados por empresa</strong>
                 </div>
                 <div>
                   <small>Administração de empresas</small>
-                  <strong><ShieldCheck size={16} /> {data.tenant.podeGerenciarEmpresas ? 'Admin geral' : 'Tenant isolado'}</strong>
+                  <strong><ShieldCheck size={16} /> {data.tenant.podeGerenciarEmpresas ? 'Admin geral' : 'Empresa isolada'}</strong>
                 </div>
               </div>
             </article>

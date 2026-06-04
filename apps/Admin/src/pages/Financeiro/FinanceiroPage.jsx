@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
 import { categoriasFinanceirasApi, financeiroApi } from '@/api/financeiro';
 import { reservasApi } from '@/api/reservas';
+import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
 
 const tipoOptions = [
@@ -70,6 +71,10 @@ function labelFor(options, value) {
 
 function nullableNumber(value) {
   return value ? Number(value) : null;
+}
+
+function scrollToForm() {
+  document.getElementById('movimentacao-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function Field({ label, children, span = false }) {
@@ -351,7 +356,7 @@ export function FinanceiroPage() {
         <div>
           <span className="eyebrow">Gestão financeira</span>
           <h1>Financeiro</h1>
-          <p>Receitas, despesas, categorias e fluxo de caixa por período, imóvel e proprietário.</p>
+          <p>Controle entradas, saídas, categorias e fluxo de caixa por período, imóvel e proprietário.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={() => load()}>
@@ -445,7 +450,7 @@ export function FinanceiroPage() {
           <div className="resource-panel-heading">
             <div>
               <strong>Movimentações</strong>
-              <small>Entradas e saídas registradas no caixa.</small>
+              <small>Receitas e despesas lançadas no caixa.</small>
             </div>
             <span>{movimentacoes.length} registros</span>
           </div>
@@ -454,11 +459,12 @@ export function FinanceiroPage() {
           {loading ? (
             <div className="loading-line">Carregando movimentações...</div>
           ) : movimentacoes.length === 0 ? (
-            <div className="inline-empty">
-              <Banknote size={26} />
-              <strong>Nenhuma movimentação encontrada</strong>
-              <span>Ajuste os filtros ou registre a primeira receita ou despesa.</span>
-            </div>
+            <EmptyState
+              icon={<Banknote size={26} />}
+              title="Nenhuma movimentação encontrada"
+              description="Registre receitas, despesas e custos extras para enxergar o caixa real."
+              actions={[{ label: 'Nova movimentação', onClick: scrollToForm, icon: <Plus size={17} /> }]}
+            />
           ) : (
             <div className="data-table-wrap">
               <table className="data-table">
@@ -507,7 +513,7 @@ export function FinanceiroPage() {
         </article>
 
         <aside className="financial-side">
-          <form className="resource-form" onSubmit={save}>
+          <form className="resource-form" id="movimentacao-form" onSubmit={save}>
             <div className="form-title">
               <Plus size={18} />
               <strong>{editingId ? 'Editar movimentação' : 'Nova movimentação'}</strong>
