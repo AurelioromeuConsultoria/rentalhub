@@ -45,7 +45,9 @@ builder.Services.AddCors(options =>
 builder.Services.AddRentalHubInfrastructure(builder.Configuration);
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+builder.Services.AddScoped<OperationalNotificationService>();
 builder.Services.AddHostedService<DatabaseInitializerHostedService>();
+builder.Services.AddHostedService<EmailNotificationDigestHostedService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is not configured.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "RentalHub";

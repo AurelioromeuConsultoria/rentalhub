@@ -1,5 +1,6 @@
 import { CalendarDays, Edit3, Plus, RotateCcw, Save, Search, XCircle } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { configuracoesApi } from '@/api/administracao';
 import { calendarioApi } from '@/api/calendario';
 import { hospedesApi, imoveisApi } from '@/api/cadastros';
@@ -196,6 +197,8 @@ function SelectField({ label, value, onChange, children, required }) {
 }
 
 export function ReservasPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const calendarParamsApplied = useRef(false);
   const [reservas, setReservas] = useState([]);
   const [imoveis, setImoveis] = useState([]);
   const [hospedes, setHospedes] = useState([]);
@@ -248,6 +251,45 @@ export function ReservasPage() {
     const timeout = setTimeout(load, 0);
     return () => clearTimeout(timeout);
   }, []);
+
+  useEffect(() => {
+    if (calendarParamsApplied.current || loading || imoveis.length === 0) {
+      return;
+    }
+
+    const imovelId = searchParams.get('imovelId');
+    const checkIn = searchParams.get('checkIn');
+    const checkOut = searchParams.get('checkOut');
+
+    if (!imovelId || !checkIn || !checkOut) {
+      calendarParamsApplied.current = true;
+      return;
+    }
+
+    calendarParamsApplied.current = true;
+    const timeout = setTimeout(() => {
+      const imovelExists = imoveis.some((imovel) => String(imovel.id) === String(imovelId));
+      if (!imovelExists) {
+        setError('O imóvel selecionado no calendário não está disponível para reserva.');
+        return;
+      }
+
+      setEditingId(null);
+      setError('');
+      setSuccess('Reserva preparada a partir do calendário. Revise hóspede, valores e origem antes de salvar.');
+      setForm((current) => ({
+        ...buildEmptyReserva(tenantSettings),
+        ...current,
+        imovelId: String(imovelId),
+        hospedeId: current.hospedeId || (hospedes[0]?.id ? String(hospedes[0].id) : ''),
+        checkIn,
+        checkOut,
+      }));
+      setSearchParams({}, { replace: true });
+    }, 0);
+
+    return () => clearTimeout(timeout);
+  }, [hospedes, imoveis, loading, searchParams, setSearchParams, tenantSettings]);
 
   useEffect(() => {
     if (editingId || !tenantSettings) {

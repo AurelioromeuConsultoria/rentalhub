@@ -8,6 +8,44 @@ public static class SimplePdfBuilder
     private const int LinesPerPage = 44;
     private const int MaxLineLength = 105;
 
+    public static byte[] CreateReport(SimplePdfReport report)
+    {
+        var lines = new List<string>
+        {
+            "RentalHub",
+            report.Title,
+            report.Subtitle,
+            $"Emitido em {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC",
+            new string('=', MaxLineLength),
+            string.Empty
+        };
+
+        if (report.Summary.Count > 0)
+        {
+            lines.Add("RESUMO");
+            lines.Add(new string('-', MaxLineLength));
+            lines.AddRange(report.Summary.Select(FormatSummaryLine));
+            lines.Add(string.Empty);
+        }
+
+        foreach (var table in report.Tables)
+        {
+            lines.Add(table.Title.ToUpperInvariant());
+            lines.Add(new string('-', MaxLineLength));
+            lines.AddRange(CreateTableLines(table));
+            lines.Add(string.Empty);
+        }
+
+        if (report.Notes.Count > 0)
+        {
+            lines.Add("OBSERVACOES");
+            lines.Add(new string('-', MaxLineLength));
+            lines.AddRange(report.Notes);
+        }
+
+        return Create(lines);
+    }
+
     public static byte[] Create(IReadOnlyCollection<string> rawLines)
     {
         var lines = rawLines.SelectMany(WrapLine).ToList();
@@ -123,4 +161,84 @@ public static class SimplePdfBuilder
             .Replace("(", "\\(", StringComparison.Ordinal)
             .Replace(")", "\\)", StringComparison.Ordinal);
     }
+
+    private static string FormatSummaryLine(SimplePdfSummaryItem item)
+    {
+        const int labelLength = 34;
+        var label = NormalizeCell(item.Label, labelLength);
+        return $"{label.PadRight(labelLength, '.')} {item.Value}";
+    }
+
+    private static IReadOnlyCollection<string> CreateTableLines(SimplePdfTable table)
+    {
+        if (table.Rows.Count == 0)
+        {
+            return ["Nenhum registro encontrado para os filtros selecionados."];
+        }
+
+        var columnCount = table.Headers.Count;
+        if (columnCount == 0)
+        {
+            return table.Rows.Select(row => string.Join(" | ", row)).ToList();
+        }
+
+        var separatorWidth = Math.Max(0, (columnCount - 1) * 3);
+        var availableWidth = Math.Max(columnCount * 8, MaxLineLength - separatorWidth);
+        var baseWidth = Math.Max(8, availableWidth / columnCount);
+        var widths = table.Headers.Select(header => Math.Min(24, Math.Max(baseWidth, Math.Min(18, header.Length + 4)))).ToArray();
+        var currentWidth = widths.Sum() + separatorWidth;
+
+        while (currentWidth > MaxLineLength)
+        {
+            var largestIndex = Array.IndexOf(widths, widths.Max());
+            if (widths[largestIndex] <= 8)
+            {
+                break;
+            }
+
+            widths[largestIndex]--;
+            currentWidth = widths.Sum() + separatorWidth;
+        }
+
+        var lines = new List<string>
+        {
+            FormatColumns(table.Headers, widths),
+            FormatColumns(widths.Select(width => new string('-', width)).ToArray(), widths)
+        };
+
+        lines.AddRange(table.Rows.Select(row => FormatColumns(row, widths)));
+        return lines;
+    }
+
+    private static string FormatColumns(IReadOnlyCollection<string> values, IReadOnlyList<int> widths)
+    {
+        return string.Join(" | ", values
+            .Select((value, index) => NormalizeCell(value, widths[Math.Min(index, widths.Count - 1)]).PadRight(widths[Math.Min(index, widths.Count - 1)]))
+            .Take(widths.Count));
+    }
+
+    private static string NormalizeCell(string? value, int width)
+    {
+        var normalized = ToAscii(value ?? string.Empty).ReplaceLineEndings(" ").Trim();
+        if (normalized.Length <= width)
+        {
+            return normalized;
+        }
+
+        return width <= 3 ? normalized[..width] : string.Concat(normalized.AsSpan(0, width - 3), "...");
+    }
 }
+
+public sealed record SimplePdfReport(
+    string Title,
+    string Subtitle,
+    IReadOnlyCollection<SimplePdfSummaryItem> Summary,
+    IReadOnlyCollection<SimplePdfTable> Tables,
+    IReadOnlyCollection<string> Notes);
+
+public sealed record SimplePdfSummaryItem(string Label, string Value);
+
+public sealed record SimplePdfTable(
+    string Title,
+    IReadOnlyCollection<string> Headers,
+    IReadOnlyCollection<IReadOnlyCollection<string>> Rows);

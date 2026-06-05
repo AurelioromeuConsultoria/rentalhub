@@ -32,6 +32,7 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<PerfilAcessoPermissao> PerfisAcessoPermissoes => Set<PerfilAcessoPermissao>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<LgpdConsent> LgpdConsents => Set<LgpdConsent>();
+    public DbSet<EmailNotificationLog> EmailNotificationLogs => Set<EmailNotificationLog>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<Proprietario> Proprietarios => Set<Proprietario>();
     public DbSet<Imovel> Imoveis => Set<Imovel>();
@@ -198,6 +199,21 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.UsuarioId, e.AcceptedAt });
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Usuario).WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EmailNotificationLog>(entity =>
+        {
+            entity.ToTable("EmailNotificationLogs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ReferenceDate).IsRequired();
+            entity.Property(e => e.Type).IsRequired().HasMaxLength(80);
+            entity.Property(e => e.RecipientEmail).IsRequired().HasMaxLength(180);
+            entity.Property(e => e.Subject).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.SentAt).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.ReferenceDate, e.Type, e.RecipientEmail }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.SentAt });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SupportTicket>(entity =>
@@ -573,6 +589,7 @@ public sealed class RentalHubDbContext : DbContext
             .Entries<ITenantEntity>()
             .Where(entry =>
                 entry.Entity is not AuditLog &&
+                entry.Entity is not EmailNotificationLog &&
                 entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
                 HasMeaningfulChange(entry))
             .Select(entry => new PendingAuditEntry(

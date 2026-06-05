@@ -148,6 +148,7 @@ export function Login() {
           <div className="login-legal-links">
             <Link to="/termos-de-uso">Termos de Uso</Link>
             <Link to="/privacidade">Privacidade</Link>
+            <Link to="/contrato">Contrato SaaS</Link>
           </div>
         </form>
       </section>

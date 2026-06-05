@@ -1505,7 +1505,7 @@ export function ConfiguracoesPage() {
                 <strong>Privacidade e LGPD</strong>
                 <small>Exportação e anonimização de dados pessoais por solicitação do titular</small>
               </div>
-              <span>Termos v2026-06-04</span>
+              <span>Termos v2026-06-05</span>
             </div>
 
             <div className="privacy-grid">

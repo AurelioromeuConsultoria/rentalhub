@@ -11,7 +11,7 @@ import { FinanceiroPage } from '@/pages/Financeiro/FinanceiroPage';
 import { LimpezaPage } from '@/pages/Limpeza/LimpezaPage';
 import { Login } from '@/pages/Login/Login';
 import { SetPassword } from '@/pages/Login/SetPassword';
-import { PrivacyPage, TermsPage } from '@/pages/Legal/LegalPages';
+import { ContractPage, PrivacyPage, TermsPage } from '@/pages/Legal/LegalPages';
 import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
 import { PortalProprietarioPage } from '@/pages/PortalProprietario/PortalProprietarioPage';
 import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
@@ -82,6 +82,7 @@ export default function App() {
           <Route path="/definir-senha" element={<SetPassword />} />
           <Route path="/termos-de-uso" element={<TermsPage />} />
           <Route path="/privacidade" element={<PrivacyPage />} />
+          <Route path="/contrato" element={<ContractPage />} />
           <Route
             path="/"
             element={

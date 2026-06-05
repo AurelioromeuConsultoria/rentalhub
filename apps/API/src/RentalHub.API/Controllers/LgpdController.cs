@@ -14,8 +14,8 @@ namespace RentalHub.API.Controllers;
 [Route("api/lgpd")]
 public sealed class LgpdController : ControllerBase
 {
-    private const string CurrentTermsVersion = "2026-06-04";
-    private const string CurrentPrivacyVersion = "2026-06-04";
+    private const string CurrentTermsVersion = "2026-06-05";
+    private const string CurrentPrivacyVersion = "2026-06-05";
 
     private readonly RentalHubDbContext _dbContext;
     private readonly ICurrentUserContext _currentUserContext;

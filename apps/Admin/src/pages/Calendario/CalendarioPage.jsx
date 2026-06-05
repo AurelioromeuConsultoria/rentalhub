@@ -1,14 +1,40 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarCheck,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  Clock,
+  DoorOpen,
+  Hammer,
+  Lock,
+  Plus,
+  RotateCcw,
+  Save,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { calendarioApi } from '@/api/calendario';
 import { imoveisApi } from '@/api/cadastros';
+import { EmptyState } from '@/components/EmptyState';
 import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
-const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const dayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' });
+const shortDateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+const longDateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 const tipoOptions = [
   { value: 1, label: 'Bloqueio' },
   { value: 2, label: 'Manutenção' },
+];
+
+const viewModes = [
+  { value: 'month', label: 'Mês' },
+  { value: 'week', label: 'Semana' },
+  { value: 'day', label: 'Dia' },
 ];
 
 const emptyBlock = {
@@ -28,33 +54,69 @@ function parseDateOnly(value) {
   return new Date(year, month - 1, day);
 }
 
+function addDays(date, amount) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function differenceInDays(start, end) {
+  const startDate = parseDateOnly(toInputDate(start));
+  const endDate = parseDateOnly(toInputDate(end));
+  return Math.round((endDate - startDate) / 86400000);
+}
+
+function formatDate(value) {
+  if (!value) return '-';
+  return longDateFormatter.format(parseDateOnly(value));
+}
+
 function monthLabel(date) {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
 }
 
-function getMonthRange(monthDate) {
-  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-  const gridStart = new Date(firstDay);
-  gridStart.setDate(firstDay.getDate() - firstDay.getDay());
-  const gridEnd = new Date(lastDay);
-  gridEnd.setDate(lastDay.getDate() + (6 - lastDay.getDay()) + 1);
+function getVisibleRange(anchorDate, viewMode) {
+  if (viewMode === 'day') {
+    const start = parseDateOnly(toInputDate(anchorDate));
+    return { start, end: addDays(start, 1) };
+  }
 
-  return { firstDay, lastDay, gridStart, gridEnd };
+  if (viewMode === 'week') {
+    const start = parseDateOnly(toInputDate(anchorDate));
+    start.setDate(start.getDate() - start.getDay());
+    return { start, end: addDays(start, 7) };
+  }
+
+  const start = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+  const end = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1);
+  return { start, end };
 }
 
-function buildDays(monthDate) {
-  const { firstDay, gridStart } = getMonthRange(monthDate);
-  return Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(gridStart);
-    day.setDate(gridStart.getDate() + index);
+function buildDays(anchorDate, viewMode) {
+  const { start, end } = getVisibleRange(anchorDate, viewMode);
+  const total = differenceInDays(start, end);
+
+  return Array.from({ length: total }, (_, index) => {
+    const date = addDays(start, index);
+    const key = toInputDate(date);
     return {
-      date: day,
-      key: toInputDate(day),
-      isCurrentMonth: day.getMonth() === firstDay.getMonth(),
-      isToday: toInputDate(day) === toInputDate(new Date()),
+      date,
+      key,
+      dayNumber: date.getDate(),
+      weekday: dayFormatter.format(date).replace('.', ''),
+      label: shortDateFormatter.format(date),
+      isToday: key === toInputDate(new Date()),
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
     };
   });
+}
+
+function eventTouchesRange(event, startKey, endKey) {
+  const start = parseDateOnly(startKey);
+  const end = parseDateOnly(endKey);
+  const eventStart = parseDateOnly(event.inicio);
+  const eventEnd = parseDateOnly(event.fim);
+  return eventEnd > start && eventStart < end;
 }
 
 function eventTouchesDay(event, dayKey) {
@@ -64,37 +126,182 @@ function eventTouchesDay(event, dayKey) {
   return start <= day && day < end;
 }
 
+function eventStartsOn(event, dayKey) {
+  return String(event.inicio).slice(0, 10) === dayKey;
+}
+
+function eventEndsOn(event, dayKey) {
+  return String(event.fim).slice(0, 10) === dayKey;
+}
+
+function getEventMeta(event) {
+  if (event.tipo === 'reserva') {
+    if (event.status === 1) return { label: 'Pendente', icon: Clock };
+    if (event.status === 2) return { label: 'Confirmada', icon: CalendarCheck };
+    if (event.status === 3) return { label: 'Em andamento', icon: DoorOpen };
+    if (event.status === 4) return { label: 'Finalizada', icon: ClipboardCheck };
+    return { label: 'Reserva', icon: CalendarDays };
+  }
+
+  if (event.tipo === 'limpeza') return { label: 'Limpeza', icon: Sparkles };
+  if (event.tipo === 'manutencao') return { label: 'Manutenção', icon: Hammer };
+  return { label: 'Bloqueio', icon: Lock };
+}
+
+function getEventText(event) {
+  const meta = getEventMeta(event);
+  if (event.tipo === 'reserva') {
+    return `${meta.label}${event.descricao ? ` · ${event.descricao}` : ''}`;
+  }
+
+  return event.titulo || meta.label;
+}
+
 function getErrorMessage(error) {
   return getFriendlyErrorMessage(error);
 }
 
+function getSelectionMessage(selection, conflicts) {
+  if (!selection.imovelId || !selection.inicio || !selection.fim) {
+    return {
+      tone: 'neutral',
+      title: 'Selecione um período',
+      description: 'Clique em um dia para definir o check-in. Clique em outro dia do mesmo imóvel para definir o check-out.',
+    };
+  }
+
+  if (conflicts.length > 0) {
+    return {
+      tone: 'danger',
+      title: 'Período indisponível',
+      description: 'Existe reserva, bloqueio, limpeza ou manutenção nesse intervalo.',
+    };
+  }
+
+  return {
+    tone: 'success',
+    title: 'Período livre',
+    description: 'Você pode criar uma reserva ou bloquear esse intervalo para o imóvel selecionado.',
+  };
+}
+
+function assignEventLanes(events, days) {
+  const rangeStart = parseDateOnly(days[0]?.key);
+  const rangeEnd = addDays(parseDateOnly(days.at(-1)?.key), 1);
+  const lanes = [];
+
+  return events
+    .map((event) => {
+      const eventStart = parseDateOnly(event.inicio) < rangeStart ? rangeStart : parseDateOnly(event.inicio);
+      const eventEnd = parseDateOnly(event.fim) > rangeEnd ? rangeEnd : parseDateOnly(event.fim);
+      return {
+        ...event,
+        startIndex: Math.max(0, differenceInDays(rangeStart, eventStart)),
+        endIndex: Math.max(1, differenceInDays(rangeStart, eventEnd)),
+      };
+    })
+    .filter((event) => event.endIndex > event.startIndex)
+    .sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex)
+    .map((event) => {
+      let laneIndex = lanes.findIndex((laneEnd) => event.startIndex >= laneEnd);
+      if (laneIndex === -1) {
+        laneIndex = lanes.length;
+        lanes.push(event.endIndex);
+      } else {
+        lanes[laneIndex] = event.endIndex;
+      }
+
+      return { ...event, lane: laneIndex + 1 };
+    });
+}
+
 export function CalendarioPage() {
-  const [monthDate, setMonthDate] = useState(() => new Date());
+  const navigate = useNavigate();
+  const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const [viewMode, setViewMode] = useState('month');
   const [events, setEvents] = useState([]);
   const [imoveis, setImoveis] = useState([]);
   const [selectedImovelId, setSelectedImovelId] = useState('');
+  const [selection, setSelection] = useState({ imovelId: '', inicio: '', fim: '' });
   const [form, setForm] = useState(emptyBlock);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const days = useMemo(() => buildDays(monthDate), [monthDate]);
+  const days = useMemo(() => buildDays(anchorDate, viewMode), [anchorDate, viewMode]);
+  const visibleStart = days[0]?.key || toInputDate(anchorDate);
+  const visibleEnd = days.length > 0 ? toInputDate(addDays(parseDateOnly(days.at(-1).key), 1)) : toInputDate(addDays(anchorDate, 1));
+
+  const visibleImoveis = useMemo(() => {
+    if (!selectedImovelId) return imoveis;
+    return imoveis.filter((imovel) => String(imovel.id) === String(selectedImovelId));
+  }, [imoveis, selectedImovelId]);
+
+  const selectedImovel = useMemo(
+    () => imoveis.find((imovel) => String(imovel.id) === String(selection.imovelId)),
+    [imoveis, selection.imovelId],
+  );
+
+  const eventsByProperty = useMemo(() => {
+    return visibleImoveis.map((imovel) => {
+      const propertyEvents = events.filter((event) => event.imovelId === imovel.id);
+      const laneEvents = assignEventLanes(propertyEvents, days);
+      const lanes = Math.max(1, ...laneEvents.map((event) => event.lane));
+
+      return {
+        imovel,
+        events: laneEvents,
+        lanes,
+      };
+    });
+  }, [days, events, visibleImoveis]);
+
+  const selectedConflicts = useMemo(() => {
+    if (!selection.imovelId || !selection.inicio || !selection.fim) return [];
+    return events.filter(
+      (event) =>
+        String(event.imovelId) === String(selection.imovelId) &&
+        eventTouchesRange(event, selection.inicio, selection.fim),
+    );
+  }, [events, selection]);
+
+  const selectionStatus = useMemo(() => getSelectionMessage(selection, selectedConflicts), [selection, selectedConflicts]);
+
+  const daySummary = useMemo(() => {
+    const todayKey = toInputDate(new Date());
+    const relevantEvents = events.filter((event) => eventTouchesDay(event, todayKey));
+    const checkIns = events.filter((event) => event.tipo === 'reserva' && eventStartsOn(event, todayKey)).length;
+    const checkOuts = events.filter((event) => event.tipo === 'reserva' && eventEndsOn(event, todayKey)).length;
+    const limpezas = relevantEvents.filter((event) => event.tipo === 'limpeza').length;
+    const manutencoes = relevantEvents.filter((event) => event.tipo === 'manutencao').length;
+
+    return { checkIns, checkOuts, limpezas, manutencoes };
+  }, [events]);
+
+  const availableProperties = useMemo(() => {
+    if (!selection.inicio || !selection.fim) return [];
+    return imoveis.filter((imovel) => {
+      return !events.some(
+        (event) =>
+          event.imovelId === imovel.id &&
+          eventTouchesRange(event, selection.inicio, selection.fim),
+      );
+    });
+  }, [events, imoveis, selection.fim, selection.inicio]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
 
-    const { gridStart, gridEnd } = getMonthRange(monthDate);
-
     try {
       const [eventsResponse, imoveisResponse] = await Promise.all([
         calendarioApi.events({
-          inicio: toInputDate(gridStart),
-          fim: toInputDate(gridEnd),
+          inicio: visibleStart,
+          fim: visibleEnd,
           imovelId: selectedImovelId || undefined,
         }),
-        imoveisApi.list({ status: 1, pageSize: 100 }),
+        imoveisApi.list({ status: 1, pageSize: 200 }),
       ]);
 
       setEvents(eventsResponse.data || []);
@@ -104,7 +311,7 @@ export function CalendarioPage() {
     } finally {
       setLoading(false);
     }
-  }, [monthDate, selectedImovelId]);
+  }, [selectedImovelId, visibleEnd, visibleStart]);
 
   useEffect(() => {
     const timeout = setTimeout(load, 0);
@@ -121,12 +328,67 @@ export function CalendarioPage() {
     return undefined;
   }, [form.imovelId, imoveis]);
 
-  const goToPreviousMonth = () => {
-    setMonthDate((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
+  const goToPreviousRange = () => {
+    setAnchorDate((current) => {
+      if (viewMode === 'day') return addDays(current, -1);
+      if (viewMode === 'week') return addDays(current, -7);
+      return new Date(current.getFullYear(), current.getMonth() - 1, 1);
+    });
   };
 
-  const goToNextMonth = () => {
-    setMonthDate((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1));
+  const goToNextRange = () => {
+    setAnchorDate((current) => {
+      if (viewMode === 'day') return addDays(current, 1);
+      if (viewMode === 'week') return addDays(current, 7);
+      return new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    });
+  };
+
+  const goToToday = () => {
+    setAnchorDate(new Date());
+  };
+
+  const selectDay = (imovelId, dayKey) => {
+    setError('');
+    setSuccess('');
+    setSelection((current) => {
+      const sameProperty = String(current.imovelId) === String(imovelId);
+      const shouldStartOver = !sameProperty || !current.inicio || current.fim || dayKey <= current.inicio;
+      const next = shouldStartOver
+        ? { imovelId: String(imovelId), inicio: dayKey, fim: '' }
+        : { imovelId: String(imovelId), inicio: current.inicio, fim: toInputDate(addDays(parseDateOnly(dayKey), 1)) };
+
+      setForm((formState) => ({
+        ...formState,
+        imovelId: String(imovelId),
+        inicio: next.inicio,
+        fim: next.fim || toInputDate(addDays(parseDateOnly(next.inicio), 1)),
+      }));
+
+      return next;
+    });
+  };
+
+  const fillBlockFromSelection = () => {
+    if (!selection.imovelId || !selection.inicio) return;
+    setForm((current) => ({
+      ...current,
+      imovelId: selection.imovelId,
+      inicio: selection.inicio,
+      fim: selection.fim || toInputDate(addDays(parseDateOnly(selection.inicio), 1)),
+    }));
+  };
+
+  const createReservaFromSelection = () => {
+    if (!selection.imovelId || !selection.inicio || !selection.fim || selectedConflicts.length > 0) return;
+
+    const params = new URLSearchParams({
+      imovelId: selection.imovelId,
+      checkIn: selection.inicio,
+      checkOut: selection.fim,
+    });
+
+    navigate(`/reservas?${params.toString()}`);
   };
 
   const saveBlock = async (event) => {
@@ -149,6 +411,7 @@ export function CalendarioPage() {
         ...emptyBlock,
         imovelId: current.imovelId,
       }));
+      setSelection({ imovelId: '', inicio: '', fim: '' });
       setSuccess('Bloqueio salvo no calendário.');
       await load();
     } catch (saveError) {
@@ -181,17 +444,20 @@ export function CalendarioPage() {
 
   return (
     <div className="calendar-page">
-      <section className="page-heading">
+      <section className="page-heading calendar-heading">
         <div>
           <span className="eyebrow">Operação</span>
           <h1>Calendário</h1>
-          <p>Visão mensal de reservas, check-ins, check-outs, bloqueios e períodos de manutenção.</p>
+          <p>Mapa de ocupação por imóvel com reservas, bloqueios, limpezas, manutenções e criação rápida de agenda.</p>
         </div>
         <div className="resource-actions">
-          <button className="icon-button bordered" type="button" aria-label="Mês anterior" onClick={goToPreviousMonth}>
+          <button className="secondary-action compact" type="button" onClick={goToToday}>
+            Hoje
+          </button>
+          <button className="icon-button bordered" type="button" aria-label="Período anterior" onClick={goToPreviousRange}>
             <ChevronLeft size={18} />
           </button>
-          <button className="icon-button bordered" type="button" aria-label="Próximo mês" onClick={goToNextMonth}>
+          <button className="icon-button bordered" type="button" aria-label="Próximo período" onClick={goToNextRange}>
             <ChevronRight size={18} />
           </button>
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -200,136 +466,300 @@ export function CalendarioPage() {
         </div>
       </section>
 
-      <section className="calendar-layout">
-        <article className="calendar-panel">
-          <div className="calendar-toolbar">
-            <strong>{monthLabel(monthDate)}</strong>
-            <label>
-              <span>Imóvel</span>
-              <select value={selectedImovelId} onChange={(event) => setSelectedImovelId(event.target.value)}>
-                <option value="">Todos</option>
-                {imoveis.map((imovel) => (
-                  <option key={imovel.id} value={imovel.id}>
-                    {imovel.nome}
-                  </option>
+      <section className="calendar-kpis">
+        <article>
+          <DoorOpen size={20} />
+          <span>Check-ins hoje</span>
+          <strong>{daySummary.checkIns}</strong>
+        </article>
+        <article>
+          <CalendarCheck size={20} />
+          <span>Check-outs hoje</span>
+          <strong>{daySummary.checkOuts}</strong>
+        </article>
+        <article>
+          <Sparkles size={20} />
+          <span>Limpezas hoje</span>
+          <strong>{daySummary.limpezas}</strong>
+        </article>
+        <article>
+          <Hammer size={20} />
+          <span>Manutenções hoje</span>
+          <strong>{daySummary.manutencoes}</strong>
+        </article>
+      </section>
+
+      <section className="calendar-layout strong">
+        <article className="calendar-panel calendar-board-panel">
+          <div className="calendar-toolbar strong">
+            <div>
+              <strong>{viewMode === 'month' ? monthLabel(anchorDate) : `${formatDate(visibleStart)} a ${formatDate(addDays(parseDateOnly(visibleEnd), -1))}`}</strong>
+              <span>{visibleImoveis.length} imóveis · {events.length} eventos no período</span>
+            </div>
+
+            <div className="calendar-toolbar-controls">
+              <div className="segmented-control" aria-label="Visualização do calendário">
+                {viewModes.map((mode) => (
+                  <button
+                    className={viewMode === mode.value ? 'active' : ''}
+                    key={mode.value}
+                    type="button"
+                    onClick={() => setViewMode(mode.value)}
+                  >
+                    {mode.label}
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+
+              <label>
+                <span>Imóvel</span>
+                <select value={selectedImovelId} onChange={(event) => setSelectedImovelId(event.target.value)}>
+                  <option value="">Todos</option>
+                  {imoveis.map((imovel) => (
+                    <option key={imovel.id} value={imovel.id}>
+                      {imovel.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           {error && <div className="form-alert">{error}</div>}
           {success && <div className="form-success">{success}</div>}
 
-          <div className="calendar-grid">
-            {weekDays.map((day) => (
-              <div className="calendar-weekday" key={day}>
-                {day}
+          {loading ? (
+            <div className="loading-line">Carregando agenda operacional...</div>
+          ) : visibleImoveis.length === 0 ? (
+            <EmptyState
+              icon={CalendarDays}
+              title="Nenhum imóvel ativo encontrado"
+              description="Cadastre ou ative um imóvel para montar a agenda operacional."
+            />
+          ) : (
+            <div className="calendar-board" style={{ '--calendar-days': days.length }}>
+              <div className="calendar-board-header">
+                <div className="calendar-property-heading">Imóvel</div>
+                {days.map((day) => (
+                  <div className={`calendar-board-day${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}`} key={day.key}>
+                    <span>{day.weekday}</span>
+                    <strong>{day.dayNumber}</strong>
+                  </div>
+                ))}
               </div>
-            ))}
 
-            {days.map((day) => {
-              const dayEvents = events.filter((event) => eventTouchesDay(event, day.key));
-              return (
+              {eventsByProperty.map(({ imovel, events: propertyEvents, lanes }) => (
                 <div
-                  className={`calendar-day${day.isCurrentMonth ? '' : ' muted'}${day.isToday ? ' today' : ''}`}
-                  key={day.key}
+                  className="calendar-property-row"
+                  key={imovel.id}
+                  style={{ '--event-lanes': lanes }}
                 >
-                  <div className="calendar-day-header">
-                    <strong>{day.date.getDate()}</strong>
-                    {dayEvents.some((event) => event.tipo === 'reserva' && event.inicio.slice(0, 10) === day.key) && <span>Check-in</span>}
-                    {dayEvents.some((event) => event.tipo === 'reserva' && event.fim.slice(0, 10) === day.key) && <span>Check-out</span>}
+                  <div className="calendar-property-label">
+                    <strong>{imovel.nome}</strong>
+                    <span>{imovel.cidade || 'Sem cidade'}{imovel.estado ? ` · ${imovel.estado}` : ''}</span>
+                    <small>{propertyEvents.length} eventos</small>
                   </div>
 
-                  {loading ? (
-                    <small className="calendar-loading">...</small>
-                  ) : (
-                    <div className="calendar-events">
-                      {dayEvents.slice(0, 4).map((event) => (
-                        <div className={`calendar-event ${event.tipo}`} key={`${day.key}-${event.id}`}>
-                          <div>
-                            <strong>{event.titulo}</strong>
-                            <span>{event.imovelNome}</span>
-                            {event.descricao && <small>{event.descricao}</small>}
+                  {days.map((day) => {
+                    const selected =
+                      String(selection.imovelId) === String(imovel.id) &&
+                      selection.inicio &&
+                      parseDateOnly(selection.inicio) <= parseDateOnly(day.key) &&
+                      parseDateOnly(day.key) < parseDateOnly(selection.fim || toInputDate(addDays(parseDateOnly(selection.inicio), 1)));
+                    const occupied = propertyEvents.some((event) => eventTouchesDay(event, day.key));
+
+                    return (
+                      <button
+                        className={`calendar-slot${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}${occupied ? ' occupied' : ''}${selected ? ' selected' : ''}`}
+                        key={`${imovel.id}-${day.key}`}
+                        type="button"
+                        title={`${imovel.nome} · ${day.label}`}
+                        onClick={() => selectDay(imovel.id, day.key)}
+                      >
+                        <span>{occupied ? 'ocupado' : 'livre'}</span>
+                      </button>
+                    );
+                  })}
+
+                  {propertyEvents.length > 0 && (
+                    <div className="calendar-row-events">
+                      {propertyEvents.map((event) => {
+                        const meta = getEventMeta(event);
+                        const Icon = meta.icon;
+                        return (
+                          <div
+                            className={`calendar-board-event ${event.tipo}`}
+                            key={event.id}
+                            style={{
+                              gridColumn: `${event.startIndex + 1} / ${event.endIndex + 1}`,
+                              gridRow: event.lane,
+                            }}
+                            title={`${event.imovelNome} · ${getEventText(event)}`}
+                          >
+                            <Icon size={13} />
+                            <span>{getEventText(event)}</span>
+                            {event.id.startsWith('bloqueio-') && (
+                              <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
-                          {event.id.startsWith('bloqueio-') && event.inicio.slice(0, 10) === day.key && (
-                            <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {dayEvents.length > 4 && <span className="calendar-more">+{dayEvents.length - 4}</span>}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </article>
 
-        <form className="resource-form" onSubmit={saveBlock}>
-          <div className="form-title">
-            <Plus size={18} />
-            <strong>Novo bloqueio</strong>
-          </div>
-          <div className="form-grid">
-            <label className="form-field span-2">
-              <span>Imóvel</span>
-              <select
-                value={form.imovelId}
-                onChange={(event) => setForm((current) => ({ ...current, imovelId: event.target.value }))}
-                required
+        <aside className="calendar-side-panel">
+          <article className={`calendar-selection-card ${selectionStatus.tone}`}>
+            <div className="form-title">
+              {selectionStatus.tone === 'danger' ? <AlertTriangle size={18} /> : <CalendarCheck size={18} />}
+              <strong>Disponibilidade</strong>
+            </div>
+            <h2>{selectionStatus.title}</h2>
+            <p>{selectionStatus.description}</p>
+
+            <dl className="calendar-selection-details">
+              <div>
+                <dt>Imóvel</dt>
+                <dd>{selectedImovel?.nome || 'Não selecionado'}</dd>
+              </div>
+              <div>
+                <dt>Check-in</dt>
+                <dd>{formatDate(selection.inicio)}</dd>
+              </div>
+              <div>
+                <dt>Check-out</dt>
+                <dd>{formatDate(selection.fim)}</dd>
+              </div>
+              <div>
+                <dt>Diárias</dt>
+                <dd>{selection.inicio && selection.fim ? differenceInDays(parseDateOnly(selection.inicio), parseDateOnly(selection.fim)) : 0}</dd>
+              </div>
+            </dl>
+
+            {selectedConflicts.length > 0 && (
+              <div className="calendar-conflict-list">
+                <strong>Conflitos no período</strong>
+                {selectedConflicts.slice(0, 4).map((event) => (
+                  <span key={event.id}>{getEventText(event)} · {formatDate(event.inicio)} a {formatDate(event.fim)}</span>
+                ))}
+              </div>
+            )}
+
+            <div className="calendar-selection-actions">
+              <button
+                className="primary-action full"
+                type="button"
+                disabled={!selection.imovelId || !selection.inicio || !selection.fim || selectedConflicts.length > 0}
+                onClick={createReservaFromSelection}
               >
-                <option value="">Selecione</option>
-                {imoveis.map((imovel) => (
-                  <option key={imovel.id} value={imovel.id}>
-                    {imovel.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Início</span>
-              <input
-                type="date"
-                value={form.inicio}
-                onChange={(event) => setForm((current) => ({ ...current, inicio: event.target.value }))}
-                required
-              />
-            </label>
-            <label className="form-field">
-              <span>Fim</span>
-              <input
-                type="date"
-                value={form.fim}
-                onChange={(event) => setForm((current) => ({ ...current, fim: event.target.value }))}
-                required
-              />
-            </label>
-            <label className="form-field span-2">
-              <span>Tipo</span>
-              <select value={form.tipo} onChange={(event) => setForm((current) => ({ ...current, tipo: Number(event.target.value) }))}>
-                {tipoOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field span-2">
-              <span>Motivo</span>
-              <textarea
-                value={form.motivo}
-                onChange={(event) => setForm((current) => ({ ...current, motivo: event.target.value }))}
-                placeholder="Ex.: manutenção preventiva, bloqueio do proprietário"
-                required
-              />
-            </label>
-          </div>
-          <button className="primary-action full" type="submit" disabled={saving || imoveis.length === 0}>
-            <Save size={18} />
-            {saving ? 'Salvando...' : 'Salvar bloqueio'}
-          </button>
+                <Plus size={18} />
+                Criar reserva
+              </button>
+              <button
+                className="secondary-action full"
+                type="button"
+                disabled={!selection.imovelId || !selection.inicio}
+                onClick={fillBlockFromSelection}
+              >
+                Usar no bloqueio
+              </button>
+            </div>
+          </article>
+
+          <form className="resource-form calendar-block-form" onSubmit={saveBlock}>
+            <div className="form-title">
+              <Plus size={18} />
+              <strong>Novo bloqueio</strong>
+            </div>
+            <div className="form-grid">
+              <label className="form-field span-2">
+                <span>Imóvel</span>
+                <select
+                  value={form.imovelId}
+                  onChange={(event) => setForm((current) => ({ ...current, imovelId: event.target.value }))}
+                  required
+                >
+                  <option value="">Selecione</option>
+                  {imoveis.map((imovel) => (
+                    <option key={imovel.id} value={imovel.id}>
+                      {imovel.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field">
+                <span>Início</span>
+                <input
+                  type="date"
+                  value={form.inicio}
+                  onChange={(event) => setForm((current) => ({ ...current, inicio: event.target.value }))}
+                  required
+                />
+              </label>
+              <label className="form-field">
+                <span>Fim</span>
+                <input
+                  type="date"
+                  value={form.fim}
+                  onChange={(event) => setForm((current) => ({ ...current, fim: event.target.value }))}
+                  required
+                />
+              </label>
+              <label className="form-field span-2">
+                <span>Tipo</span>
+                <select value={form.tipo} onChange={(event) => setForm((current) => ({ ...current, tipo: Number(event.target.value) }))}>
+                  {tipoOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field span-2">
+                <span>Motivo</span>
+                <textarea
+                  value={form.motivo}
+                  onChange={(event) => setForm((current) => ({ ...current, motivo: event.target.value }))}
+                  placeholder="Ex.: manutenção preventiva, bloqueio do proprietário"
+                  required
+                />
+              </label>
+            </div>
+            <button className="primary-action full" type="submit" disabled={saving || imoveis.length === 0}>
+              <Save size={18} />
+              {saving ? 'Salvando...' : 'Salvar bloqueio'}
+            </button>
+          </form>
+
+          <article className="calendar-availability-list">
+            <strong>Imóveis livres no período</strong>
+            {selection.inicio && selection.fim ? (
+              availableProperties.length > 0 ? (
+                <div>
+                  {availableProperties.slice(0, 8).map((imovel) => (
+                    <button
+                      key={imovel.id}
+                      type="button"
+                      onClick={() => setSelection((current) => ({ ...current, imovelId: String(imovel.id) }))}
+                    >
+                      {imovel.nome}
+                      <span>{imovel.quantidadeHospedes || 0} hóspedes</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p>Nenhum imóvel livre nesse intervalo.</p>
+              )
+            ) : (
+              <p>Selecione check-in e check-out para consultar disponibilidade.</p>
+            )}
+          </article>
 
           <div className="calendar-legend">
             <span className="reserva">Reserva</span>
@@ -337,7 +767,7 @@ export function CalendarioPage() {
             <span className="limpeza">Limpeza</span>
             <span className="manutencao">Manutenção</span>
           </div>
-        </form>
+        </aside>
       </section>
     </div>
   );

@@ -58,7 +58,7 @@ public sealed class RelatoriosController : ControllerBase
             period.Fim,
             await GetReservasItemsAsync(period.Inicio, period.Fim, imovelId, plataforma, cancellationToken));
 
-        return Csv("relatorio-reservas.csv", report.Itens, [
+        return Csv(BuildReportFileName("reservas", period.Inicio, period.Fim, "csv"), report.Itens, [
             "Id", "Imovel", "Hospede", "Plataforma", "CheckIn", "CheckOut", "Status", "ValorHospedagem", "TaxaLimpeza", "ValorLiquido"
         ], item => [
             item.Id.ToString(CultureInfo.InvariantCulture),
@@ -72,6 +72,28 @@ public sealed class RelatoriosController : ControllerBase
             FormatDecimal(item.TaxaLimpeza),
             FormatDecimal(item.ValorLiquido)
         ]);
+    }
+
+    [HttpGet("reservas.pdf")]
+    public async Task<IActionResult> ReservasPdf(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim,
+        [FromQuery] int? imovelId,
+        [FromQuery] ReservaOrigem? plataforma,
+        CancellationToken cancellationToken)
+    {
+        var period = GetPeriod(inicio, fim);
+        if (period.Error is not null)
+        {
+            return period.Error;
+        }
+
+        var report = BuildReservasReport(
+            period.Inicio,
+            period.Fim,
+            await GetReservasItemsAsync(period.Inicio, period.Fim, imovelId, plataforma, cancellationToken));
+
+        return Pdf(BuildReportFileName("reservas", period.Inicio, period.Fim, "pdf"), BuildReservasPdf(report));
     }
 
     [HttpGet("financeiro")]
@@ -111,7 +133,7 @@ public sealed class RelatoriosController : ControllerBase
             period.Fim,
             await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken));
 
-        return Csv("relatorio-financeiro.csv", report.Itens, [
+        return Csv(BuildReportFileName("financeiro", period.Inicio, period.Fim, "csv"), report.Itens, [
             "Id", "Data", "Tipo", "Categoria", "Imovel", "Descricao", "Valor"
         ], item => [
             item.Id.ToString(CultureInfo.InvariantCulture),
@@ -122,6 +144,28 @@ public sealed class RelatoriosController : ControllerBase
             item.Descricao,
             FormatDecimal(item.Valor)
         ]);
+    }
+
+    [HttpGet("financeiro.pdf")]
+    public async Task<IActionResult> FinanceiroPdf(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim,
+        [FromQuery] int? categoriaId,
+        [FromQuery] int? imovelId,
+        CancellationToken cancellationToken)
+    {
+        var period = GetPeriod(inicio, fim);
+        if (period.Error is not null)
+        {
+            return period.Error;
+        }
+
+        var report = BuildFinanceiroReport(
+            period.Inicio,
+            period.Fim,
+            await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken));
+
+        return Pdf(BuildReportFileName("financeiro", period.Inicio, period.Fim, "pdf"), BuildFinanceiroPdf(report));
     }
 
     [HttpGet("imoveis")]
@@ -154,7 +198,7 @@ public sealed class RelatoriosController : ControllerBase
         }
 
         var report = await BuildImoveisReportAsync(period.Inicio, period.Fim, imovelId, cancellationToken);
-        return Csv("relatorio-imoveis.csv", report.Itens, [
+        return Csv(BuildReportFileName("imoveis", period.Inicio, period.Fim, "csv"), report.Itens, [
             "ImovelId", "Imovel", "Receita", "Despesa", "Lucro", "Reservas", "NoitesOcupadas", "TaxaOcupacao"
         ], item => [
             item.ImovelId.ToString(CultureInfo.InvariantCulture),
@@ -166,6 +210,23 @@ public sealed class RelatoriosController : ControllerBase
             item.NoitesOcupadas.ToString(CultureInfo.InvariantCulture),
             FormatDecimal(item.TaxaOcupacao)
         ]);
+    }
+
+    [HttpGet("imoveis.pdf")]
+    public async Task<IActionResult> ImoveisPdf(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim,
+        [FromQuery] int? imovelId,
+        CancellationToken cancellationToken)
+    {
+        var period = GetPeriod(inicio, fim);
+        if (period.Error is not null)
+        {
+            return period.Error;
+        }
+
+        var report = await BuildImoveisReportAsync(period.Inicio, period.Fim, imovelId, cancellationToken);
+        return Pdf(BuildReportFileName("imoveis", period.Inicio, period.Fim, "pdf"), BuildImoveisPdf(report));
     }
 
     [HttpGet("proprietarios")]
@@ -198,7 +259,7 @@ public sealed class RelatoriosController : ControllerBase
         }
 
         var report = await BuildProprietariosReportAsync(period.Inicio, period.Fim, proprietarioId, cancellationToken);
-        return Csv("relatorio-proprietarios.csv", report.Itens, [
+        return Csv(BuildReportFileName("proprietarios", period.Inicio, period.Fim, "csv"), report.Itens, [
             "ProprietarioId", "Proprietario", "Imoveis", "Reservas", "Receita", "Custos", "RepassesGerados", "RepassesPendentes"
         ], item => [
             item.ProprietarioId.ToString(CultureInfo.InvariantCulture),
@@ -210,6 +271,23 @@ public sealed class RelatoriosController : ControllerBase
             FormatDecimal(item.RepassesGerados),
             FormatDecimal(item.RepassesPendentes)
         ]);
+    }
+
+    [HttpGet("proprietarios.pdf")]
+    public async Task<IActionResult> ProprietariosPdf(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim,
+        [FromQuery] int? proprietarioId,
+        CancellationToken cancellationToken)
+    {
+        var period = GetPeriod(inicio, fim);
+        if (period.Error is not null)
+        {
+            return period.Error;
+        }
+
+        var report = await BuildProprietariosReportAsync(period.Inicio, period.Fim, proprietarioId, cancellationToken);
+        return Pdf(BuildReportFileName("proprietarios", period.Inicio, period.Fim, "pdf"), BuildProprietariosPdf(report));
     }
 
     [HttpGet("repasses/{id:int}/demonstrativo")]
@@ -274,34 +352,170 @@ public sealed class RelatoriosController : ControllerBase
 
     private static byte[] BuildDemonstrativoRepassePdf(DemonstrativoRepasseResponse demonstrativo)
     {
-        var lines = new List<string>
-        {
-            "RentalHub - Demonstrativo de Repasse",
-            $"Repasse #{demonstrativo.RepasseId}",
-            $"Proprietario: {demonstrativo.ProprietarioNome}",
-            $"Imovel: {demonstrativo.ImovelNome ?? "Todos os imoveis"}",
-            $"Periodo: {FormatDate(demonstrativo.PeriodoInicio)} a {FormatDate(demonstrativo.PeriodoFim)}",
-            $"Status: {demonstrativo.Status}",
-            string.Empty,
-            $"Receitas: {FormatCurrency(demonstrativo.ReceitaReservas)}",
-            $"Taxas da plataforma: {FormatCurrency(demonstrativo.TaxasPlataforma)}",
-            $"Custos vinculados: {FormatCurrency(demonstrativo.CustosVinculados)}",
-            $"Comissao da administradora: {FormatCurrency(demonstrativo.ComissaoAdministradora)}",
-            $"Valor a repassar: {FormatCurrency(demonstrativo.ValorRepassar)}",
-            $"Valor pago: {FormatCurrency(demonstrativo.ValorPago)}",
-            $"Saldo pendente: {FormatCurrency(demonstrativo.SaldoPendente)}",
-            string.Empty,
-            "Itens",
-            "Descricao | Receita | Taxas | Custos | Comissao | Liquido"
-        };
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Demonstrativo de Repasse",
+            $"Repasse #{demonstrativo.RepasseId} | {FormatPeriod(demonstrativo.PeriodoInicio, demonstrativo.PeriodoFim)}",
+            [
+                new("Proprietario", demonstrativo.ProprietarioNome),
+                new("Imovel", demonstrativo.ImovelNome ?? "Todos os imoveis"),
+                new("Status", demonstrativo.Status),
+                new("Receitas", FormatCurrency(demonstrativo.ReceitaReservas)),
+                new("Taxas da plataforma", FormatCurrency(demonstrativo.TaxasPlataforma)),
+                new("Custos vinculados", FormatCurrency(demonstrativo.CustosVinculados)),
+                new("Comissao administradora", FormatCurrency(demonstrativo.ComissaoAdministradora)),
+                new("Valor a repassar", FormatCurrency(demonstrativo.ValorRepassar)),
+                new("Valor pago", FormatCurrency(demonstrativo.ValorPago)),
+                new("Saldo pendente", FormatCurrency(demonstrativo.SaldoPendente))
+            ],
+            [
+                new SimplePdfTable(
+                    "Itens do repasse",
+                    ["Descricao", "Receita", "Taxas", "Custos", "Comissao", "Liquido"],
+                    demonstrativo.Itens.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        item.Descricao,
+                        FormatCurrency(item.Receita),
+                        FormatCurrency(item.Taxas),
+                        FormatCurrency(item.Custos),
+                        FormatCurrency(item.Comissao),
+                        FormatCurrency(item.ValorLiquido)
+                    ]).ToList())
+            ],
+            ["Documento gerado automaticamente pelo RentalHub."]));
+    }
 
-        lines.AddRange(demonstrativo.Itens.Select(item =>
-            $"{item.Descricao} | {FormatCurrency(item.Receita)} | {FormatCurrency(item.Taxas)} | {FormatCurrency(item.Custos)} | {FormatCurrency(item.Comissao)} | {FormatCurrency(item.ValorLiquido)}"));
+    private static byte[] BuildReservasPdf(RelatorioReservasResponse report)
+    {
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Relatorio de Reservas",
+            FormatPeriod(report.PeriodoInicio, report.PeriodoFim),
+            [
+                new("Reservas", report.TotalReservas.ToString(CultureInfo.InvariantCulture)),
+                new("Valor da hospedagem", FormatCurrency(report.ValorHospedagem)),
+                new("Taxas de limpeza", FormatCurrency(report.TaxaLimpeza)),
+                new("Taxas da plataforma", FormatCurrency(report.TaxaPlataforma)),
+                new("Comissao administradora", FormatCurrency(report.ComissaoAdministradora)),
+                new("Valor liquido", FormatCurrency(report.ValorLiquido))
+            ],
+            [
+                new SimplePdfTable(
+                    "Resumo por plataforma",
+                    ["Plataforma", "Qtd", "Total"],
+                    report.PorPlataforma.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        item.Nome,
+                        item.Quantidade.ToString(CultureInfo.InvariantCulture),
+                        FormatCurrency(item.Total)
+                    ]).ToList()),
+                new SimplePdfTable(
+                    "Reservas",
+                    ["Check-in", "Check-out", "Imovel", "Hospede", "Origem", "Liquido"],
+                    report.Itens.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        FormatDate(item.CheckIn),
+                        FormatDate(item.CheckOut),
+                        item.ImovelNome,
+                        item.HospedeNome,
+                        item.Plataforma,
+                        FormatCurrency(item.ValorLiquido)
+                    ]).ToList())
+            ],
+            ["Reservas canceladas nao entram neste relatorio."]));
+    }
 
-        lines.Add(string.Empty);
-        lines.Add($"Emitido em {FormatDate(DateTime.UtcNow)}");
+    private static byte[] BuildFinanceiroPdf(RelatorioFinanceiroResponse report)
+    {
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Relatorio Financeiro",
+            FormatPeriod(report.PeriodoInicio, report.PeriodoFim),
+            [
+                new("Receitas", FormatCurrency(report.Receitas)),
+                new("Despesas", FormatCurrency(report.Despesas)),
+                new("Lucro", FormatCurrency(report.Lucro)),
+                new("Categorias movimentadas", report.PorCategoria.Count.ToString(CultureInfo.InvariantCulture)),
+                new("Movimentacoes", report.Itens.Count.ToString(CultureInfo.InvariantCulture))
+            ],
+            [
+                new SimplePdfTable(
+                    "Resumo por categoria",
+                    ["Tipo", "Categoria", "Total"],
+                    report.PorCategoria.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        item.Tipo,
+                        item.CategoriaNome,
+                        FormatCurrency(item.Total)
+                    ]).ToList()),
+                new SimplePdfTable(
+                    "Movimentacoes",
+                    ["Data", "Tipo", "Categoria", "Imovel", "Descricao", "Valor"],
+                    report.Itens.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        FormatDate(item.Data),
+                        item.Tipo,
+                        item.CategoriaNome,
+                        item.ImovelNome ?? "-",
+                        item.Descricao,
+                        FormatCurrency(item.Valor)
+                    ]).ToList())
+            ],
+            ["O lucro considera receitas menos despesas no periodo selecionado."]));
+    }
 
-        return SimplePdfBuilder.Create(lines);
+    private static byte[] BuildImoveisPdf(RelatorioImoveisResponse report)
+    {
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Relatorio por Imovel",
+            FormatPeriod(report.PeriodoInicio, report.PeriodoFim),
+            [
+                new("Receita", FormatCurrency(report.Receita)),
+                new("Despesa", FormatCurrency(report.Despesa)),
+                new("Lucro", FormatCurrency(report.Lucro)),
+                new("Imoveis analisados", report.Itens.Count.ToString(CultureInfo.InvariantCulture))
+            ],
+            [
+                new SimplePdfTable(
+                    "Desempenho dos imoveis",
+                    ["Imovel", "Receita", "Despesa", "Lucro", "Reservas", "Ocupacao"],
+                    report.Itens.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        item.ImovelNome,
+                        FormatCurrency(item.Receita),
+                        FormatCurrency(item.Despesa),
+                        FormatCurrency(item.Lucro),
+                        item.Reservas.ToString(CultureInfo.InvariantCulture),
+                        $"{FormatDecimal(item.TaxaOcupacao)}%"
+                    ]).ToList())
+            ],
+            ["A taxa de ocupacao considera as noites ocupadas dentro do periodo selecionado."]));
+    }
+
+    private static byte[] BuildProprietariosPdf(RelatorioProprietariosResponse report)
+    {
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Relatorio por Proprietario",
+            FormatPeriod(report.PeriodoInicio, report.PeriodoFim),
+            [
+                new("Receita", FormatCurrency(report.Receita)),
+                new("Custos", FormatCurrency(report.Custos)),
+                new("Repasses gerados", FormatCurrency(report.RepassesGerados)),
+                new("Repasses pendentes", FormatCurrency(report.RepassesPendentes)),
+                new("Proprietarios analisados", report.Itens.Count.ToString(CultureInfo.InvariantCulture))
+            ],
+            [
+                new SimplePdfTable(
+                    "Desempenho dos proprietarios",
+                    ["Proprietario", "Imoveis", "Reservas", "Receita", "Custos", "Pendentes"],
+                    report.Itens.Select(item => (IReadOnlyCollection<string>)
+                    [
+                        item.ProprietarioNome,
+                        item.TotalImoveis.ToString(CultureInfo.InvariantCulture),
+                        item.Reservas.ToString(CultureInfo.InvariantCulture),
+                        FormatCurrency(item.Receita),
+                        FormatCurrency(item.Custos),
+                        FormatCurrency(item.RepassesPendentes)
+                    ]).ToList())
+            ],
+            ["Use este relatorio como apoio operacional. O demonstrativo oficial de repasse deve ser emitido no modulo de repasses."]));
     }
 
     private async Task<List<RelatorioReservaItemResponse>> GetReservasItemsAsync(
@@ -566,6 +780,14 @@ public sealed class RelatoriosController : ControllerBase
         };
     }
 
+    private static IActionResult Pdf(string fileName, byte[] content)
+    {
+        return new FileContentResult(content, "application/pdf")
+        {
+            FileDownloadName = fileName
+        };
+    }
+
     private static string EscapeCsv(string value)
     {
         var escaped = value.Replace("\"", "\"\"");
@@ -579,6 +801,13 @@ public sealed class RelatoriosController : ControllerBase
     private static string FormatDecimal(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 
     private static string FormatCurrency(decimal value) => $"R$ {FormatDecimal(value)}";
+
+    private static string FormatPeriod(DateTime inicio, DateTime fim) => $"Periodo: {FormatDate(inicio)} a {FormatDate(fim)}";
+
+    private static string BuildReportFileName(string report, DateTime inicio, DateTime fim, string extension)
+    {
+        return $"relatorio-{report}-{FormatDate(inicio)}-a-{FormatDate(fim)}.{extension}";
+    }
 
     private static DateTime NormalizeDate(DateTime value)
     {

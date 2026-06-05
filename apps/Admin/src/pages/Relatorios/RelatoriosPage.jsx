@@ -1,4 +1,4 @@
-import { Download, FileText, RotateCcw } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { categoriasFinanceirasApi } from '@/api/financeiro';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
@@ -122,7 +122,7 @@ export function RelatoriosPage() {
   const [categorias, setCategorias] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState('');
   const [error, setError] = useState('');
 
   const baseParams = useMemo(
@@ -196,17 +196,17 @@ export function RelatoriosPage() {
     return () => clearTimeout(timeout);
   }, [load]);
 
-  const exportCsv = async () => {
-    setExporting(true);
+  const exportReport = async (format) => {
+    setExportingFormat(format);
     setError('');
     try {
-      const exportMethod = relatoriosApi[`${activeTab}Csv`];
+      const exportMethod = relatoriosApi[`${activeTab}${format === 'pdf' ? 'Pdf' : 'Csv'}`];
       const response = await exportMethod(reportParams);
-      saveBlob(response, `relatorio-${activeTab}.csv`);
+      saveBlob(response, `relatorio-${activeTab}.${format}`);
     } catch (exportError) {
       setError(getErrorMessage(exportError));
     } finally {
-      setExporting(false);
+      setExportingFormat('');
     }
   };
 
@@ -397,15 +397,19 @@ export function RelatoriosPage() {
         <div>
           <span className="eyebrow">Camada analítica</span>
           <h1>Relatórios</h1>
-          <p>Reservas, financeiro, imóveis e proprietários com totalizadores por período e exportação CSV.</p>
+          <p>Reservas, financeiro, imóveis e proprietários com totalizadores por período e exportação profissional.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
             <RotateCcw size={18} />
           </button>
-          <button className="primary-action" type="button" onClick={exportCsv} disabled={exporting}>
+          <button className="secondary-action" type="button" onClick={() => exportReport('csv')} disabled={Boolean(exportingFormat)}>
+            <FileSpreadsheet size={18} />
+            {exportingFormat === 'csv' ? 'Gerando...' : 'CSV'}
+          </button>
+          <button className="primary-action" type="button" onClick={() => exportReport('pdf')} disabled={Boolean(exportingFormat)}>
             <Download size={18} />
-            {exporting ? 'Exportando...' : 'CSV'}
+            {exportingFormat === 'pdf' ? 'Gerando...' : 'PDF'}
           </button>
         </div>
       </section>
