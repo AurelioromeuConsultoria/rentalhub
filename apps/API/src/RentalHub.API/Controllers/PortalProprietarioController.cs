@@ -25,6 +25,8 @@ public sealed class PortalProprietarioController : ControllerBase
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
         [FromQuery] int? imovelId,
+        [FromQuery] string? reservaStatus,
+        [FromQuery] string? origem,
         CancellationToken cancellationToken)
     {
         var proprietarioId = GetProprietarioId();
@@ -39,6 +41,18 @@ public sealed class PortalProprietarioController : ControllerBase
         if (end < start)
         {
             return BadRequest(new { message = "Período final deve ser maior ou igual ao período inicial." });
+        }
+
+        var reservaStatusFilter = ParseEnumFilter<ReservaStatus>(reservaStatus, "status da reserva");
+        if (reservaStatusFilter.ErrorMessage is not null)
+        {
+            return BadRequest(new { message = reservaStatusFilter.ErrorMessage });
+        }
+
+        var origemFilter = ParseEnumFilter<ReservaOrigem>(origem, "origem da reserva");
+        if (origemFilter.ErrorMessage is not null)
+        {
+            return BadRequest(new { message = origemFilter.ErrorMessage });
         }
 
         var proprietario = await _dbContext.Proprietarios
@@ -79,15 +93,27 @@ public sealed class PortalProprietarioController : ControllerBase
 
         var selectedImovelIds = imovelId.HasValue ? [imovelId.Value] : imovelIds;
 
-        var reservas = await _dbContext.Reservas
+        var reservasQuery = _dbContext.Reservas
             .AsNoTracking()
             .Include(r => r.Imovel)
             .Include(r => r.Hospede)
             .Where(r =>
                 selectedImovelIds.Contains(r.ImovelId) &&
-                r.Status != ReservaStatus.Cancelada &&
+                (reservaStatusFilter.Value == ReservaStatus.Cancelada || r.Status != ReservaStatus.Cancelada) &&
                 r.CheckOut >= start &&
-                r.CheckIn <= end)
+                r.CheckIn <= end);
+
+        if (reservaStatusFilter.Value.HasValue)
+        {
+            reservasQuery = reservasQuery.Where(r => r.Status == reservaStatusFilter.Value.Value);
+        }
+
+        if (origemFilter.Value.HasValue)
+        {
+            reservasQuery = reservasQuery.Where(r => r.Origem == origemFilter.Value.Value);
+        }
+
+        var reservas = await reservasQuery
             .OrderBy(r => r.CheckIn)
             .Select(r => new PortalReservaResponse(
                 r.Id,
@@ -268,9 +294,11 @@ public sealed class PortalProprietarioController : ControllerBase
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
         [FromQuery] int? imovelId,
+        [FromQuery] string? reservaStatus,
+        [FromQuery] string? origem,
         CancellationToken cancellationToken)
     {
-        var result = await LoadPortalDataAsync(inicio, fim, imovelId, cancellationToken);
+        var result = await LoadPortalDataAsync(inicio, fim, imovelId, reservaStatus, origem, cancellationToken);
         var error = ToErrorResult(result);
         if (error is not null)
         {
@@ -287,9 +315,11 @@ public sealed class PortalProprietarioController : ControllerBase
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
         [FromQuery] int? imovelId,
+        [FromQuery] string? reservaStatus,
+        [FromQuery] string? origem,
         CancellationToken cancellationToken)
     {
-        var result = await LoadPortalDataAsync(inicio, fim, imovelId, cancellationToken);
+        var result = await LoadPortalDataAsync(inicio, fim, imovelId, reservaStatus, origem, cancellationToken);
         var error = ToErrorResult(result);
         if (error is not null)
         {
@@ -306,9 +336,11 @@ public sealed class PortalProprietarioController : ControllerBase
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
         [FromQuery] int? imovelId,
+        [FromQuery] string? reservaStatus,
+        [FromQuery] string? origem,
         CancellationToken cancellationToken)
     {
-        var result = await LoadPortalDataAsync(inicio, fim, imovelId, cancellationToken);
+        var result = await LoadPortalDataAsync(inicio, fim, imovelId, reservaStatus, origem, cancellationToken);
         var error = ToErrorResult(result);
         if (error is not null)
         {
@@ -318,6 +350,102 @@ public sealed class PortalProprietarioController : ControllerBase
         var data = result.Data!;
         var pdf = BuildRepassesPdf(data);
         return File(pdf, "application/pdf", $"portal-repasses-{FormatDateForFile(data.PeriodoInicio)}-{FormatDateForFile(data.PeriodoFim)}.pdf");
+    }
+
+    [HttpGet("demonstrativo-mensal.pdf")]
+    public async Task<IActionResult> DemonstrativoMensalPdf(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim,
+        [FromQuery] int? imovelId,
+        [FromQuery] string? reservaStatus,
+        [FromQuery] string? origem,
+        CancellationToken cancellationToken)
+    {
+        var result = await LoadPortalDataAsync(inicio, fim, imovelId, reservaStatus, origem, cancellationToken);
+        var error = ToErrorResult(result);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        var data = result.Data!;
+        var pdf = BuildDemonstrativoMensalPdf(data);
+        return File(pdf, "application/pdf", $"demonstrativo-mensal-{FormatDateForFile(data.PeriodoInicio)}-{FormatDateForFile(data.PeriodoFim)}.pdf");
+    }
+
+    [HttpGet("reservas/{id:int}/detalhe.pdf")]
+    public async Task<IActionResult> ReservaDetalhePdf(int id, CancellationToken cancellationToken)
+    {
+        var proprietarioId = GetProprietarioId();
+        if (!proprietarioId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var reserva = await _dbContext.Reservas
+            .AsNoTracking()
+            .Include(r => r.Imovel)
+            .Include(r => r.Hospede)
+            .FirstOrDefaultAsync(r => r.Id == id && r.Imovel != null && r.Imovel.ProprietarioId == proprietarioId.Value, cancellationToken);
+
+        if (reserva is null)
+        {
+            return NotFound();
+        }
+
+        var pdf = BuildReservaDetalhePdf(reserva);
+        return File(pdf, "application/pdf", $"reserva-{id}.pdf");
+    }
+
+    [HttpGet("repasses/{id:int}")]
+    public async Task<ActionResult<PortalRepasseDetalheResponse>> RepasseDetalhe(int id, CancellationToken cancellationToken)
+    {
+        var proprietarioId = GetProprietarioId();
+        if (!proprietarioId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var repasse = await _dbContext.RepassesProprietarios
+            .AsNoTracking()
+            .Include(r => r.Imovel)
+            .Include(r => r.Itens)
+            .FirstOrDefaultAsync(r => r.Id == id && r.ProprietarioId == proprietarioId.Value, cancellationToken);
+
+        if (repasse is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(new PortalRepasseDetalheResponse(
+            repasse.Id,
+            repasse.ImovelId,
+            repasse.Imovel?.Nome,
+            repasse.PeriodoInicio,
+            repasse.PeriodoFim,
+            repasse.ReceitaReservas,
+            repasse.TaxasPlataforma,
+            repasse.CustosVinculados,
+            repasse.ComissaoAdministradora,
+            repasse.ValorRepassar,
+            repasse.ValorPago,
+            repasse.ValorRepassar - repasse.ValorPago,
+            repasse.Status.ToString(),
+            repasse.DataPagamento,
+            repasse.Observacoes,
+            repasse.Itens
+                .OrderBy(i => i.Id)
+                .Select(i => new PortalRepasseItemResponse(
+                    i.Id,
+                    i.ReservaId,
+                    i.MovimentacaoFinanceiraId,
+                    i.Descricao,
+                    i.Receita,
+                    i.Taxas,
+                    i.Custos,
+                    i.Comissao,
+                    i.ValorLiquido))
+                .ToList()));
     }
 
     [HttpGet("repasses/{id:int}/demonstrativo.pdf")]
@@ -349,6 +477,8 @@ public sealed class PortalProprietarioController : ControllerBase
         DateTime? inicio,
         DateTime? fim,
         int? imovelId,
+        string? reservaStatus,
+        string? origem,
         CancellationToken cancellationToken)
     {
         var proprietarioId = GetProprietarioId();
@@ -363,6 +493,18 @@ public sealed class PortalProprietarioController : ControllerBase
         if (end < start)
         {
             return PortalDataResult.Invalid("Período final deve ser maior ou igual ao período inicial.");
+        }
+
+        var reservaStatusFilter = ParseEnumFilter<ReservaStatus>(reservaStatus, "status da reserva");
+        if (reservaStatusFilter.ErrorMessage is not null)
+        {
+            return PortalDataResult.Invalid(reservaStatusFilter.ErrorMessage);
+        }
+
+        var origemFilter = ParseEnumFilter<ReservaOrigem>(origem, "origem da reserva");
+        if (origemFilter.ErrorMessage is not null)
+        {
+            return PortalDataResult.Invalid(origemFilter.ErrorMessage);
         }
 
         var proprietario = await _dbContext.Proprietarios
@@ -403,15 +545,27 @@ public sealed class PortalProprietarioController : ControllerBase
 
         var selectedImovelIds = imovelId.HasValue ? [imovelId.Value] : imovelIds;
 
-        var reservas = await _dbContext.Reservas
+        var reservasQuery = _dbContext.Reservas
             .AsNoTracking()
             .Include(r => r.Imovel)
             .Include(r => r.Hospede)
             .Where(r =>
                 selectedImovelIds.Contains(r.ImovelId) &&
-                r.Status != ReservaStatus.Cancelada &&
+                (reservaStatusFilter.Value == ReservaStatus.Cancelada || r.Status != ReservaStatus.Cancelada) &&
                 r.CheckOut >= start &&
-                r.CheckIn <= end)
+                r.CheckIn <= end);
+
+        if (reservaStatusFilter.Value.HasValue)
+        {
+            reservasQuery = reservasQuery.Where(r => r.Status == reservaStatusFilter.Value.Value);
+        }
+
+        if (origemFilter.Value.HasValue)
+        {
+            reservasQuery = reservasQuery.Where(r => r.Origem == origemFilter.Value.Value);
+        }
+
+        var reservas = await reservasQuery
             .OrderBy(r => r.CheckIn)
             .Select(r => new PortalReservaResponse(
                 r.Id,
@@ -563,6 +717,19 @@ public sealed class PortalProprietarioController : ControllerBase
         return int.TryParse(User.FindFirstValue("ProprietarioId"), out var proprietarioId)
             ? proprietarioId
             : null;
+    }
+
+    private static EnumFilterResult<TEnum> ParseEnumFilter<TEnum>(string? value, string label)
+        where TEnum : struct, Enum
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new EnumFilterResult<TEnum>(null, null);
+        }
+
+        return Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed)
+            ? new EnumFilterResult<TEnum>(parsed, null)
+            : new EnumFilterResult<TEnum>(null, $"Filtro de {label} inválido.");
     }
 
     private static DateTime NormalizeDate(DateTime value)
@@ -725,6 +892,129 @@ public sealed class PortalProprietarioController : ControllerBase
             ["Relatorio gerado pelo Portal do Proprietario."]));
     }
 
+    private static byte[] BuildDemonstrativoMensalPdf(PortalProprietarioResponse data)
+    {
+        var receitasOperacionais = data.Movimentacoes
+            .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita.ToString())
+            .Sum(m => m.Valor);
+        var despesasOperacionais = data.Movimentacoes
+            .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString())
+            .Sum(m => m.Valor);
+        var receitaReservas = data.Reservas.Sum(r => r.Receita);
+        var liquidoReservas = data.Reservas.Sum(r => r.ValorLiquido);
+
+        var summary = new List<SimplePdfSummaryItem>
+        {
+            new("Proprietario", data.ProprietarioNome),
+            new("Periodo", $"{FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}"),
+            new("Imoveis no filtro", data.ResumoPorImovel.Count.ToString()),
+            new("Reservas", data.Reservas.Count.ToString()),
+            new("Receita bruta das reservas", FormatCurrency(receitaReservas)),
+            new("Liquido das reservas", FormatCurrency(liquidoReservas)),
+            new("Receitas extras", FormatCurrency(receitasOperacionais)),
+            new("Custos operacionais", FormatCurrency(despesasOperacionais)),
+            new("Resultado estimado", FormatCurrency(receitaReservas + receitasOperacionais - despesasOperacionais)),
+            new("Valor a receber", FormatCurrency(data.RepassesPendentes))
+        };
+
+        var propertyRows = data.ResumoPorImovel
+            .OrderByDescending(i => i.Lucro)
+            .Select(i => (IReadOnlyCollection<string>)
+            [
+                i.ImovelNome,
+                i.Reservas.ToString(),
+                FormatCurrency(i.Receitas),
+                FormatCurrency(i.Custos),
+                FormatCurrency(i.Lucro),
+                FormatCurrency(i.RepassesPendentes)
+            ])
+            .ToList();
+
+        var reservationRows = data.Reservas
+            .OrderBy(r => r.CheckIn)
+            .Select(r => (IReadOnlyCollection<string>)
+            [
+                $"{FormatDate(r.CheckIn)} a {FormatDate(r.CheckOut)}",
+                r.ImovelNome,
+                r.HospedeNome,
+                r.Origem,
+                FormatCurrency(r.Receita),
+                FormatCurrency(r.ValorLiquido)
+            ])
+            .ToList();
+
+        var transferRows = data.Repasses
+            .OrderByDescending(r => r.PeriodoFim)
+            .Select(r => (IReadOnlyCollection<string>)
+            [
+                $"{FormatDate(r.PeriodoInicio)} a {FormatDate(r.PeriodoFim)}",
+                r.ImovelNome ?? "Todos",
+                FormatCurrency(r.ValorRepassar),
+                FormatCurrency(r.ValorPago),
+                FormatCurrency(r.SaldoPendente),
+                r.Status
+            ])
+            .ToList();
+
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Demonstrativo Mensal do Proprietario",
+            BuildPortalSubtitle(data),
+            summary,
+            [
+                new SimplePdfTable(
+                    "Resumo por imovel",
+                    ["Imovel", "Reservas", "Receitas", "Custos", "Resultado", "A receber"],
+                    propertyRows),
+                new SimplePdfTable(
+                    "Reservas do periodo",
+                    ["Periodo", "Imovel", "Hospede", "Origem", "Bruto", "Liquido"],
+                    reservationRows),
+                new SimplePdfTable(
+                    "Repasses",
+                    ["Periodo", "Imovel", "Valor", "Pago", "Pendente", "Status"],
+                    transferRows)
+            ],
+            [
+                "Documento consolidado gerado pelo Portal do Proprietario.",
+                "Use este demonstrativo como conferencia operacional e financeira do periodo.",
+                "Valores sujeitos a ajustes conforme contrato, pagamentos e custos registrados."
+            ]));
+    }
+
+    private static byte[] BuildReservaDetalhePdf(Domain.Entities.Reserva reserva)
+    {
+        var nights = Math.Max(1, (int)(reserva.CheckOut.Date - reserva.CheckIn.Date).TotalDays);
+        var receitaBruta = reserva.ValorHospedagem + reserva.TaxaLimpeza;
+        var summary = new List<SimplePdfSummaryItem>
+        {
+            new("Reserva", $"#{reserva.Id}"),
+            new("Imovel", reserva.Imovel?.Nome ?? "-"),
+            new("Hospede", reserva.Hospede?.Nome ?? "-"),
+            new("Origem", reserva.Origem.ToString()),
+            new("Status", reserva.Status.ToString()),
+            new("Check-in", FormatDate(reserva.CheckIn)),
+            new("Check-out", FormatDate(reserva.CheckOut)),
+            new("Diarias", nights.ToString()),
+            new("Hospedes", reserva.NumeroHospedes.ToString()),
+            new("Bruto por diaria", FormatCurrency(receitaBruta / nights)),
+            new("Liquido por diaria", FormatCurrency(reserva.ValorLiquido / nights)),
+            new("Receita bruta", FormatCurrency(receitaBruta)),
+            new("Taxa da plataforma", FormatCurrency(reserva.TaxaPlataforma)),
+            new("Comissao administradora", FormatCurrency(reserva.ComissaoAdministradora)),
+            new("Valor liquido", FormatCurrency(reserva.ValorLiquido))
+        };
+
+        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
+            "Detalhe da Reserva",
+            $"{reserva.Imovel?.Nome ?? "Imovel"} - {FormatDate(reserva.CheckIn)} a {FormatDate(reserva.CheckOut)}",
+            summary,
+            [],
+            [
+                string.IsNullOrWhiteSpace(reserva.Observacoes) ? "Sem observacoes registradas." : $"Observacoes: {reserva.Observacoes}",
+                "Documento gerado automaticamente pelo RentalHub."
+            ]));
+    }
+
     private static IReadOnlyCollection<SimplePdfSummaryItem> BuildPortalSummary(PortalProprietarioResponse data)
     {
         return
@@ -759,6 +1049,9 @@ internal sealed record PortalDataResult(
 
     public static PortalDataResult Forbidden() => new(null, null, true);
 }
+
+internal sealed record EnumFilterResult<TEnum>(TEnum? Value, string? ErrorMessage)
+    where TEnum : struct, Enum;
 
 public sealed record PortalProprietarioResponse(
     int ProprietarioId,
@@ -823,6 +1116,35 @@ public sealed record PortalRepasseResponse(
     decimal ValorPago,
     decimal SaldoPendente,
     string Status);
+
+public sealed record PortalRepasseDetalheResponse(
+    int Id,
+    int? ImovelId,
+    string? ImovelNome,
+    DateTime PeriodoInicio,
+    DateTime PeriodoFim,
+    decimal ReceitaReservas,
+    decimal TaxasPlataforma,
+    decimal CustosVinculados,
+    decimal ComissaoAdministradora,
+    decimal ValorRepassar,
+    decimal ValorPago,
+    decimal SaldoPendente,
+    string Status,
+    DateTime? DataPagamento,
+    string? Observacoes,
+    IReadOnlyCollection<PortalRepasseItemResponse> Itens);
+
+public sealed record PortalRepasseItemResponse(
+    int Id,
+    int? ReservaId,
+    int? MovimentacaoFinanceiraId,
+    string Descricao,
+    decimal Receita,
+    decimal Taxas,
+    decimal Custos,
+    decimal Comissao,
+    decimal ValorLiquido);
 
 public sealed record PortalCalendarioEventoResponse(
     string Id,

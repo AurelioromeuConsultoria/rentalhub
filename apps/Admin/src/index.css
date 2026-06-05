@@ -1099,8 +1099,8 @@ button:disabled {
 }
 
 .portal-filters {
-  max-width: 860px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: none;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
 }
 
 .portal-filter-action {
@@ -1202,6 +1202,12 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.table-action-row {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -1819,6 +1825,16 @@ button:disabled {
     var(--card-raised);
 }
 
+.portal-transfer-detail {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  border-color: rgba(55, 201, 128, 0.28);
+  background:
+    linear-gradient(135deg, rgba(55, 201, 128, 0.1), transparent 42%),
+    var(--card-raised);
+}
+
 .portal-detail-close {
   position: absolute;
   top: 14px;
@@ -1938,6 +1954,28 @@ button:disabled {
   line-height: 1.45;
 }
 
+.portal-detail-note {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 12px;
+}
+
+.portal-detail-note strong {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.portal-detail-note p {
+  margin: 6px 0 0;
+  color: var(--foreground);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .portal-reservation-detail-heading {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
@@ -1989,6 +2027,77 @@ button:disabled {
   gap: 8px;
   min-height: 42px;
   padding: 0 16px;
+}
+
+.portal-transfer-items {
+  display: grid;
+  gap: 12px;
+}
+
+.compact-heading {
+  margin-bottom: 0;
+}
+
+.portal-documents-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.portal-documents-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portal-document-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 14px;
+}
+
+.portal-document-card > svg {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius);
+  background: rgba(110, 182, 255, 0.12);
+  color: var(--primary);
+  padding: 10px;
+}
+
+.portal-document-card strong,
+.portal-document-card small,
+.portal-document-card span {
+  display: block;
+}
+
+.portal-document-card strong {
+  color: var(--foreground);
+  font-size: 0.95rem;
+}
+
+.portal-document-card small {
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.portal-document-card span {
+  margin-top: 8px;
+  color: var(--primary);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.portal-document-card .portal-export-button {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .portal-capacity {
@@ -4007,6 +4116,7 @@ button:disabled {
   .portal-owner-hero,
   .portal-kpi-grid,
   .portal-property-grid,
+  .portal-documents-grid,
   .portal-detail-grid,
   .portal-detail-columns {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4020,6 +4130,10 @@ button:disabled {
 
   .portal-heading-actions {
     justify-content: flex-start;
+  }
+
+  .portal-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -4102,6 +4216,7 @@ button:disabled {
   .portal-owner-hero,
   .portal-kpi-grid,
   .portal-property-grid,
+  .portal-documents-grid,
   .portal-detail-grid,
   .portal-detail-columns,
   .form-grid,
@@ -4138,6 +4253,11 @@ button:disabled {
   .portal-calendar-legend,
   .portal-heading-actions {
     justify-content: flex-start;
+  }
+
+  .table-action-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .portal-calendar-grid {

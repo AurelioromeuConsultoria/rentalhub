@@ -42,6 +42,24 @@ const emptyPortal = {
   resumoPorImovel: [],
 };
 
+const reservaStatusOptions = [
+  { value: '', label: 'Todos os status' },
+  { value: 'Pendente', label: 'Pendente' },
+  { value: 'Confirmada', label: 'Confirmada' },
+  { value: 'EmAndamento', label: 'Em andamento' },
+  { value: 'Finalizada', label: 'Finalizada' },
+  { value: 'Cancelada', label: 'Cancelada' },
+];
+
+const reservaOrigemOptions = [
+  { value: '', label: 'Todas as origens' },
+  { value: 'Airbnb', label: 'Airbnb' },
+  { value: 'Booking', label: 'Booking' },
+  { value: 'Vrbo', label: 'VRBO' },
+  { value: 'ReservaDireta', label: 'Reserva direta' },
+  { value: 'Outros', label: 'Outros' },
+];
+
 function money(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 }
@@ -256,7 +274,7 @@ function PortalHero({ data, nextReservation, pendingTransfers, periodLabel }) {
   );
 }
 
-function PortalCalendar({ events, month, onMonthChange, onReservationClick }) {
+function PortalCalendar({ events, month, onMonthChange, onReservationClick, onTransferClick }) {
   const days = buildCalendarMonthDays(month);
   const visibleEvents = events || [];
   const eventTypes = {
@@ -318,9 +336,14 @@ function PortalCalendar({ events, month, onMonthChange, onReservationClick }) {
                   onClick={() => {
                     if (event.tipo === 'reserva') {
                       onReservationClick(Number(String(event.id).replace('reserva-', '')));
+                      return;
+                    }
+
+                    if (event.tipo === 'repasse') {
+                      onTransferClick(Number(String(event.id).replace('repasse-', '')));
                     }
                   }}
-                  disabled={event.tipo !== 'reserva'}
+                  disabled={!['reserva', 'repasse'].includes(event.tipo)}
                   title={event.imovelNome ? `${event.titulo} · ${event.imovelNome}` : event.titulo}
                 >
                   {event.titulo}
@@ -475,8 +498,161 @@ function ReservationDetail({ reservation, onClose, onDownloadPdf }) {
       <div className="portal-reservation-actions">
         <button className="primary-action" type="button" onClick={onDownloadPdf}>
           <FileText size={17} />
-          Exportar reservas em PDF
+          Exportar reserva em PDF
         </button>
+      </div>
+    </section>
+  );
+}
+
+function TransferDetail({ transfer, detail, loading, onClose, onDownloadPdf }) {
+  if (!transfer) return null;
+
+  const current = detail?.id === transfer.id ? detail : transfer;
+  const itens = detail?.id === transfer.id ? detail.itens || [] : [];
+
+  return (
+    <section className="resource-panel portal-transfer-detail">
+      <button className="portal-detail-close" type="button" onClick={onClose} aria-label="Fechar detalhe do repasse">
+        <X size={18} />
+      </button>
+      <div className="portal-reservation-detail-heading">
+        <ReceiptText size={24} />
+        <div>
+          <small>Detalhe do repasse</small>
+          <h2>{current.imovelNome || 'Todos os imóveis'}</h2>
+          <p>{formatDate(current.periodoInicio)} até {formatDate(current.periodoFim)}</p>
+        </div>
+        <StatusBadge value={current.status} />
+      </div>
+      <div className="portal-detail-grid">
+        <article>
+          <span>Receita reservas</span>
+          <strong>{money(current.receitaReservas ?? current.valorRepassar)}</strong>
+        </article>
+        <article>
+          <span>Taxas plataforma</span>
+          <strong>{money(current.taxasPlataforma)}</strong>
+        </article>
+        <article>
+          <span>Custos</span>
+          <strong>{money(current.custosVinculados)}</strong>
+        </article>
+        <article>
+          <span>Comissão</span>
+          <strong>{money(current.comissaoAdministradora)}</strong>
+        </article>
+        <article>
+          <span>Valor a repassar</span>
+          <strong>{money(current.valorRepassar)}</strong>
+        </article>
+        <article>
+          <span>Pago</span>
+          <strong>{money(current.valorPago)}</strong>
+        </article>
+        <article>
+          <span>Pendente</span>
+          <strong>{money(current.saldoPendente)}</strong>
+        </article>
+        <article>
+          <span>Pagamento</span>
+          <strong>{current.dataPagamento ? formatDate(current.dataPagamento) : '-'}</strong>
+        </article>
+      </div>
+      {current.observacoes && (
+        <div className="portal-detail-note">
+          <strong>Observações</strong>
+          <p>{current.observacoes}</p>
+        </div>
+      )}
+      <div className="portal-transfer-items">
+        <div className="resource-panel-heading compact-heading">
+          <div>
+            <strong>Composição</strong>
+            <small>Itens que formam o demonstrativo.</small>
+          </div>
+          <span>{loading ? 'Carregando...' : `${itens.length} itens`}</span>
+        </div>
+        <PortalTable
+          columns={[
+            { key: 'descricao', label: 'Descrição' },
+            { key: 'receita', label: 'Receita', render: (item) => money(item.receita) },
+            { key: 'taxas', label: 'Taxas', render: (item) => money(item.taxas) },
+            { key: 'custos', label: 'Custos', render: (item) => money(item.custos) },
+            { key: 'comissao', label: 'Comissão', render: (item) => money(item.comissao) },
+            { key: 'valorLiquido', label: 'Líquido', render: (item) => money(item.valorLiquido) },
+          ]}
+          emptyText={loading ? 'Carregando composição do repasse.' : 'Este repasse ainda não possui itens detalhados.'}
+          items={itens}
+        />
+      </div>
+      <div className="portal-reservation-actions">
+        <button className="primary-action" type="button" onClick={onDownloadPdf}>
+          <FileText size={17} />
+          Baixar demonstrativo
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function DocumentsPanel({ data, downloadingPdfType, onDownloadPdf }) {
+  const documents = [
+    {
+      key: 'mensal',
+      title: 'Demonstrativo mensal',
+      description: 'Resumo profissional com desempenho por imóvel, reservas e repasses do período.',
+      meta: `${formatDate(data.periodoInicio)} até ${formatDate(data.periodoFim)}`,
+    },
+    {
+      key: 'reservas',
+      title: 'Reservas do período',
+      description: 'Lista consolidada de reservas com receita bruta e valor líquido.',
+      meta: `${data.reservas?.length || 0} reservas`,
+    },
+    {
+      key: 'movimentacoes',
+      title: 'Receitas e custos',
+      description: 'Movimentações financeiras vinculadas aos imóveis do proprietário.',
+      meta: `${data.movimentacoes?.length || 0} lançamentos`,
+    },
+    {
+      key: 'repasses',
+      title: 'Repasses',
+      description: 'Demonstrativos e saldos pendentes para conferência financeira.',
+      meta: `${data.repasses?.length || 0} repasses`,
+    },
+  ];
+
+  return (
+    <section className="resource-panel portal-documents-panel">
+      <div className="resource-panel-heading">
+        <div>
+          <strong>Documentos</strong>
+          <small>PDFs prontos para conferência, envio ou arquivo.</small>
+        </div>
+        <span>{documents.length} documentos</span>
+      </div>
+      <div className="portal-documents-grid">
+        {documents.map((document) => (
+          <article className="portal-document-card" key={document.key}>
+            <FileText size={22} />
+            <div>
+              <strong>{document.title}</strong>
+              <small>{document.description}</small>
+              <span>{document.meta}</span>
+            </div>
+            <button
+              className="portal-export-button"
+              type="button"
+              onClick={() => onDownloadPdf(document.key)}
+              disabled={downloadingPdfType === document.key}
+            >
+              <Download size={16} />
+              PDF
+            </button>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -487,6 +663,8 @@ export function PortalProprietarioPage() {
     inicio: currentMonthStart.toISOString().slice(0, 10),
     fim: new Date().toISOString().slice(0, 10),
     imovelId: '',
+    reservaStatus: '',
+    origem: '',
   });
   const [data, setData] = useState(emptyPortal);
   const [loading, setLoading] = useState(true);
@@ -495,6 +673,8 @@ export function PortalProprietarioPage() {
   const [calendarMonth, setCalendarMonth] = useState(monthKeyFromDate(currentMonthStart));
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [selectedReservationId, setSelectedReservationId] = useState(null);
+  const [selectedTransferId, setSelectedTransferId] = useState(null);
+  const [selectedTransferDetail, setSelectedTransferDetail] = useState(null);
   const [error, setError] = useState('');
 
   const params = useMemo(
@@ -502,6 +682,8 @@ export function PortalProprietarioPage() {
       inicio: filters.inicio || undefined,
       fim: filters.fim || undefined,
       imovelId: filters.imovelId || undefined,
+      reservaStatus: filters.reservaStatus || undefined,
+      origem: filters.origem || undefined,
     }),
     [filters],
   );
@@ -524,7 +706,33 @@ export function PortalProprietarioPage() {
     return () => clearTimeout(timeout);
   }, [load]);
 
+  useEffect(() => {
+    if (!selectedTransferId) {
+      return undefined;
+    }
+
+    let active = true;
+    portalProprietarioApi.repasseDetalhe(selectedTransferId)
+      .then((response) => {
+        if (active) {
+          setSelectedTransferDetail(response.data);
+        }
+      })
+      .catch((detailError) => {
+        if (active) {
+          setError(getErrorMessage(detailError));
+          setSelectedTransferDetail(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedTransferId]);
+
   const downloadRepasse = async (repasseId) => {
+    if (!repasseId) return;
+
     setDownloadingRepasseId(repasseId);
     setError('');
     try {
@@ -534,6 +742,21 @@ export function PortalProprietarioPage() {
       setError(getErrorMessage(downloadError));
     } finally {
       setDownloadingRepasseId(null);
+    }
+  };
+
+  const downloadReserva = async (reservaId) => {
+    if (!reservaId) return;
+
+    setDownloadingPdfType(`reserva-${reservaId}`);
+    setError('');
+    try {
+      const response = await portalProprietarioApi.reservaPdf(reservaId);
+      saveBlob(response, `reserva-${reservaId}.pdf`);
+    } catch (downloadError) {
+      setError(getErrorMessage(downloadError));
+    } finally {
+      setDownloadingPdfType('');
     }
   };
 
@@ -550,6 +773,10 @@ export function PortalProprietarioPage() {
       repasses: {
         request: portalProprietarioApi.repassesPdf,
         fileName: 'portal-repasses.pdf',
+      },
+      mensal: {
+        request: portalProprietarioApi.demonstrativoMensalPdf,
+        fileName: 'demonstrativo-mensal.pdf',
       },
     }[type];
 
@@ -619,6 +846,11 @@ export function PortalProprietarioPage() {
     () => (data.reservas || []).find((reservation) => reservation.id === selectedReservationId),
     [data.reservas, selectedReservationId],
   );
+  const selectedTransfer = useMemo(
+    () => (data.repasses || []).find((transfer) => transfer.id === selectedTransferId),
+    [data.repasses, selectedTransferId],
+  );
+  const loadingTransferDetail = Boolean(selectedTransferId && selectedTransferDetail?.id !== selectedTransferId);
   const handleCalendarMonthChange = (nextMonth) => {
     const range = getMonthRange(nextMonth);
     setCalendarMonth(nextMonth);
@@ -653,6 +885,22 @@ export function PortalProprietarioPage() {
             <option value="">Todos os imóveis</option>
             {(data.imoveis || []).map((imovel) => (
               <option key={imovel.id} value={imovel.id}>{imovel.nome}</option>
+            ))}
+          </select>
+        </label>
+        <label className="form-field">
+          <span>Status da reserva</span>
+          <select value={filters.reservaStatus} onChange={(event) => setFilters((current) => ({ ...current, reservaStatus: event.target.value }))}>
+            {reservaStatusOptions.map((option) => (
+              <option key={option.value || 'todos'} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="form-field">
+          <span>Origem</span>
+          <select value={filters.origem} onChange={(event) => setFilters((current) => ({ ...current, origem: event.target.value }))}>
+            {reservaOrigemOptions.map((option) => (
+              <option key={option.value || 'todas'} value={option.value}>{option.label}</option>
             ))}
           </select>
         </label>
@@ -722,6 +970,13 @@ export function PortalProprietarioPage() {
         month={calendarMonth}
         onMonthChange={handleCalendarMonthChange}
         onReservationClick={setSelectedReservationId}
+        onTransferClick={setSelectedTransferId}
+      />
+
+      <DocumentsPanel
+        data={data}
+        downloadingPdfType={downloadingPdfType}
+        onDownloadPdf={downloadPortalPdf}
       />
 
       <section className="resource-panel">
@@ -794,7 +1049,18 @@ export function PortalProprietarioPage() {
       <ReservationDetail
         reservation={selectedReservation}
         onClose={() => setSelectedReservationId(null)}
-        onDownloadPdf={() => downloadPortalPdf('reservas')}
+        onDownloadPdf={() => downloadReserva(selectedReservation?.id)}
+      />
+
+      <TransferDetail
+        transfer={selectedTransfer}
+        detail={selectedTransferDetail}
+        loading={loadingTransferDetail}
+        onClose={() => {
+          setSelectedTransferId(null);
+          setSelectedTransferDetail(null);
+        }}
+        onDownloadPdf={() => downloadRepasse(selectedTransfer?.id)}
       />
 
       <section className="content-grid">
@@ -1054,15 +1320,20 @@ export function PortalProprietarioPage() {
                 key: 'acoes',
                 label: '',
                 render: (item) => (
-                  <button
-                    className="icon-button bordered"
-                    type="button"
-                    aria-label="Baixar demonstrativo"
-                    onClick={() => downloadRepasse(item.id)}
-                    disabled={downloadingRepasseId === item.id}
-                  >
-                    <Download size={16} />
-                  </button>
+                  <div className="table-action-row">
+                    <button className="portal-link-button" type="button" onClick={() => setSelectedTransferId(item.id)}>
+                      Detalhe
+                    </button>
+                    <button
+                      className="icon-button bordered"
+                      type="button"
+                      aria-label="Baixar demonstrativo"
+                      onClick={() => downloadRepasse(item.id)}
+                      disabled={downloadingRepasseId === item.id}
+                    >
+                      <Download size={16} />
+                    </button>
+                  </div>
                 ),
               },
             ]}
