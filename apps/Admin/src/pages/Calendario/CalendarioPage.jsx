@@ -2,6 +2,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, RotateCcw, Save, Trash2 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { calendarioApi } from '@/api/calendario';
 import { imoveisApi } from '@/api/cadastros';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -64,7 +65,7 @@ function eventTouchesDay(event, dayKey) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 export function CalendarioPage() {
@@ -76,6 +77,7 @@ export function CalendarioPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const days = useMemo(() => buildDays(monthDate), [monthDate]);
 
@@ -131,6 +133,7 @@ export function CalendarioPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       imovelId: Number(form.imovelId),
@@ -146,6 +149,7 @@ export function CalendarioPage() {
         ...emptyBlock,
         imovelId: current.imovelId,
       }));
+      setSuccess('Bloqueio salvo no calendário.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -155,9 +159,20 @@ export function CalendarioPage() {
   };
 
   const deleteBlock = async (event) => {
+    const confirmed = confirmAction(
+      'Remover este bloqueio?',
+      `${event.titulo} em ${event.imovelNome} será removido do calendário.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await calendarioApi.deleteBlock(event.entityId);
+      setSuccess('Bloqueio removido do calendário.');
       await load();
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
@@ -203,6 +218,7 @@ export function CalendarioPage() {
           </div>
 
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
 
           <div className="calendar-grid">
             {weekDays.map((day) => (

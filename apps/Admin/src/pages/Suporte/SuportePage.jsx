@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { sistemaApi } from '@/api/sistema';
 import { suporteApi } from '@/api/suporte';
 import { useAuth } from '@/context/AuthContext';
+import { getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const emptyTicket = {
   titulo: '',
@@ -27,7 +28,7 @@ const priorityLabels = {
 };
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function formatDateTime(value) {
@@ -50,6 +51,7 @@ export function SuportePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const canManageSupport = Boolean(usuario?.isPlatformAdmin || canEdit('configuracoes'));
   const summary = useMemo(() => ({
@@ -85,6 +87,7 @@ export function SuportePage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       await suporteApi.create({
@@ -94,6 +97,7 @@ export function SuportePage() {
         prioridade: form.prioridade,
       });
       setForm(emptyTicket);
+      setSuccess('Chamado aberto. Acompanhe o andamento nesta tela.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -104,8 +108,10 @@ export function SuportePage() {
 
   const updateStatus = async (ticket, status) => {
     setError('');
+    setSuccess('');
     try {
       await suporteApi.updateStatus(ticket.id, { status });
+      setSuccess(`Chamado #${ticket.id} atualizado para ${statusLabels[status] || status}.`);
       await load();
     } catch (updateError) {
       setError(getErrorMessage(updateError));
@@ -128,6 +134,7 @@ export function SuportePage() {
       </section>
 
       {error && <div className="form-alert">{error}</div>}
+      {success && <div className="form-success">{success}</div>}
 
       <div className="kpi-grid secondary-kpis">
         <article className="metric-card">

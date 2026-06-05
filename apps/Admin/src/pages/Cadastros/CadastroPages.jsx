@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { hospedesApi, imoveisApi, proprietariosApi } from '@/api/cadastros';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const imovelStatusOptions = [
   { value: 1, label: 'Ativo' },
@@ -137,7 +138,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function normalizeFoto(foto, index) {
@@ -196,12 +197,26 @@ function SearchBar({ value, onChange, placeholder }) {
   );
 }
 
-function EmptyState({ title, description, icon }) {
+function scrollToForm(formId) {
+  document.getElementById(formId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function EmptyState({ title, description, icon, actions = [] }) {
   return (
     <div className="inline-empty">
       {icon}
       <strong>{title}</strong>
       <span>{description}</span>
+      {actions.length > 0 && (
+        <div className="empty-state-actions">
+          {actions.map((action) => (
+            <button className="primary-action" key={action.label} type="button" onClick={action.onClick}>
+              {action.icon}
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -308,6 +323,7 @@ export function ProprietariosPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -330,11 +346,15 @@ export function ProprietariosPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm(emptyProprietario);
   };
 
   const startEdit = (item) => {
     setEditingId(item.id);
+    setError('');
+    setSuccess('');
     setForm({
       nome: item.nome || '',
       documento: item.documento || '',
@@ -350,6 +370,7 @@ export function ProprietariosPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       ...form,
@@ -362,12 +383,14 @@ export function ProprietariosPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await proprietariosApi.update(editingId, payload);
       } else {
         await proprietariosApi.create(payload);
       }
       startCreate();
+      setSuccess(wasEditing ? 'Proprietário atualizado.' : 'Proprietário cadastrado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -377,9 +400,20 @@ export function ProprietariosPage() {
   };
 
   const deactivate = async (item) => {
+    const confirmed = confirmAction(
+      'Inativar este proprietário?',
+      `${item.nome} deixará de aparecer como opção ativa para novos imóveis e repasses.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await proprietariosApi.deactivate(item.id);
+      setSuccess('Proprietário inativado.');
       await load();
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
@@ -403,6 +437,7 @@ export function ProprietariosPage() {
             <span>{items.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando proprietários...</div>
           ) : items.length === 0 ? (
@@ -410,6 +445,7 @@ export function ProprietariosPage() {
               icon={<Users size={26} />}
               title="Nenhum proprietário cadastrado"
               description="Cadastre o primeiro proprietário para liberar o cadastro de imóveis."
+              actions={[{ label: 'Novo proprietário', onClick: () => scrollToForm('proprietario-form'), icon: <Plus size={17} /> }]}
             />
           ) : (
             <div className="data-table-wrap">
@@ -453,7 +489,7 @@ export function ProprietariosPage() {
           )}
         </article>
 
-        <form className="resource-form" onSubmit={save}>
+        <form className="resource-form" id="proprietario-form" onSubmit={save}>
           <div className="form-title">
             <Plus size={18} />
             <strong>{editingId ? 'Editar proprietário' : 'Novo proprietário'}</strong>
@@ -498,6 +534,7 @@ export function HospedesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -520,11 +557,15 @@ export function HospedesPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm(emptyHospede);
   };
 
   const startEdit = (item) => {
     setEditingId(item.id);
+    setError('');
+    setSuccess('');
     setForm({
       nome: item.nome || '',
       email: item.email || '',
@@ -540,6 +581,7 @@ export function HospedesPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       ...form,
@@ -552,12 +594,14 @@ export function HospedesPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await hospedesApi.update(editingId, payload);
       } else {
         await hospedesApi.create(payload);
       }
       startCreate();
+      setSuccess(wasEditing ? 'Hóspede atualizado.' : 'Hóspede cadastrado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -567,9 +611,20 @@ export function HospedesPage() {
   };
 
   const deactivate = async (item) => {
+    const confirmed = confirmAction(
+      'Inativar este hóspede?',
+      `${item.nome} deixará de aparecer como opção ativa para novas reservas.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await hospedesApi.deactivate(item.id);
+      setSuccess('Hóspede inativado.');
       await load();
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
@@ -593,6 +648,7 @@ export function HospedesPage() {
             <span>{items.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando hóspedes...</div>
           ) : items.length === 0 ? (
@@ -600,6 +656,7 @@ export function HospedesPage() {
               icon={<UserRound size={26} />}
               title="Nenhum hóspede cadastrado"
               description="Cadastre hóspedes para lançar reservas e manter o histórico de estadias."
+              actions={[{ label: 'Novo hóspede', onClick: () => scrollToForm('hospede-form'), icon: <Plus size={17} /> }]}
             />
           ) : (
             <div className="data-table-wrap">
@@ -643,7 +700,7 @@ export function HospedesPage() {
           )}
         </article>
 
-        <form className="resource-form" onSubmit={save}>
+        <form className="resource-form" id="hospede-form" onSubmit={save}>
           <div className="form-title">
             <Plus size={18} />
             <strong>{editingId ? 'Editar hóspede' : 'Novo hóspede'}</strong>
@@ -690,6 +747,7 @@ export function ImoveisPage() {
   const [estados, setEstados] = useState([]);
   const [cidades, setCidades] = useState([]);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const proprietarioOptions = useMemo(() => proprietarios.filter((proprietario) => proprietario.ativo), [proprietarios]);
 
@@ -822,6 +880,8 @@ export function ImoveisPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm({
       ...emptyImovel,
       proprietarioId: proprietarioOptions[0]?.id ? String(proprietarioOptions[0].id) : '',
@@ -832,6 +892,8 @@ export function ImoveisPage() {
     const enderecoFields = parseEndereco(item.endereco);
 
     setEditingId(item.id);
+    setError('');
+    setSuccess('');
     setForm({
       proprietarioId: String(item.proprietarioId),
       nome: item.nome || '',
@@ -858,6 +920,7 @@ export function ImoveisPage() {
 
     setPhotoUploading(true);
     setError('');
+    setSuccess('');
 
     try {
       const uploaded = [];
@@ -873,6 +936,7 @@ export function ImoveisPage() {
         ...current,
         fotos: normalizeFotos([...current.fotos, ...uploaded]),
       }));
+      setSuccess(files.length > 1 ? 'Fotos adicionadas ao imóvel.' : 'Foto adicionada ao imóvel.');
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
     } finally {
@@ -885,6 +949,7 @@ export function ImoveisPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       proprietarioId: Number(form.proprietarioId),
@@ -912,12 +977,14 @@ export function ImoveisPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await imoveisApi.update(editingId, payload);
       } else {
         await imoveisApi.create(payload);
       }
       startCreate();
+      setSuccess(wasEditing ? 'Imóvel atualizado.' : 'Imóvel cadastrado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -927,9 +994,20 @@ export function ImoveisPage() {
   };
 
   const deactivate = async (item) => {
+    const confirmed = confirmAction(
+      'Inativar este imóvel?',
+      `${item.nome} deixará de aparecer como disponível para novas reservas. Reservas existentes continuam preservadas.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await imoveisApi.deactivate(item.id);
+      setSuccess('Imóvel inativado.');
       await load();
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
@@ -953,6 +1031,7 @@ export function ImoveisPage() {
             <span>{items.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando imóveis...</div>
           ) : items.length === 0 ? (
@@ -960,6 +1039,7 @@ export function ImoveisPage() {
               icon={<Building2 size={26} />}
               title="Nenhum imóvel cadastrado"
               description="Cadastre proprietários e depois os imóveis vinculados a eles."
+              actions={[{ label: 'Novo imóvel', onClick: () => scrollToForm('imovel-form'), icon: <Plus size={17} /> }]}
             />
           ) : (
             <div className="data-table-wrap">
@@ -1016,7 +1096,7 @@ export function ImoveisPage() {
           )}
         </article>
 
-        <form className="resource-form" onSubmit={save}>
+        <form className="resource-form" id="imovel-form" onSubmit={save}>
           <div className="form-title">
             <Plus size={18} />
             <strong>{editingId ? 'Editar imóvel' : 'Novo imóvel'}</strong>

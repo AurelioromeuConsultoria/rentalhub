@@ -15,6 +15,7 @@ import { categoriasFinanceirasApi, financeiroApi } from '@/api/financeiro';
 import { reservasApi } from '@/api/reservas';
 import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const tipoOptions = [
   { value: 1, label: 'Receita' },
@@ -46,7 +47,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function money(value) {
@@ -331,6 +332,7 @@ export function FinanceiroPage() {
         ativo: true,
       });
       setCategoriaForm(emptyCategoria);
+      setSuccess('Categoria criada e pronta para novos lançamentos.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -340,10 +342,20 @@ export function FinanceiroPage() {
   };
 
   const deleteMovimentacao = async (movimentacao) => {
+    const confirmed = confirmAction(
+      'Excluir esta movimentação?',
+      `${movimentacao.descricao} no valor de ${money(movimentacao.valor)} será removida do fluxo de caixa. Essa ação não pode ser desfeita.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
     setSuccess('');
     try {
       await financeiroApi.deleteMovimentacao(movimentacao.id);
+      setSuccess('Movimentação excluída do fluxo de caixa.');
       await load();
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
@@ -461,8 +473,8 @@ export function FinanceiroPage() {
           ) : movimentacoes.length === 0 ? (
             <EmptyState
               icon={<Banknote size={26} />}
-              title="Nenhuma movimentação encontrada"
-              description="Registre receitas, despesas e custos extras para enxergar o caixa real."
+              title="Nenhuma movimentação no período"
+              description="Ajuste os filtros ou registre uma receita/despesa para enxergar o caixa real."
               actions={[{ label: 'Nova movimentação', onClick: scrollToForm, icon: <Plus size={17} /> }]}
             />
           ) : (

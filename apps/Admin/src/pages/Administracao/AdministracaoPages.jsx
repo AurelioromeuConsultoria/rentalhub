@@ -35,6 +35,7 @@ import { lgpdApi } from '@/api/lgpd';
 import { useAuth } from '@/context/AuthContext';
 import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
 import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 import { APP_VERSION } from '@/lib/version';
 
 const tipoUsuarioOptions = [
@@ -100,7 +101,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function normalizeId(value) {
@@ -273,6 +274,7 @@ export function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [accessLink, setAccessLink] = useState(null);
 
   const tipoUsuarioLabel = useMemo(
@@ -309,10 +311,14 @@ export function UsuariosPage() {
     setEditingId(null);
     setForm(emptyUsuario);
     setAccessLink(null);
+    setError('');
+    setSuccess('');
   };
 
   const startEdit = (usuario) => {
     setEditingId(usuario.id);
+    setError('');
+    setSuccess('');
     setForm({
       nome: usuario.nome || '',
       email: usuario.email || '',
@@ -347,6 +353,7 @@ export function UsuariosPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       nome: form.nome.trim(),
@@ -362,7 +369,8 @@ export function UsuariosPage() {
 
     try {
       let response;
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         response = await usuariosApi.update(editingId, payload);
       } else {
         response = await usuariosApi.create(payload);
@@ -371,6 +379,7 @@ export function UsuariosPage() {
       if (response?.data?.conviteUrl) {
         setAccessLink({ url: response.data.conviteUrl, expiraEm: response.data.conviteExpiraEm || null });
       }
+      setSuccess(wasEditing ? 'Usuário atualizado.' : payload.enviarConvite ? 'Usuário criado e convite gerado.' : 'Usuário criado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -381,6 +390,7 @@ export function UsuariosPage() {
 
   const generateInvite = async (usuario) => {
     setError('');
+    setSuccess('');
     try {
       const response = await usuariosApi.generateInvite(usuario.id);
       setAccessLink({
@@ -388,19 +398,32 @@ export function UsuariosPage() {
         expiraEm: response.data?.expiraEm,
         usuario: usuario.nome,
       });
+      setSuccess(`Convite gerado para ${usuario.nome}.`);
     } catch (inviteError) {
       setError(getErrorMessage(inviteError));
     }
   };
 
   const deactivate = async (id) => {
+    const target = usuarios.find((usuario) => usuario.id === id);
+    const confirmed = confirmAction(
+      'Inativar este usuário?',
+      `${target?.nome || 'Este usuário'} perderá acesso ao RentalHub até ser reativado.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await usuariosApi.deactivate(id);
       await load();
       if (editingId === id) {
         startCreate();
       }
+      setSuccess('Usuário inativado.');
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
     }
@@ -416,6 +439,7 @@ export function UsuariosPage() {
       />
 
       {error && <div className="form-alert">{error}</div>}
+      {success && <div className="form-success">{success}</div>}
 
       <div className="resource-layout">
         <section className="resource-panel">
@@ -580,6 +604,7 @@ export function PerfisPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -614,6 +639,8 @@ export function PerfisPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm({
       ...emptyPerfil,
       permissoes: buildPermissionMap(resources),
@@ -622,6 +649,8 @@ export function PerfisPage() {
 
   const startEdit = (perfil) => {
     setEditingId(perfil.id);
+    setError('');
+    setSuccess('');
     setForm({
       nome: perfil.nome || '',
       descricao: perfil.descricao || '',
@@ -663,6 +692,7 @@ export function PerfisPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       nome: form.nome.trim(),
@@ -677,12 +707,14 @@ export function PerfisPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await perfisAcessoApi.update(editingId, payload);
       } else {
         await perfisAcessoApi.create(payload);
       }
       startCreate();
+      setSuccess(wasEditing ? 'Perfil atualizado.' : 'Perfil criado.');
       await load();
       window.dispatchEvent(new Event(TENANTS_UPDATED_EVENT));
     } catch (saveError) {
@@ -693,13 +725,25 @@ export function PerfisPage() {
   };
 
   const deactivate = async (id) => {
+    const target = perfis.find((perfil) => perfil.id === id);
+    const confirmed = confirmAction(
+      'Inativar este perfil?',
+      `${target?.nome || 'Este perfil'} deixará de ser usado para novas liberações de acesso.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await perfisAcessoApi.deactivate(id);
       await load();
       if (editingId === id) {
         startCreate();
       }
+      setSuccess('Perfil inativado.');
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
     }
@@ -715,6 +759,7 @@ export function PerfisPage() {
       />
 
       {error && <div className="form-alert">{error}</div>}
+      {success && <div className="form-success">{success}</div>}
 
       <div className="resource-layout wide-detail">
         <section className="resource-panel">
@@ -810,6 +855,7 @@ export function EmpresasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [adminAccessLink, setAdminAccessLink] = useState('');
 
   const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
@@ -836,11 +882,15 @@ export function EmpresasPage() {
     setEditingId(null);
     setForm(emptyTenant);
     setAdminAccessLink('');
+    setError('');
+    setSuccess('');
   };
 
   const startEdit = (empresa) => {
     setEditingId(empresa.id);
     setAdminAccessLink('');
+    setError('');
+    setSuccess('');
     setForm({
       nome: empresa.nome || '',
       nomeExibicao: empresa.nomeExibicao || '',
@@ -870,6 +920,7 @@ export function EmpresasPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       nome: form.nome.trim(),
@@ -884,7 +935,8 @@ export function EmpresasPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await tenantsApi.update(editingId, payload);
         startCreate();
       } else {
@@ -893,6 +945,7 @@ export function EmpresasPage() {
         setForm(emptyTenant);
         setAdminAccessLink(response.data?.adminConviteUrl || '');
       }
+      setSuccess(wasEditing ? 'Empresa atualizada.' : 'Empresa criada e implantação inicial preparada.');
       await load();
       window.dispatchEvent(new Event(TENANTS_UPDATED_EVENT));
     } catch (saveError) {
@@ -903,7 +956,17 @@ export function EmpresasPage() {
   };
 
   const deactivate = async (empresa) => {
+    const confirmed = confirmAction(
+      'Inativar esta empresa?',
+      `${empresa.nomeExibicao || empresa.nome} perderá acesso operacional. Os dados continuam preservados para reativação futura.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await tenantsApi.deactivate(empresa.id);
       if (selectedTenantId === String(empresa.id)) {
@@ -912,6 +975,7 @@ export function EmpresasPage() {
       }
       await load();
       window.dispatchEvent(new Event(TENANTS_UPDATED_EVENT));
+      setSuccess('Empresa inativada.');
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
     }
@@ -927,6 +991,7 @@ export function EmpresasPage() {
       />
 
       {error && <div className="form-alert">{error}</div>}
+      {success && <div className="form-success">{success}</div>}
 
       <div className="resource-layout">
         <section className="resource-panel">
@@ -1106,6 +1171,7 @@ export function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState('');
   const [checkingHealth, setCheckingHealth] = useState(false);
@@ -1186,6 +1252,7 @@ export function ConfiguracoesPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
     try {
       const response = await configuracoesApi.updateTenant({
         nome: form.nome.trim(),
@@ -1218,6 +1285,7 @@ export function ConfiguracoesPage() {
         ativo: form.ativo,
       });
       setData((current) => ({ ...current, tenant: response.data }));
+      setSuccess('Configurações salvas.');
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -1244,6 +1312,15 @@ export function ConfiguracoesPage() {
   };
 
   const anonymizePrivacyData = async () => {
+    const confirmed = confirmAction(
+      'Anonimizar dados pessoais?',
+      'Esta ação substitui dados pessoais por valores anonimizados e deve ser usada apenas mediante solicitação formal do titular.',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setPrivacyLoading(true);
     setPrivacyAction('');
     try {
@@ -1275,6 +1352,7 @@ export function ConfiguracoesPage() {
       />
 
       {error && <div className="form-alert">{error}</div>}
+      {success && <div className="form-success">{success}</div>}
 
       {loading ? (
         <div className="loading-line">Carregando configurações...</div>

@@ -4,6 +4,7 @@ import { imoveisApi } from '@/api/cadastros';
 import { manutencoesApi } from '@/api/operacional';
 import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const statusOptions = [
   { value: 1, label: 'Aberta' },
@@ -34,7 +35,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function money(value) {
@@ -123,6 +124,7 @@ export function ManutencaoPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const filterParams = useMemo(
     () => ({
@@ -169,11 +171,15 @@ export function ManutencaoPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm({ ...emptyForm, imovelId: imoveis[0]?.id ? String(imoveis[0].id) : '' });
   };
 
   const startEdit = (manutencao) => {
     setEditingId(manutencao.id);
+    setError('');
+    setSuccess('');
     setForm({
       imovelId: String(manutencao.imovelId),
       categoria: manutencao.categoria || '',
@@ -193,6 +199,7 @@ export function ManutencaoPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       imovelId: Number(form.imovelId),
@@ -209,12 +216,14 @@ export function ManutencaoPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await manutencoesApi.update(editingId, payload);
       } else {
         await manutencoesApi.create(payload);
       }
       startCreate();
+      setSuccess(wasEditing ? 'Manutenção atualizada.' : 'Manutenção registrada.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -224,9 +233,20 @@ export function ManutencaoPage() {
   };
 
   const cancel = async (manutencao) => {
+    const confirmed = confirmAction(
+      'Cancelar esta manutenção?',
+      `A ocorrência "${manutencao.categoria}" do imóvel ${manutencao.imovelNome} será marcada como cancelada.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await manutencoesApi.cancel(manutencao.id);
+      setSuccess('Manutenção cancelada.');
       await load();
     } catch (cancelError) {
       setError(getErrorMessage(cancelError));
@@ -315,6 +335,7 @@ export function ManutencaoPage() {
             <span>{manutencoes.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando manutenções...</div>
           ) : manutencoes.length === 0 ? (

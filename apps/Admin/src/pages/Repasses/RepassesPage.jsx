@@ -5,6 +5,7 @@ import { relatoriosApi } from '@/api/relatorios';
 import { repassesApi } from '@/api/repasses';
 import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const statusOptions = [
   { value: 1, label: 'Pendente' },
@@ -35,7 +36,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function money(value) {
@@ -127,6 +128,7 @@ export function RepassesPage() {
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const filterParams = useMemo(
     () => ({
@@ -180,6 +182,7 @@ export function RepassesPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       await repassesApi.gerar({
@@ -189,6 +192,7 @@ export function RepassesPage() {
         periodoFim: generateForm.periodoFim,
         observacoes: generateForm.observacoes?.trim() || '',
       });
+      setSuccess('Demonstrativo de repasse gerado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -213,6 +217,7 @@ export function RepassesPage() {
 
     setPaying(true);
     setError('');
+    setSuccess('');
     try {
       await repassesApi.registrarPagamento(paymentForm.repasseId, {
         valor: Number(paymentForm.valor),
@@ -221,6 +226,7 @@ export function RepassesPage() {
       });
       setSelectedRepasse(null);
       setPaymentForm(emptyPaymentForm);
+      setSuccess('Pagamento registrado no repasse.');
       await load();
     } catch (paymentError) {
       setError(getErrorMessage(paymentError));
@@ -230,9 +236,20 @@ export function RepassesPage() {
   };
 
   const remove = async (repasse) => {
+    const confirmed = confirmAction(
+      'Excluir este demonstrativo?',
+      `O repasse #${repasse.id} de ${repasse.proprietarioNome} será removido. Pagamentos já registrados nesse demonstrativo também podem deixar de aparecer no controle.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await repassesApi.delete(repasse.id);
+      setSuccess('Demonstrativo excluído.');
       await load();
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
@@ -241,6 +258,7 @@ export function RepassesPage() {
 
   const downloadPdf = async (repasse) => {
     setError('');
+    setSuccess('');
     try {
       const response = await relatoriosApi.demonstrativoRepassePdf(repasse.id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -346,6 +364,7 @@ export function RepassesPage() {
             <span>{repasses.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando repasses...</div>
           ) : repasses.length === 0 ? (

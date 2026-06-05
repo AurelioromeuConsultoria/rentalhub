@@ -6,6 +6,7 @@ import { hospedesApi, imoveisApi } from '@/api/cadastros';
 import { reservasApi } from '@/api/reservas';
 import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const origemOptions = [
   { value: 1, label: 'Airbnb' },
@@ -49,7 +50,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function buildEmptyReserva(settings = null) {
@@ -205,6 +206,7 @@ export function ReservasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [availability, setAvailability] = useState(initialAvailability);
   const selectedImovelId = form.imovelId;
   const selectedCheckIn = form.checkIn;
@@ -347,6 +349,8 @@ export function ReservasPage() {
   const startCreate = () => {
     const defaultForm = buildEmptyReserva(tenantSettings);
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm({
       ...defaultForm,
       imovelId: imoveis[0]?.id ? String(imoveis[0].id) : '',
@@ -356,6 +360,8 @@ export function ReservasPage() {
 
   const startEdit = (reserva) => {
     setEditingId(reserva.id);
+    setError('');
+    setSuccess('');
     setForm({
       imovelId: String(reserva.imovelId),
       hospedeId: String(reserva.hospedeId),
@@ -376,6 +382,7 @@ export function ReservasPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
 
     const payload = {
       imovelId: Number(form.imovelId),
@@ -393,12 +400,14 @@ export function ReservasPage() {
     };
 
     try {
-      if (editingId) {
+      const wasEditing = Boolean(editingId);
+      if (wasEditing) {
         await reservasApi.update(editingId, payload);
       } else {
         await reservasApi.create(payload);
       }
       startCreate();
+      setSuccess(wasEditing ? 'Reserva atualizada e agenda recalculada.' : 'Reserva criada e calendário atualizado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -408,9 +417,20 @@ export function ReservasPage() {
   };
 
   const cancel = async (reserva) => {
+    const confirmed = confirmAction(
+      'Cancelar esta reserva?',
+      `A reserva de ${reserva.hospedeNome} em ${reserva.imovelNome} será marcada como cancelada. O período voltará a ficar disponível conforme as regras do calendário.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await reservasApi.cancel(reserva.id);
+      setSuccess('Reserva cancelada e calendário atualizado.');
       await load();
     } catch (cancelError) {
       setError(getErrorMessage(cancelError));
@@ -446,13 +466,18 @@ export function ReservasPage() {
             <span>{filteredReservas.length} registros</span>
           </div>
           {error && <div className="form-alert">{error}</div>}
+          {success && <div className="form-success">{success}</div>}
           {loading ? (
             <div className="loading-line">Carregando reservas...</div>
           ) : filteredReservas.length === 0 ? (
             <EmptyState
               icon={<CalendarDays size={26} />}
-              title="Nenhuma reserva cadastrada"
-              description="A primeira reserva já movimenta calendário, financeiro, limpeza e repasses."
+              title={search.trim() ? 'Nenhuma reserva encontrada' : 'Nenhuma reserva cadastrada'}
+              description={
+                search.trim()
+                  ? 'Ajuste a busca ou limpe o campo para voltar a ver todas as reservas.'
+                  : 'A primeira reserva já movimenta calendário, financeiro, limpeza e repasses.'
+              }
               actions={[
                 { label: 'Preencher reserva', onClick: scrollToForm, icon: <Plus size={17} /> },
                 { label: 'Ver calendário', to: '/calendario', variant: 'secondary' },

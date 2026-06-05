@@ -5,6 +5,7 @@ import { limpezasApi } from '@/api/operacional';
 import { reservasApi } from '@/api/reservas';
 import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const statusOptions = [
   { value: 1, label: 'Pendente' },
@@ -31,7 +32,7 @@ function extractItems(response) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível concluir a operação.';
+  return getFriendlyErrorMessage(error);
 }
 
 function money(value) {
@@ -169,11 +170,15 @@ export function LimpezaPage() {
 
   const startCreate = () => {
     setEditingId(null);
+    setError('');
+    setSuccess('');
     setForm({ ...emptyForm, imovelId: imoveis[0]?.id ? String(imoveis[0].id) : '' });
   };
 
   const startEdit = (limpeza) => {
     setEditingId(limpeza.id);
+    setError('');
+    setSuccess('');
     setForm({
       imovelId: String(limpeza.imovelId),
       reservaId: limpeza.reservaId ? String(limpeza.reservaId) : '',
@@ -219,8 +224,8 @@ export function LimpezaPage() {
       };
 
       setFilters(visibleFilters);
-      setSuccess(`Limpeza ${editingId ? 'atualizada' : 'salva'} para ${formatDate(savedDate)}.`);
       startCreate();
+      setSuccess(`Limpeza ${editingId ? 'atualizada' : 'salva'} para ${formatDate(savedDate)}.`);
       await load({
         inicio: visibleFilters.inicio,
         fim: visibleFilters.fim,
@@ -235,9 +240,20 @@ export function LimpezaPage() {
   };
 
   const cancel = async (limpeza) => {
+    const confirmed = confirmAction(
+      'Cancelar esta limpeza?',
+      `A limpeza de ${formatDate(limpeza.dataPrevista)} para ${limpeza.imovelNome} será marcada como cancelada.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setError('');
+    setSuccess('');
     try {
       await limpezasApi.cancel(limpeza.id);
+      setSuccess('Limpeza cancelada.');
       await load();
     } catch (cancelError) {
       setError(getErrorMessage(cancelError));
