@@ -7,10 +7,23 @@ namespace RentalHub.API.Tests;
 public sealed class PermissionMiddlewareTests
 {
     [Theory]
+    [InlineData("/api/dashboard/executivo", "GET", Resources.Dashboard, PermissionAccess.View)]
+    [InlineData("/api/imoveis", "GET", Resources.Imoveis, PermissionAccess.View)]
+    [InlineData("/api/imoveis", "POST", Resources.Imoveis, PermissionAccess.Edit)]
+    [InlineData("/api/proprietarios", "GET", Resources.Proprietarios, PermissionAccess.View)]
+    [InlineData("/api/hospedes", "GET", Resources.Hospedes, PermissionAccess.View)]
+    [InlineData("/api/reservas", "POST", Resources.Reservas, PermissionAccess.Edit)]
     [InlineData("/api/financeiro/fluxo-caixa", "GET", Resources.Financeiro, PermissionAccess.View)]
     [InlineData("/api/financeiro/movimentacoes", "POST", Resources.Financeiro, PermissionAccess.Edit)]
     [InlineData("/api/reservas/10", "DELETE", Resources.Reservas, PermissionAccess.Delete)]
+    [InlineData("/api/calendario", "GET", Resources.Calendario, PermissionAccess.View)]
+    [InlineData("/api/calendario/bloqueios", "POST", Resources.Calendario, PermissionAccess.Edit)]
     [InlineData("/api/categoriasfinanceiras", "PUT", Resources.Financeiro, PermissionAccess.Edit)]
+    [InlineData("/api/repasses", "GET", Resources.Repasses, PermissionAccess.View)]
+    [InlineData("/api/limpezas", "GET", Resources.Limpezas, PermissionAccess.View)]
+    [InlineData("/api/manutencoes", "GET", Resources.Manutencoes, PermissionAccess.View)]
+    [InlineData("/api/relatorios/reservas", "GET", Resources.Relatorios, PermissionAccess.View)]
+    [InlineData("/api/usuarios", "POST", Resources.Usuarios, PermissionAccess.Edit)]
     [InlineData("/api/perfis-acesso", "GET", Resources.PerfisAcesso, PermissionAccess.View)]
     [InlineData("/api/configuracoes/tenant", "PUT", Resources.Configuracoes, PermissionAccess.Edit)]
     [InlineData("/api/auditoria", "GET", Resources.Auditoria, PermissionAccess.View)]
@@ -35,6 +48,9 @@ public sealed class PermissionMiddlewareTests
     [InlineData("/api/notificacoes")]
     [InlineData("/api/buscaglobal")]
     [InlineData("/api/lgpd/status")]
+    [InlineData("/api/portalproprietario")]
+    [InlineData("/api/sistema/status")]
+    [InlineData("/api/suporte")]
     [InlineData("/")]
     public void TryCreateCheck_ShouldSkipPublicOrAuthenticatedOnlyRoutes(string path)
     {

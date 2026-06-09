@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RentalHub.Application.Security;
 using RentalHub.Application.Services;
+using RentalHub.API.Security;
+using RentalHub.API.Services;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Enums;
 using RentalHub.Domain.Security;
@@ -21,6 +23,8 @@ public sealed class TenantsController : ControllerBase
     private readonly ITokenService _tokenService;
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
+    private readonly PasswordPolicyService _passwordPolicy;
+    private readonly SecurityAuditService _securityAudit;
     private static readonly (string Nome, MovimentacaoFinanceiraTipo Tipo)[] DefaultFinancialCategories =
     [
         ("Reservas Airbnb", MovimentacaoFinanceiraTipo.Receita),
@@ -44,13 +48,17 @@ public sealed class TenantsController : ControllerBase
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         IEmailSender emailSender,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        PasswordPolicyService passwordPolicy,
+        SecurityAuditService securityAudit)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _emailSender = emailSender;
         _configuration = configuration;
+        _passwordPolicy = passwordPolicy;
+        _securityAudit = securityAudit;
     }
 
     [HttpGet]
@@ -204,7 +212,7 @@ public sealed class TenantsController : ControllerBase
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
                 ApplyDomains(tenant, domains);
-                var perfis = CreateDefaultAccessProfiles(tenant.Id);
+                var perfis = DefaultAccessProfiles.CreateForTenant(tenant.Id);
                 var adminProfile = perfis.First(p => p.Nome == "Administrador");
                 var categorias = CreateDefaultFinancialCategories(tenant.Id).ToList();
                 _dbContext.PerfisAcesso.AddRange(perfis);
@@ -258,6 +266,13 @@ public sealed class TenantsController : ControllerBase
         if (invitedAdmin is not null && adminInviteUrl is not null)
         {
             await SendInviteEmailAsync(invitedAdmin, adminInviteUrl, cancellationToken);
+            await _securityAudit.RecordAsync(
+                "ConviteGerado",
+                invitedAdmin.TenantId,
+                invitedAdmin.Id.ToString(),
+                invitedAdmin.Nome,
+                invitedAdmin.Email,
+                cancellationToken);
         }
 
         return CreatedAtAction(nameof(GetById), new { id = createdTenantId }, createdTenant);
@@ -385,9 +400,18 @@ public sealed class TenantsController : ControllerBase
             return BadRequest(new { message = "Informe uma senha ou mantenha o convite de admin ativado." });
         }
 
-        if (!string.IsNullOrWhiteSpace(request.AdminSenha) && request.AdminSenha.Trim().Length < 8)
+        if (!string.IsNullOrWhiteSpace(request.AdminSenha))
         {
-            return BadRequest(new { message = "A senha do admin deve ter pelo menos 8 caracteres." });
+            var passwordError = _passwordPolicy.Validate(
+                request.AdminSenha,
+                request.AdminNome,
+                request.AdminEmail,
+                request.Nome,
+                request.NomeExibicao);
+            if (passwordError is not null)
+            {
+                return BadRequest(new { message = passwordError });
+            }
         }
 
         return null;
@@ -406,65 +430,6 @@ public sealed class TenantsController : ControllerBase
             .Where(d => !string.IsNullOrWhiteSpace(d))
             .Distinct()
             .ToList();
-    }
-
-    private static IReadOnlyList<PerfilAcesso> CreateDefaultAccessProfiles(int tenantId)
-    {
-        var tenantAdminResources = Resources.All
-            .Where(resource => resource != Resources.Tenants)
-            .ToArray();
-
-        return
-        [
-            CreateProfile(tenantId, "Administrador", "Acesso total ao tenant.", tenantAdminResources, canEdit: true, canDelete: true),
-            CreateProfile(
-                tenantId,
-                "Financeiro",
-                "Acesso aos módulos financeiros, repasses e relatórios.",
-                [Resources.Dashboard, Resources.Financeiro, Resources.Repasses, Resources.Relatorios, Resources.Imoveis, Resources.Proprietarios, Resources.Reservas],
-                canEdit: true,
-                canDelete: false),
-            CreateProfile(
-                tenantId,
-                "Operacional",
-                "Acesso a reservas, calendário, limpeza e manutenção.",
-                [Resources.Dashboard, Resources.Imoveis, Resources.Hospedes, Resources.Reservas, Resources.Calendario, Resources.Limpezas, Resources.Manutencoes],
-                canEdit: true,
-                canDelete: false),
-            CreateProfile(
-                tenantId,
-                "Proprietário",
-                "Acesso restrito ao portal do proprietário.",
-                [Resources.PortalProprietario],
-                canEdit: false,
-                canDelete: false)
-        ];
-    }
-
-    private static PerfilAcesso CreateProfile(
-        int tenantId,
-        string nome,
-        string descricao,
-        IReadOnlyCollection<string> resources,
-        bool canEdit,
-        bool canDelete)
-    {
-        return new PerfilAcesso
-        {
-            TenantId = tenantId,
-            Nome = nome,
-            Descricao = descricao,
-            Ativo = true,
-            DataCriacao = DateTime.UtcNow,
-            Permissoes = resources.Select(resource => new PerfilAcessoPermissao
-            {
-                TenantId = tenantId,
-                Recurso = resource,
-                PodeVer = true,
-                PodeEditar = canEdit,
-                PodeExcluir = canDelete
-            }).ToList()
-        };
     }
 
     private static IEnumerable<CategoriaFinanceira> CreateDefaultFinancialCategories(int tenantId)

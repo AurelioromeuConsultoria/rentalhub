@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using RentalHub.Application.Auth;
 using RentalHub.Application.Security;
 using RentalHub.Application.Services;
+using RentalHub.API.Services;
 using RentalHub.Infrastructure.Data;
 
 namespace RentalHub.API.Controllers;
@@ -18,6 +20,8 @@ public sealed class AuthController : ControllerBase
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
+    private readonly PasswordPolicyService _passwordPolicy;
+    private readonly SecurityAuditService _securityAudit;
 
     public AuthController(
         RentalHubDbContext dbContext,
@@ -25,7 +29,9 @@ public sealed class AuthController : ControllerBase
         ITokenService tokenService,
         IEmailSender emailSender,
         IConfiguration configuration,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        PasswordPolicyService passwordPolicy,
+        SecurityAuditService securityAudit)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
@@ -33,10 +39,13 @@ public sealed class AuthController : ControllerBase
         _emailSender = emailSender;
         _configuration = configuration;
         _environment = environment;
+        _passwordPolicy = passwordPolicy;
+        _securityAudit = securityAudit;
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         try
@@ -52,6 +61,13 @@ public sealed class AuthController : ControllerBase
 
             if (usuario?.Tenant is null || !_passwordHasher.Verify(request.Senha, usuario.SenhaHash))
             {
+                await _securityAudit.RecordAsync(
+                    "LoginFalhou",
+                    usuario?.TenantId,
+                    usuario?.Id.ToString() ?? "auth",
+                    usuario?.Nome,
+                    email,
+                    cancellationToken);
                 return Unauthorized(new { message = "Email ou senha inválidos." });
             }
 
@@ -60,6 +76,13 @@ public sealed class AuthController : ControllerBase
             usuario.RefreshTokenExpiraEm = DateTime.UtcNow.AddDays(14);
             usuario.DataAtualizacao = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await _securityAudit.RecordAsync(
+                "LoginOk",
+                usuario.TenantId,
+                usuario.Id.ToString(),
+                usuario.Nome,
+                usuario.Email,
+                cancellationToken);
 
             var permissoes = usuario.PerfilAcesso?.Permissoes
                 .Select(p => new PermissaoDto(p.Recurso, p.PodeVer, p.PodeEditar, p.PodeExcluir))
@@ -141,6 +164,7 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("esqueci-senha")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth-sensitive")]
     public async Task<ActionResult<PasswordFlowResponse>> ForgotPassword(
         ForgotPasswordRequest request,
         CancellationToken cancellationToken)
@@ -176,6 +200,13 @@ public sealed class AuthController : ControllerBase
                 "Redefinir senha",
                 resetUrl,
                 cancellationToken);
+            await _securityAudit.RecordAsync(
+                "ResetSolicitado",
+                usuario.TenantId,
+                usuario.Id.ToString(),
+                usuario.Nome,
+                usuario.Email,
+                cancellationToken);
         }
 
         var exposeLink = _environment.IsDevelopment() ||
@@ -188,16 +219,12 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("definir-senha")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth-sensitive")]
     public async Task<IActionResult> SetPassword(SetPasswordRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.Senha))
         {
             return BadRequest(new { message = "Token e nova senha são obrigatórios." });
-        }
-
-        if (request.Senha.Trim().Length < 8)
-        {
-            return BadRequest(new { message = "A senha deve ter pelo menos 8 caracteres." });
         }
 
         var tokenHash = _tokenService.HashRefreshToken(request.Token.Trim());
@@ -214,6 +241,12 @@ public sealed class AuthController : ControllerBase
             return BadRequest(new { message = "Link inválido ou expirado." });
         }
 
+        var passwordError = _passwordPolicy.Validate(request.Senha, usuario.Nome, usuario.Email);
+        if (passwordError is not null)
+        {
+            return BadRequest(new { message = passwordError });
+        }
+
         usuario.SenhaHash = _passwordHasher.HashPassword(request.Senha.Trim());
         usuario.ConviteTokenHash = null;
         usuario.ConviteExpiraEm = null;
@@ -224,6 +257,13 @@ public sealed class AuthController : ControllerBase
         usuario.Ativo = true;
         usuario.DataAtualizacao = now;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _securityAudit.RecordAsync(
+            "SenhaAlterada",
+            usuario.TenantId,
+            usuario.Id.ToString(),
+            usuario.Nome,
+            usuario.Email,
+            cancellationToken);
 
         return Ok(new { message = "Senha definida com sucesso. Você já pode entrar no RentalHub." });
     }

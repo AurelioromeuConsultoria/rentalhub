@@ -1,6 +1,8 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -46,6 +48,8 @@ builder.Services.AddRentalHubInfrastructure(builder.Configuration);
 builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddScoped<OperationalNotificationService>();
+builder.Services.AddScoped<PasswordPolicyService>();
+builder.Services.AddScoped<SecurityAuditService>();
 builder.Services.AddHostedService<DatabaseInitializerHostedService>();
 builder.Services.AddHostedService<EmailNotificationDigestHostedService>();
 
@@ -71,6 +75,29 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth-sensitive", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"{GetRateLimitKey(context)}:{context.Request.Path}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+    options.AddPolicy("auth-login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetRateLimitKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 12,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 builder.Services
     .AddHealthChecks()
@@ -98,6 +125,7 @@ app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(webRootPath)
 });
+app.UseRateLimiter();
 app.UseAuthentication();
 app.Use(async (context, next) =>
 {
@@ -170,3 +198,14 @@ app.MapHealthChecks("/api/health", new HealthCheckOptions
 });
 
 app.Run();
+
+static string GetRateLimitKey(HttpContext context)
+{
+    var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        return forwardedFor.Split(',')[0].Trim();
+    }
+
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}

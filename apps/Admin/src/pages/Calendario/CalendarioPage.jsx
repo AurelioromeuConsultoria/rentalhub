@@ -37,6 +37,8 @@ const viewModes = [
   { value: 'day', label: 'Dia' },
 ];
 
+const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
 const emptyBlock = {
   imovelId: '',
   inicio: '',
@@ -68,11 +70,13 @@ function differenceInDays(start, end) {
 
 function formatDate(value) {
   if (!value) return '-';
+  if (value instanceof Date) return longDateFormatter.format(value);
   return longDateFormatter.format(parseDateOnly(value));
 }
 
 function monthLabel(date) {
-  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
+  const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function getVisibleRange(anchorDate, viewMode) {
@@ -106,6 +110,53 @@ function buildDays(anchorDate, viewMode) {
       weekday: dayFormatter.format(date).replace('.', ''),
       label: shortDateFormatter.format(date),
       isToday: key === toInputDate(new Date()),
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+    };
+  });
+}
+
+function buildCalendarCells(anchorDate, viewMode) {
+  if (viewMode === 'day') {
+    const date = parseDateOnly(toInputDate(anchorDate));
+    return [{
+      date,
+      key: toInputDate(date),
+      dayNumber: date.getDate(),
+      inRange: true,
+      isToday: toInputDate(date) === toInputDate(new Date()),
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+    }];
+  }
+
+  if (viewMode === 'week') {
+    const { start } = getVisibleRange(anchorDate, viewMode);
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = addDays(start, index);
+      return {
+        date,
+        key: toInputDate(date),
+        dayNumber: date.getDate(),
+        inRange: true,
+        isToday: toInputDate(date) === toInputDate(new Date()),
+        isWeekend: date.getDay() === 0 || date.getDay() === 6,
+      };
+    });
+  }
+
+  const firstDay = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+  const totalMonthDays = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0).getDate();
+  const leadingDays = firstDay.getDay();
+  const rows = Math.ceil((leadingDays + totalMonthDays) / 7);
+  const gridStart = addDays(firstDay, -leadingDays);
+
+  return Array.from({ length: rows * 7 }, (_, index) => {
+    const date = addDays(gridStart, index);
+    return {
+      date,
+      key: toInputDate(date),
+      dayNumber: date.getDate(),
+      inRange: date.getMonth() === anchorDate.getMonth(),
+      isToday: toInputDate(date) === toInputDate(new Date()),
       isWeekend: date.getDay() === 0 || date.getDay() === 6,
     };
   });
@@ -157,6 +208,12 @@ function getEventText(event) {
   return event.titulo || meta.label;
 }
 
+function getPeriodTitle(viewMode, anchorDate, visibleStart, visibleEnd) {
+  if (viewMode === 'month') return monthLabel(anchorDate);
+  if (viewMode === 'day') return formatDate(visibleStart);
+  return `${formatDate(visibleStart)} a ${formatDate(addDays(parseDateOnly(visibleEnd), -1))}`;
+}
+
 function getErrorMessage(error) {
   return getFriendlyErrorMessage(error);
 }
@@ -185,36 +242,6 @@ function getSelectionMessage(selection, conflicts) {
   };
 }
 
-function assignEventLanes(events, days) {
-  const rangeStart = parseDateOnly(days[0]?.key);
-  const rangeEnd = addDays(parseDateOnly(days.at(-1)?.key), 1);
-  const lanes = [];
-
-  return events
-    .map((event) => {
-      const eventStart = parseDateOnly(event.inicio) < rangeStart ? rangeStart : parseDateOnly(event.inicio);
-      const eventEnd = parseDateOnly(event.fim) > rangeEnd ? rangeEnd : parseDateOnly(event.fim);
-      return {
-        ...event,
-        startIndex: Math.max(0, differenceInDays(rangeStart, eventStart)),
-        endIndex: Math.max(1, differenceInDays(rangeStart, eventEnd)),
-      };
-    })
-    .filter((event) => event.endIndex > event.startIndex)
-    .sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex)
-    .map((event) => {
-      let laneIndex = lanes.findIndex((laneEnd) => event.startIndex >= laneEnd);
-      if (laneIndex === -1) {
-        laneIndex = lanes.length;
-        lanes.push(event.endIndex);
-      } else {
-        lanes[laneIndex] = event.endIndex;
-      }
-
-      return { ...event, lane: laneIndex + 1 };
-    });
-}
-
 export function CalendarioPage() {
   const navigate = useNavigate();
   const [anchorDate, setAnchorDate] = useState(() => new Date());
@@ -222,6 +249,7 @@ export function CalendarioPage() {
   const [events, setEvents] = useState([]);
   const [imoveis, setImoveis] = useState([]);
   const [selectedImovelId, setSelectedImovelId] = useState('');
+  const [selectedDay, setSelectedDay] = useState(() => toInputDate(new Date()));
   const [selection, setSelection] = useState({ imovelId: '', inicio: '', fim: '' });
   const [form, setForm] = useState(emptyBlock);
   const [loading, setLoading] = useState(true);
@@ -230,6 +258,7 @@ export function CalendarioPage() {
   const [success, setSuccess] = useState('');
 
   const days = useMemo(() => buildDays(anchorDate, viewMode), [anchorDate, viewMode]);
+  const calendarCells = useMemo(() => buildCalendarCells(anchorDate, viewMode), [anchorDate, viewMode]);
   const visibleStart = days[0]?.key || toInputDate(anchorDate);
   const visibleEnd = days.length > 0 ? toInputDate(addDays(parseDateOnly(days.at(-1).key), 1)) : toInputDate(addDays(anchorDate, 1));
 
@@ -242,20 +271,6 @@ export function CalendarioPage() {
     () => imoveis.find((imovel) => String(imovel.id) === String(selection.imovelId)),
     [imoveis, selection.imovelId],
   );
-
-  const eventsByProperty = useMemo(() => {
-    return visibleImoveis.map((imovel) => {
-      const propertyEvents = events.filter((event) => event.imovelId === imovel.id);
-      const laneEvents = assignEventLanes(propertyEvents, days);
-      const lanes = Math.max(1, ...laneEvents.map((event) => event.lane));
-
-      return {
-        imovel,
-        events: laneEvents,
-        lanes,
-      };
-    });
-  }, [days, events, visibleImoveis]);
 
   const selectedConflicts = useMemo(() => {
     if (!selection.imovelId || !selection.inicio || !selection.fim) return [];
@@ -289,6 +304,11 @@ export function CalendarioPage() {
       );
     });
   }, [events, imoveis, selection.fim, selection.inicio]);
+
+  const selectedDayEvents = useMemo(
+    () => events.filter((event) => eventTouchesDay(event, selectedDay)),
+    [events, selectedDay],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -346,6 +366,14 @@ export function CalendarioPage() {
 
   const goToToday = () => {
     setAnchorDate(new Date());
+    setSelectedDay(toInputDate(new Date()));
+  };
+
+  const changeViewMode = (mode) => {
+    setViewMode(mode);
+    if (mode !== 'month' && selectedDay) {
+      setAnchorDate(parseDateOnly(selectedDay));
+    }
   };
 
   const selectDay = (imovelId, dayKey) => {
@@ -367,6 +395,20 @@ export function CalendarioPage() {
 
       return next;
     });
+  };
+
+  const selectCalendarDay = (dayKey) => {
+    setSelectedDay(dayKey);
+
+    const fallbackImovelId = selectedImovelId || form.imovelId || visibleImoveis[0]?.id;
+    if (fallbackImovelId) {
+      selectDay(fallbackImovelId, dayKey);
+    }
+
+    if (viewMode !== 'day') {
+      setAnchorDate(parseDateOnly(dayKey));
+      setViewMode('day');
+    }
   };
 
   const fillBlockFromSelection = () => {
@@ -493,7 +535,7 @@ export function CalendarioPage() {
         <article className="calendar-panel calendar-board-panel">
           <div className="calendar-toolbar strong">
             <div>
-              <strong>{viewMode === 'month' ? monthLabel(anchorDate) : `${formatDate(visibleStart)} a ${formatDate(addDays(parseDateOnly(visibleEnd), -1))}`}</strong>
+              <strong>{getPeriodTitle(viewMode, anchorDate, visibleStart, visibleEnd)}</strong>
               <span>{visibleImoveis.length} imóveis · {events.length} eventos no período</span>
             </div>
 
@@ -504,7 +546,7 @@ export function CalendarioPage() {
                     className={viewMode === mode.value ? 'active' : ''}
                     key={mode.value}
                     type="button"
-                    onClick={() => setViewMode(mode.value)}
+                    onClick={() => changeViewMode(mode.value)}
                   >
                     {mode.label}
                   </button>
@@ -537,84 +579,96 @@ export function CalendarioPage() {
               description="Cadastre ou ative um imóvel para montar a agenda operacional."
             />
           ) : (
-            <div className="calendar-board" style={{ '--calendar-days': days.length }}>
-              <div className="calendar-board-header">
-                <div className="calendar-property-heading">Imóvel</div>
-                {days.map((day) => (
-                  <div className={`calendar-board-day${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}`} key={day.key}>
-                    <span>{day.weekday}</span>
-                    <strong>{day.dayNumber}</strong>
-                  </div>
-                ))}
-              </div>
-
-              {eventsByProperty.map(({ imovel, events: propertyEvents, lanes }) => (
-                <div
-                  className="calendar-property-row"
-                  key={imovel.id}
-                  style={{ '--event-lanes': lanes }}
-                >
-                  <div className="calendar-property-label">
-                    <strong>{imovel.nome}</strong>
-                    <span>{imovel.cidade || 'Sem cidade'}{imovel.estado ? ` · ${imovel.estado}` : ''}</span>
-                    <small>{propertyEvents.length} eventos</small>
-                  </div>
-
-                  {days.map((day) => {
-                    const selected =
-                      String(selection.imovelId) === String(imovel.id) &&
-                      selection.inicio &&
-                      parseDateOnly(selection.inicio) <= parseDateOnly(day.key) &&
-                      parseDateOnly(day.key) < parseDateOnly(selection.fim || toInputDate(addDays(parseDateOnly(selection.inicio), 1)));
-                    const occupied = propertyEvents.some((event) => eventTouchesDay(event, day.key));
-
-                    return (
-                      <button
-                        className={`calendar-slot${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}${occupied ? ' occupied' : ''}${selected ? ' selected' : ''}`}
-                        key={`${imovel.id}-${day.key}`}
-                        type="button"
-                        title={`${imovel.nome} · ${day.label}`}
-                        onClick={() => selectDay(imovel.id, day.key)}
-                      >
-                        <span>{occupied ? 'ocupado' : 'livre'}</span>
-                      </button>
-                    );
-                  })}
-
-                  {propertyEvents.length > 0 && (
-                    <div className="calendar-row-events">
-                      {propertyEvents.map((event) => {
-                        const meta = getEventMeta(event);
-                        const Icon = meta.icon;
-                        return (
-                          <div
-                            className={`calendar-board-event ${event.tipo}`}
-                            key={event.id}
-                            style={{
-                              gridColumn: `${event.startIndex + 1} / ${event.endIndex + 1}`,
-                              gridRow: event.lane,
-                            }}
-                            title={`${event.imovelNome} · ${getEventText(event)}`}
-                          >
-                            <Icon size={13} />
-                            <span>{getEventText(event)}</span>
-                            {event.id.startsWith('bloqueio-') && (
-                              <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+            <div className={`calendar-readable-board ${viewMode}`}>
+              {viewMode === 'month' && (
+                <div className="calendar-weekdays">
+                  {weekDays.map((day) => (
+                    <span key={day}>{day}</span>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              <div className="calendar-month-grid">
+                {calendarCells.map((day) => {
+                  const dayEvents = events.filter((event) => eventTouchesDay(event, day.key));
+                  const visibleDayEvents = viewMode === 'month' ? dayEvents.slice(0, 3) : dayEvents;
+                  const selected =
+                    selection.inicio &&
+                    parseDateOnly(selection.inicio) <= parseDateOnly(day.key) &&
+                    parseDateOnly(day.key) < parseDateOnly(selection.fim || toInputDate(addDays(parseDateOnly(selection.inicio), 1)));
+
+                  return (
+                    <button
+                      className={`calendar-day-card${day.inRange ? '' : ' muted'}${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}${selected ? ' selected' : ''}`}
+                      data-calendar-day={day.key}
+                      key={day.key}
+                      type="button"
+                      onClick={() => selectCalendarDay(day.key)}
+                    >
+                      <div className="calendar-day-card-header">
+                        <strong>{day.dayNumber}</strong>
+                        {viewMode !== 'month' && <span>{dayFormatter.format(day.date).replace('.', '')}</span>}
+                      </div>
+
+                      <div className="calendar-cell-events">
+                        {visibleDayEvents.map((event) => {
+                          const meta = getEventMeta(event);
+                          const Icon = meta.icon;
+                          return (
+                            <span className={`calendar-cell-event ${event.tipo}`} key={event.id} title={`${event.imovelNome} · ${getEventText(event)}`}>
+                              {viewMode !== 'month' && <Icon size={15} />}
+                              <span>
+                                <strong>{getEventText(event)}</strong>
+                                {viewMode !== 'month' && <em>{event.imovelNome}</em>}
+                              </span>
+                            </span>
+                          );
+                        })}
+                        {viewMode === 'month' && dayEvents.length > visibleDayEvents.length && (
+                          <span className="calendar-cell-more">+{dayEvents.length - visibleDayEvents.length} eventos</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </article>
 
         <aside className="calendar-side-panel">
+          <article className="calendar-day-agenda">
+            <div>
+              <strong>Detalhe do dia</strong>
+              <span>{formatDate(selectedDay)} · {selectedDayEvents.length} eventos</span>
+            </div>
+
+            {selectedDayEvents.length > 0 ? (
+              <div className="calendar-day-agenda-list">
+                {selectedDayEvents.map((event) => {
+                  const meta = getEventMeta(event);
+                  const Icon = meta.icon;
+                  return (
+                    <article className={`calendar-agenda-event ${event.tipo}`} key={event.id}>
+                      <Icon size={16} />
+                      <div>
+                        <strong>{getEventText(event)}</strong>
+                        <span>{event.imovelNome} · {formatDate(event.inicio)} a {formatDate(event.fim)}</span>
+                      </div>
+                      {event.id.startsWith('bloqueio-') && (
+                        <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p>Dia livre no período filtrado. Clique em outro dia ou selecione um intervalo para criar reserva/bloqueio.</p>
+            )}
+          </article>
+
           <article className={`calendar-selection-card ${selectionStatus.tone}`}>
             <div className="form-title">
               {selectionStatus.tone === 'danger' ? <AlertTriangle size={18} /> : <CalendarCheck size={18} />}

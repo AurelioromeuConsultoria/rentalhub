@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RentalHub.Application.Common;
 using RentalHub.Application.Services;
 using RentalHub.Application.Security;
+using RentalHub.API.Services;
 using RentalHub.Domain.Entities;
 using RentalHub.Domain.Enums;
 using RentalHub.Infrastructure.Data;
@@ -21,6 +22,8 @@ public sealed class UsuariosController : ControllerBase
     private readonly ITokenService _tokenService;
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
+    private readonly PasswordPolicyService _passwordPolicy;
+    private readonly SecurityAuditService _securityAudit;
 
     public UsuariosController(
         RentalHubDbContext dbContext,
@@ -28,7 +31,9 @@ public sealed class UsuariosController : ControllerBase
         ICurrentUserContext currentUserContext,
         ITokenService tokenService,
         IEmailSender emailSender,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        PasswordPolicyService passwordPolicy,
+        SecurityAuditService securityAudit)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
@@ -36,6 +41,8 @@ public sealed class UsuariosController : ControllerBase
         _tokenService = tokenService;
         _emailSender = emailSender;
         _configuration = configuration;
+        _passwordPolicy = passwordPolicy;
+        _securityAudit = securityAudit;
     }
 
     [HttpGet]
@@ -156,6 +163,13 @@ public sealed class UsuariosController : ControllerBase
         if (conviteUrl is not null)
         {
             await SendInviteEmailAsync(usuario, conviteUrl, cancellationToken);
+            await _securityAudit.RecordAsync(
+                "ConviteGerado",
+                usuario.TenantId,
+                usuario.Id.ToString(),
+                usuario.Nome,
+                usuario.Email,
+                cancellationToken);
         }
 
         return CreatedAtAction(nameof(GetById), new { id = usuario.Id }, ToResponse(usuario, conviteUrl));
@@ -186,6 +200,13 @@ public sealed class UsuariosController : ControllerBase
         usuario.DataAtualizacao = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
         await SendInviteEmailAsync(usuario, conviteUrl, cancellationToken);
+        await _securityAudit.RecordAsync(
+            "ConviteGerado",
+            usuario.TenantId,
+            usuario.Id.ToString(),
+            usuario.Nome,
+            usuario.Email,
+            cancellationToken);
 
         return Ok(new UsuarioAccessLinkResponse(conviteUrl, usuario.ConviteExpiraEm!.Value));
     }
@@ -226,9 +247,11 @@ public sealed class UsuariosController : ControllerBase
         usuario.Ativo = request.Ativo;
         usuario.DataAtualizacao = DateTime.UtcNow;
 
-        if (!string.IsNullOrWhiteSpace(request.Senha))
+        var newPassword = request.Senha?.Trim();
+        var passwordChanged = !string.IsNullOrWhiteSpace(newPassword);
+        if (passwordChanged)
         {
-            usuario.SenhaHash = _passwordHasher.HashPassword(request.Senha.Trim());
+            usuario.SenhaHash = _passwordHasher.HashPassword(newPassword!);
             usuario.RefreshTokenHash = null;
             usuario.RefreshTokenExpiraEm = null;
         }
@@ -243,6 +266,17 @@ public sealed class UsuariosController : ControllerBase
         }
 
         await LoadNavigation(usuario, cancellationToken);
+        if (passwordChanged)
+        {
+            await _securityAudit.RecordAsync(
+                "SenhaAlterada",
+                usuario.TenantId,
+                usuario.Id.ToString(),
+                usuario.Nome,
+                usuario.Email,
+                cancellationToken);
+        }
+
         return Ok(ToResponse(usuario));
     }
 
@@ -294,9 +328,13 @@ public sealed class UsuariosController : ControllerBase
             return BadRequest(new { message = "Senha é obrigatória para novo usuário." });
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Senha) && request.Senha.Trim().Length < 8)
+        if (!string.IsNullOrWhiteSpace(request.Senha))
         {
-            return BadRequest(new { message = "A senha deve ter pelo menos 8 caracteres." });
+            var passwordError = _passwordPolicy.Validate(request.Senha, request.Nome, request.Email);
+            if (passwordError is not null)
+            {
+                return BadRequest(new { message = passwordError });
+            }
         }
 
         if (request.PerfilAcessoId.HasValue)
