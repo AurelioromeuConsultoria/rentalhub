@@ -83,26 +83,49 @@ public sealed class FinanceiroController : ControllerBase
             return validationError;
         }
 
-        var movimentacao = new MovimentacaoFinanceira
-        {
-            TenantId = _dbContext.CurrentTenantId,
-            Tipo = request.Tipo,
-            CategoriaFinanceiraId = request.CategoriaFinanceiraId,
-            ImovelId = request.ImovelId,
-            ReservaId = request.ReservaId,
-            ProprietarioId = request.ProprietarioId,
-            Data = NormalizeDate(request.Data),
-            Descricao = request.Descricao.Trim(),
-            Valor = request.Valor,
-            Observacoes = request.Observacoes?.Trim(),
-            DataCriacao = DateTime.UtcNow
-        };
+        var dataBase = NormalizeDate(request.Data);
+        var ocorrencias = BuildOccurrenceDates(
+            dataBase,
+            request.Recorrente,
+            request.RecorrenciaFrequencia,
+            request.RecorrenciaIntervalo,
+            request.RecorrenciaQuantidadeParcelas,
+            request.RecorrenciaFim);
 
-        _dbContext.MovimentacoesFinanceiras.Add(movimentacao);
+        var grupoRecorrenciaId = ocorrencias.Count > 1 ? Guid.NewGuid().ToString("N") : null;
+        int? totalParcelas = ocorrencias.Count > 1 ? ocorrencias.Count : null;
+        var movimentacoes = ocorrencias
+            .Select((dataOcorrencia, index) => new MovimentacaoFinanceira
+            {
+                TenantId = _dbContext.CurrentTenantId,
+                Tipo = request.Tipo,
+                CategoriaFinanceiraId = request.CategoriaFinanceiraId,
+                ImovelId = request.ImovelId,
+                ReservaId = request.ReservaId,
+                ProprietarioId = request.ProprietarioId,
+                Data = dataOcorrencia,
+                Descricao = request.Descricao.Trim(),
+                Valor = request.Valor,
+                Observacoes = request.Observacoes?.Trim(),
+                GrupoRecorrenciaId = grupoRecorrenciaId,
+                ParcelaAtual = totalParcelas.HasValue ? index + 1 : null,
+                TotalParcelas = totalParcelas,
+                RecorrenciaFrequencia = totalParcelas.HasValue ? request.RecorrenciaFrequencia : null,
+                RecorrenciaIntervalo = totalParcelas.HasValue ? request.RecorrenciaIntervalo : null,
+                RecorrenciaFim = totalParcelas.HasValue
+                    ? (request.RecorrenciaFim.HasValue ? NormalizeDate(request.RecorrenciaFim.Value) : ocorrencias[^1])
+                    : null,
+                DataCriacao = DateTime.UtcNow
+            })
+            .ToList();
+
+        _dbContext.MovimentacoesFinanceiras.AddRange(movimentacoes);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var created = await BaseQuery().FirstAsync(m => m.Id == movimentacao.Id, cancellationToken);
-        return CreatedAtAction(nameof(GetMovimentacaoById), new { id = movimentacao.Id }, ToResponse(created));
+        var movimentacao = await BaseQuery()
+            .FirstAsync(m => m.Id == movimentacoes[0].Id, cancellationToken);
+
+        return CreatedAtAction(nameof(GetMovimentacaoById), new { id = movimentacao.Id }, ToResponse(movimentacao));
     }
 
     [HttpPut("movimentacoes/{id:int}")]
@@ -150,6 +173,32 @@ public sealed class FinanceiroController : ControllerBase
         }
 
         _dbContext.MovimentacoesFinanceiras.Remove(movimentacao);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
+    }
+
+    [HttpDelete("movimentacoes/{id:int}/serie")]
+    public async Task<IActionResult> DeleteSerieMovimentacao(int id, CancellationToken cancellationToken)
+    {
+        var movimentacao = await _dbContext.MovimentacoesFinanceiras.FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        if (movimentacao is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(movimentacao.GrupoRecorrenciaId))
+        {
+            _dbContext.MovimentacoesFinanceiras.Remove(movimentacao);
+        }
+        else
+        {
+            var serie = await _dbContext.MovimentacoesFinanceiras
+                .Where(m => m.GrupoRecorrenciaId == movimentacao.GrupoRecorrenciaId)
+                .ToListAsync(cancellationToken);
+            _dbContext.MovimentacoesFinanceiras.RemoveRange(serie);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return NoContent();
@@ -297,6 +346,42 @@ public sealed class FinanceiroController : ControllerBase
             return BadRequest(new { message = "Valor da movimentação deve ser maior que zero." });
         }
 
+        if (request.Recorrente && request.Tipo != MovimentacaoFinanceiraTipo.Despesa)
+        {
+            return BadRequest(new { message = "Recorrência está disponível apenas para despesas." });
+        }
+
+        if (request.Recorrente)
+        {
+            if (!request.RecorrenciaFrequencia.HasValue)
+            {
+                return BadRequest(new { message = "Selecione a frequência da recorrência." });
+            }
+
+            if (!request.RecorrenciaIntervalo.HasValue || request.RecorrenciaIntervalo.Value < 1)
+            {
+                return BadRequest(new { message = "Intervalo da recorrência deve ser de pelo menos 1 período." });
+            }
+
+            var hasParcelas = request.RecorrenciaQuantidadeParcelas.HasValue;
+            var hasFim = request.RecorrenciaFim.HasValue;
+
+            if (hasParcelas == hasFim)
+            {
+                return BadRequest(new { message = "Escolha quantidade de parcelas ou data final para encerrar a recorrência." });
+            }
+
+            if (hasParcelas && request.RecorrenciaQuantidadeParcelas!.Value < 2)
+            {
+                return BadRequest(new { message = "Informe pelo menos 2 parcelas para a recorrência." });
+            }
+
+            if (hasFim && NormalizeDate(request.RecorrenciaFim!.Value) <= NormalizeDate(request.Data))
+            {
+                return BadRequest(new { message = "A data final da recorrência deve ser posterior à data inicial." });
+            }
+        }
+
         var categoria = await _dbContext.CategoriasFinanceiras
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.CategoriaFinanceiraId && c.Ativo, cancellationToken);
@@ -337,6 +422,58 @@ public sealed class FinanceiroController : ControllerBase
         return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
     }
 
+    private static List<DateTime> BuildOccurrenceDates(
+        DateTime dataBase,
+        bool recorrente,
+        MovimentacaoRecorrenciaFrequencia? frequencia,
+        int? intervalo,
+        int? quantidadeParcelas,
+        DateTime? fim)
+    {
+        if (!recorrente)
+        {
+            return [dataBase];
+        }
+
+        var dates = new List<DateTime> { dataBase };
+        var step = Math.Max(1, intervalo ?? 1);
+
+        if (quantidadeParcelas.HasValue)
+        {
+            while (dates.Count < quantidadeParcelas.Value)
+            {
+                dates.Add(AdvanceDate(dates[^1], frequencia!.Value, step));
+            }
+
+            return dates;
+        }
+
+        var endDate = NormalizeDate(fim!.Value);
+        var current = dataBase;
+        while (true)
+        {
+            current = AdvanceDate(current, frequencia!.Value, step);
+            if (current > endDate)
+            {
+                break;
+            }
+
+            dates.Add(current);
+        }
+
+        return dates;
+    }
+
+    private static DateTime AdvanceDate(DateTime baseDate, MovimentacaoRecorrenciaFrequencia frequencia, int intervalo)
+    {
+        return frequencia switch
+        {
+            MovimentacaoRecorrenciaFrequencia.Semanal => baseDate.AddDays(7 * intervalo),
+            MovimentacaoRecorrenciaFrequencia.Anual => baseDate.AddYears(intervalo),
+            _ => baseDate.AddMonths(intervalo)
+        };
+    }
+
     private static MovimentacaoFinanceiraResponse ToResponse(MovimentacaoFinanceira movimentacao)
     {
         return new MovimentacaoFinanceiraResponse(
@@ -353,6 +490,12 @@ public sealed class FinanceiroController : ControllerBase
             movimentacao.Descricao,
             movimentacao.Valor,
             movimentacao.Observacoes,
+            movimentacao.GrupoRecorrenciaId,
+            movimentacao.ParcelaAtual,
+            movimentacao.TotalParcelas,
+            movimentacao.RecorrenciaFrequencia,
+            movimentacao.RecorrenciaIntervalo,
+            movimentacao.RecorrenciaFim,
             movimentacao.DataCriacao,
             movimentacao.DataAtualizacao);
     }
@@ -367,7 +510,12 @@ public sealed record MovimentacaoFinanceiraRequest(
     DateTime Data,
     string Descricao,
     decimal Valor,
-    string? Observacoes);
+    string? Observacoes,
+    bool Recorrente = false,
+    MovimentacaoRecorrenciaFrequencia? RecorrenciaFrequencia = null,
+    int? RecorrenciaIntervalo = null,
+    int? RecorrenciaQuantidadeParcelas = null,
+    DateTime? RecorrenciaFim = null);
 
 public sealed record MovimentacaoFinanceiraResponse(
     int Id,
@@ -383,6 +531,12 @@ public sealed record MovimentacaoFinanceiraResponse(
     string Descricao,
     decimal Valor,
     string? Observacoes,
+    string? GrupoRecorrenciaId,
+    int? ParcelaAtual,
+    int? TotalParcelas,
+    MovimentacaoRecorrenciaFrequencia? RecorrenciaFrequencia,
+    int? RecorrenciaIntervalo,
+    DateTime? RecorrenciaFim,
     DateTime DataCriacao,
     DateTime? DataAtualizacao);
 

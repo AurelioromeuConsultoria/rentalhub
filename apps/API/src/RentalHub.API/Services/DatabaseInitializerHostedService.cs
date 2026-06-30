@@ -475,6 +475,12 @@ public sealed class DatabaseInitializerHostedService : IHostedService
                 "Descricao" character varying(220) NOT NULL,
                 "Valor" numeric(12,2) NOT NULL,
                 "Observacoes" character varying(1000),
+                "GrupoRecorrenciaId" character varying(64),
+                "ParcelaAtual" integer,
+                "TotalParcelas" integer,
+                "RecorrenciaFrequencia" integer,
+                "RecorrenciaIntervalo" integer,
+                "RecorrenciaFim" timestamp with time zone,
                 "DataCriacao" timestamp with time zone NOT NULL,
                 "DataAtualizacao" timestamp with time zone,
                 CONSTRAINT "PK_MovimentacoesFinanceiras" PRIMARY KEY ("Id"),
@@ -488,10 +494,17 @@ public sealed class DatabaseInitializerHostedService : IHostedService
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_Data" ON "MovimentacoesFinanceiras" ("TenantId", "Data");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_Tipo_Data" ON "MovimentacoesFinanceiras" ("TenantId", "Tipo", "Data");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_CategoriaFinanceiraId" ON "MovimentacoesFinanceiras" ("TenantId", "CategoriaFinanceiraId");
+            CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_GrupoRecorrenciaId" ON "MovimentacoesFinanceiras" ("TenantId", "GrupoRecorrenciaId");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_CategoriaFinanceiraId" ON "MovimentacoesFinanceiras" ("CategoriaFinanceiraId");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_ImovelId" ON "MovimentacoesFinanceiras" ("ImovelId");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_ProprietarioId" ON "MovimentacoesFinanceiras" ("ProprietarioId");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_ReservaId" ON "MovimentacoesFinanceiras" ("ReservaId");
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "GrupoRecorrenciaId" character varying(64);
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "ParcelaAtual" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "TotalParcelas" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaFrequencia" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaIntervalo" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaFim" timestamp with time zone;
 
             INSERT INTO "CategoriasFinanceiras" ("TenantId", "Nome", "Tipo", "Ativo", "DataCriacao")
             VALUES

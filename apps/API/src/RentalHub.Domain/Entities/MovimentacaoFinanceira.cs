@@ -20,6 +20,12 @@ public sealed class MovimentacaoFinanceira : ITenantEntity
     public string Descricao { get; set; } = string.Empty;
     public decimal Valor { get; set; }
     public string? Observacoes { get; set; }
+    public string? GrupoRecorrenciaId { get; set; }
+    public int? ParcelaAtual { get; set; }
+    public int? TotalParcelas { get; set; }
+    public MovimentacaoRecorrenciaFrequencia? RecorrenciaFrequencia { get; set; }
+    public int? RecorrenciaIntervalo { get; set; }
+    public DateTime? RecorrenciaFim { get; set; }
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
     public DateTime? DataAtualizacao { get; set; }
 }

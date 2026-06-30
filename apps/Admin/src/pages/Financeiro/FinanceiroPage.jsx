@@ -3,6 +3,7 @@ import {
   ArrowUpCircle,
   Banknote,
   Edit3,
+  CalendarSync,
   Plus,
   RotateCcw,
   Save,
@@ -22,6 +23,17 @@ const tipoOptions = [
   { value: 2, label: 'Despesa' },
 ];
 
+const recorrenciaOptions = [
+  { value: 1, label: 'Semanal' },
+  { value: 2, label: 'Mensal' },
+  { value: 3, label: 'Anual' },
+];
+
+const recorrenciaFimOptions = [
+  { value: 'parcelas', label: 'Número de parcelas' },
+  { value: 'data', label: 'Data final' },
+];
+
 const currentMonthStart = new Date();
 currentMonthStart.setDate(1);
 
@@ -35,6 +47,12 @@ const emptyMovimentacao = {
   descricao: '',
   valor: '',
   observacoes: '',
+  recorrente: false,
+  recorrenciaFrequencia: 2,
+  recorrenciaIntervalo: '1',
+  recorrenciaQuantidadeParcelas: '12',
+  recorrenciaFim: '',
+  recorrenciaFimModo: 'parcelas',
 };
 
 const emptyCategoria = {
@@ -123,6 +141,15 @@ function TextAreaField({ label, value, onChange }) {
 function TypePill({ tipo }) {
   const isReceita = Number(tipo) === 1;
   return <span className={`status-pill ${isReceita ? 'active' : 'inactive'}`}>{labelFor(tipoOptions, tipo)}</span>;
+}
+
+function recurrenceLabel(movimentacao) {
+  if (!movimentacao.grupoRecorrenciaId) return '';
+  const frequencia = labelFor(recorrenciaOptions, movimentacao.recorrenciaFrequencia).toLowerCase();
+  const parcela = movimentacao.parcelaAtual && movimentacao.totalParcelas
+    ? `${movimentacao.parcelaAtual}/${movimentacao.totalParcelas}`
+    : 'recorrente';
+  return `${parcela} · ${frequencia}`;
 }
 
 export function FinanceiroPage() {
@@ -244,6 +271,12 @@ export function FinanceiroPage() {
       descricao: movimentacao.descricao || '',
       valor: movimentacao.valor || '',
       observacoes: movimentacao.observacoes || '',
+      recorrente: Boolean(movimentacao.grupoRecorrenciaId),
+      recorrenciaFrequencia: movimentacao.recorrenciaFrequencia || 2,
+      recorrenciaIntervalo: String(movimentacao.recorrenciaIntervalo || 1),
+      recorrenciaQuantidadeParcelas: String(movimentacao.totalParcelas || 12),
+      recorrenciaFim: dateOnly(movimentacao.recorrenciaFim),
+      recorrenciaFimModo: movimentacao.recorrenciaFim ? 'data' : 'parcelas',
     });
   };
 
@@ -281,6 +314,17 @@ export function FinanceiroPage() {
       descricao: form.descricao.trim(),
       valor: Number(form.valor),
       observacoes: form.observacoes?.trim() || '',
+      recorrente: !editingId && Number(form.tipo) === 2 && Boolean(form.recorrente),
+      recorrenciaFrequencia: !editingId && Number(form.tipo) === 2 && form.recorrente ? Number(form.recorrenciaFrequencia) : null,
+      recorrenciaIntervalo: !editingId && Number(form.tipo) === 2 && form.recorrente ? Number(form.recorrenciaIntervalo || 1) : null,
+      recorrenciaQuantidadeParcelas:
+        !editingId && Number(form.tipo) === 2 && form.recorrente && form.recorrenciaFimModo === 'parcelas'
+          ? Number(form.recorrenciaQuantidadeParcelas || 0)
+          : null,
+      recorrenciaFim:
+        !editingId && Number(form.tipo) === 2 && form.recorrente && form.recorrenciaFimModo === 'data'
+          ? form.recorrenciaFim
+          : null,
     };
 
     try {
@@ -304,7 +348,11 @@ export function FinanceiroPage() {
 
       startCreate();
       setFilters(visibleFilters);
-      setSuccess(`Movimentação ${editingId ? 'atualizada' : 'salva'} para ${formatDate(savedDate)}.`);
+      setSuccess(
+        payload.recorrente
+          ? `Despesa recorrente criada a partir de ${formatDate(savedDate)}.`
+          : `Movimentação ${editingId ? 'atualizada' : 'salva'} para ${formatDate(savedDate)}.`,
+      );
       await load({
         inicio: visibleFilters.inicio,
         fim: visibleFilters.fim,
@@ -356,6 +404,27 @@ export function FinanceiroPage() {
     try {
       await financeiroApi.deleteMovimentacao(movimentacao.id);
       setSuccess('Movimentação excluída do fluxo de caixa.');
+      await load();
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+    }
+  };
+
+  const deleteSerieMovimentacao = async (movimentacao) => {
+    const confirmed = confirmAction(
+      'Excluir toda a recorrência?',
+      `${movimentacao.descricao} e todas as demais parcelas dessa série serão removidas do fluxo de caixa.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    try {
+      await financeiroApi.deleteSerieMovimentacao(movimentacao.id);
+      setSuccess('Série recorrente excluída do fluxo de caixa.');
       await load();
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
@@ -497,7 +566,7 @@ export function FinanceiroPage() {
                       <td>{formatDate(movimentacao.data)}</td>
                       <td>
                         <strong>{movimentacao.descricao}</strong>
-                        <small>{movimentacao.observacoes || 'Sem observações'}</small>
+                        <small>{recurrenceLabel(movimentacao) || movimentacao.observacoes || 'Sem observações'}</small>
                       </td>
                       <td>{movimentacao.categoriaNome}</td>
                       <td>
@@ -512,6 +581,11 @@ export function FinanceiroPage() {
                         <button type="button" aria-label="Editar" onClick={() => startEdit(movimentacao)}>
                           <Edit3 size={16} />
                         </button>
+                        {movimentacao.grupoRecorrenciaId && (
+                          <button type="button" aria-label="Excluir recorrência" onClick={() => deleteSerieMovimentacao(movimentacao)}>
+                            <CalendarSync size={16} />
+                          </button>
+                        )}
                         <button type="button" aria-label="Excluir" onClick={() => deleteMovimentacao(movimentacao)}>
                           <Trash2 size={16} />
                         </button>
@@ -604,6 +678,75 @@ export function FinanceiroPage() {
                 ))}
               </SelectField>
               <TextAreaField label="Observações" value={form.observacoes} onChange={(observacoes) => setForm((current) => ({ ...current, observacoes }))} />
+              {Number(form.tipo) === 2 && !editingId && (
+                <>
+                  <label className="checkbox-field span-2">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.recorrente)}
+                      onChange={(event) => setForm((current) => ({ ...current, recorrente: event.target.checked }))}
+                    />
+                    <span>Despesa recorrente</span>
+                  </label>
+
+                  {form.recorrente && (
+                    <>
+                      <SelectField
+                        label="Frequência"
+                        value={form.recorrenciaFrequencia}
+                        onChange={(recorrenciaFrequencia) => setForm((current) => ({ ...current, recorrenciaFrequencia: Number(recorrenciaFrequencia) }))}
+                        required
+                      >
+                        {recorrenciaOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </SelectField>
+                      <TextField
+                        label="Repetir a cada"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={form.recorrenciaIntervalo}
+                        onChange={(recorrenciaIntervalo) => setForm((current) => ({ ...current, recorrenciaIntervalo }))}
+                        required
+                      />
+                      <SelectField
+                        label="Encerrar por"
+                        value={form.recorrenciaFimModo}
+                        onChange={(recorrenciaFimModo) => setForm((current) => ({ ...current, recorrenciaFimModo }))}
+                        required
+                      >
+                        {recorrenciaFimOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </SelectField>
+                      {form.recorrenciaFimModo === 'parcelas' ? (
+                        <TextField
+                          label="Parcelas"
+                          type="number"
+                          min="2"
+                          step="1"
+                          value={form.recorrenciaQuantidadeParcelas}
+                          onChange={(recorrenciaQuantidadeParcelas) => setForm((current) => ({ ...current, recorrenciaQuantidadeParcelas }))}
+                          required
+                        />
+                      ) : (
+                        <TextField
+                          label="Data final"
+                          type="date"
+                          value={form.recorrenciaFim}
+                          onChange={(recorrenciaFim) => setForm((current) => ({ ...current, recorrenciaFim }))}
+                          required
+                        />
+                      )}
+                    </>
+                  )}
+                </>
+              )}
             </div>
             <button className="primary-action full" type="submit" disabled={saving}>
               <Save size={18} />

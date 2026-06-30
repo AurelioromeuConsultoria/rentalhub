@@ -510,10 +510,14 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.Descricao).IsRequired().HasMaxLength(220);
             entity.Property(e => e.Valor).HasPrecision(12, 2).IsRequired();
             entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.GrupoRecorrenciaId).HasMaxLength(64);
+            entity.Property(e => e.RecorrenciaFrequencia);
+            entity.Property(e => e.RecorrenciaFim);
             entity.Property(e => e.DataCriacao).IsRequired();
             entity.HasIndex(e => new { e.TenantId, e.Data });
             entity.HasIndex(e => new { e.TenantId, e.Tipo, e.Data });
             entity.HasIndex(e => new { e.TenantId, e.CategoriaFinanceiraId });
+            entity.HasIndex(e => new { e.TenantId, e.GrupoRecorrenciaId });
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.CategoriaFinanceira)
                 .WithMany(c => c.Movimentacoes)

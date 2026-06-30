@@ -14,5 +14,6 @@ export const financeiroApi = {
   createMovimentacao: (payload) => api.post('/financeiro/movimentacoes', payload),
   updateMovimentacao: (id, payload) => api.put(`/financeiro/movimentacoes/${id}`, payload),
   deleteMovimentacao: (id) => api.delete(`/financeiro/movimentacoes/${id}`),
+  deleteSerieMovimentacao: (id) => api.delete(`/financeiro/movimentacoes/${id}/serie`),
   fluxoCaixa: (params = {}) => api.get('/financeiro/fluxo-caixa', { params }),
 };
