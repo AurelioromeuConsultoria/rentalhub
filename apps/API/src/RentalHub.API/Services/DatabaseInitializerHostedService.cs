@@ -491,6 +491,12 @@ public sealed class DatabaseInitializerHostedService : IHostedService
                 CONSTRAINT "FK_MovimentacoesFinanceiras_Tenants_TenantId" FOREIGN KEY ("TenantId") REFERENCES "Tenants" ("Id") ON DELETE RESTRICT
             );
 
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "GrupoRecorrenciaId" character varying(64);
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "ParcelaAtual" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "TotalParcelas" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaFrequencia" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaIntervalo" integer;
+            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaFim" timestamp with time zone;
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_Data" ON "MovimentacoesFinanceiras" ("TenantId", "Data");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_Tipo_Data" ON "MovimentacoesFinanceiras" ("TenantId", "Tipo", "Data");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_TenantId_CategoriaFinanceiraId" ON "MovimentacoesFinanceiras" ("TenantId", "CategoriaFinanceiraId");
@@ -499,12 +505,6 @@ public sealed class DatabaseInitializerHostedService : IHostedService
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_ImovelId" ON "MovimentacoesFinanceiras" ("ImovelId");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_ProprietarioId" ON "MovimentacoesFinanceiras" ("ProprietarioId");
             CREATE INDEX IF NOT EXISTS "IX_MovimentacoesFinanceiras_ReservaId" ON "MovimentacoesFinanceiras" ("ReservaId");
-            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "GrupoRecorrenciaId" character varying(64);
-            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "ParcelaAtual" integer;
-            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "TotalParcelas" integer;
-            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaFrequencia" integer;
-            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaIntervalo" integer;
-            ALTER TABLE "MovimentacoesFinanceiras" ADD COLUMN IF NOT EXISTS "RecorrenciaFim" timestamp with time zone;
 
             INSERT INTO "CategoriasFinanceiras" ("TenantId", "Nome", "Tipo", "Ativo", "DataCriacao")
             VALUES

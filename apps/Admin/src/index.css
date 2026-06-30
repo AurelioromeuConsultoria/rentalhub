@@ -757,7 +757,108 @@ button:disabled {
 }
 
 .tenant-popover {
-  width: min(340px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
+}
+
+.support-access-button {
+  min-width: 154px;
+}
+
+.support-panel {
+  display: grid;
+  gap: 12px;
+  padding: 4px 6px 6px;
+}
+
+.support-panel .form-field > span {
+  font-size: 0.76rem;
+}
+
+.support-panel > button {
+  width: 100%;
+}
+
+.support-panel-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(217, 137, 11, 0.28);
+  border-radius: 12px;
+  background: var(--warning-background);
+  padding: 12px;
+}
+
+.support-panel-card strong {
+  font-size: 0.92rem;
+}
+
+.support-panel-card span,
+.support-panel-card small {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+
+.support-alert {
+  margin: 0;
+}
+
+.support-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 24px 0;
+  border: 1px solid rgba(217, 137, 11, 0.34);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(217, 137, 11, 0.16), rgba(217, 137, 11, 0.08));
+  padding: 14px 16px;
+}
+
+.support-mode-banner-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.support-mode-banner-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warning);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.support-mode-banner strong {
+  font-size: 1rem;
+}
+
+.support-mode-banner span,
+.support-mode-banner small {
+  color: var(--muted-foreground);
+}
+
+.support-mode-banner-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.support-mode-banner-meta button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(217, 137, 11, 0.34);
+  border-radius: 999px;
+  background: rgba(217, 137, 11, 0.14);
+  color: var(--warning);
+  font-weight: 800;
+  padding: 0 14px;
+}
+
+.support-mode-banner-meta button:hover {
+  background: rgba(217, 137, 11, 0.2);
 }
 
 .icon-button,

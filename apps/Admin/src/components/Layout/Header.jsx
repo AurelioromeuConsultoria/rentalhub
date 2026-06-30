@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Moon, RefreshCw, Search, Settings, Sun } from 'lucide-react';
+import { Bell, ChevronDown, Moon, RefreshCw, Search, Settings, ShieldAlert, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { tenantsApi } from '@/api/administracao';
@@ -10,7 +10,10 @@ import {
   SELECTED_TENANT_SLUG_KEY,
   SUPPORT_ACCESS_EXPIRES_KEY,
   SUPPORT_ACCESS_REASON_KEY,
+  SUPPORT_ACCESS_TENANT_NAME_KEY,
   SUPPORT_ACCESS_TOKEN_KEY,
+  clearSupportAccessStorage,
+  readSupportAccessState,
 } from '@/lib/authStorage';
 import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
 import { useTheme } from '@/context/ThemeContext';
@@ -44,6 +47,14 @@ const notificationTypeLabels = {
   manutencao: 'Manutenção',
   repasse: 'Repasse',
 };
+
+const supportReasonOptions = [
+  { value: 'cliente', label: 'Solicitação do cliente' },
+  { value: 'incidente', label: 'Incidente em produção' },
+  { value: 'implantacao', label: 'Implantação ou onboarding' },
+  { value: 'financeiro', label: 'Conferência financeira ou repasse' },
+  { value: 'qa', label: 'Validação operacional assistida' },
+];
 
 function getBreadcrumbs(pathname) {
   const segments = pathname.split('/').filter(Boolean);
@@ -98,7 +109,13 @@ export function Header() {
   const [showTenants, setShowTenants] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState(() => localStorage.getItem(SELECTED_TENANT_ID_KEY));
   const [supportReason, setSupportReason] = useState(() => localStorage.getItem(SUPPORT_ACCESS_REASON_KEY) || '');
+  const [supportExpiresAt, setSupportExpiresAt] = useState(() => localStorage.getItem(SUPPORT_ACCESS_EXPIRES_KEY) || '');
+  const [supportTenantName, setSupportTenantName] = useState(() => localStorage.getItem(SUPPORT_ACCESS_TENANT_NAME_KEY) || '');
   const [tenantSwitching, setTenantSwitching] = useState(false);
+  const [supportCategory, setSupportCategory] = useState(supportReasonOptions[0].value);
+  const [supportDetails, setSupportDetails] = useState('');
+  const [supportTargetTenantId, setSupportTargetTenantId] = useState('');
+  const [supportError, setSupportError] = useState('');
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const highPriorityCount = useMemo(
     () => notifications.filter((item) => item.prioridade === 'alta').length,
@@ -120,6 +137,37 @@ export function Header() {
     const selectedTenant = tenants.find((tenant) => String(tenant.id) === String(selectedTenantId));
     return selectedTenant || currentTenant;
   }, [currentTenant, selectedTenantId, tenants]);
+  const supportState = useMemo(() => {
+    const expiresDate = supportExpiresAt ? new Date(supportExpiresAt) : null;
+    const isExpired = Boolean(expiresDate && Number.isFinite(expiresDate.getTime()) && expiresDate <= new Date());
+    const isActive = Boolean(
+      selectedTenantId &&
+      supportReason &&
+      supportExpiresAt &&
+      !isExpired &&
+      String(selectedTenantId) !== String(currentTenant?.id),
+    );
+
+    return {
+      isActive,
+      isExpired,
+      expiresLabel: supportExpiresAt
+        ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(supportExpiresAt))
+        : '',
+    };
+  }, [currentTenant?.id, selectedTenantId, supportExpiresAt, supportReason]);
+
+  const syncSupportState = useCallback(() => {
+    const support = readSupportAccessState(currentTenant?.id);
+    if (support.isExpired) {
+      clearSupportAccessStorage();
+    }
+
+    setSelectedTenantId(support.isExpired ? null : support.selectedTenantId);
+    setSupportReason(support.isExpired ? '' : support.reason);
+    setSupportExpiresAt(support.isExpired ? '' : support.expiresAt || '');
+    setSupportTenantName(support.isExpired ? '' : support.tenantName || '');
+  }, [currentTenant?.id]);
 
   const handleLogout = () => {
     logout();
@@ -173,6 +221,17 @@ export function Header() {
   }, [loadTenants]);
 
   useEffect(() => {
+    syncSupportState();
+    window.addEventListener('storage', syncSupportState);
+    window.addEventListener('focus', syncSupportState);
+
+    return () => {
+      window.removeEventListener('storage', syncSupportState);
+      window.removeEventListener('focus', syncSupportState);
+    };
+  }, [syncSupportState]);
+
+  useEffect(() => {
     const timeout = setTimeout(async () => {
       if (search.trim().length < 2) {
         setSearchResults([]);
@@ -200,10 +259,14 @@ export function Header() {
 
   const clearSupportAccess = async () => {
     const token = localStorage.getItem(SUPPORT_ACCESS_TOKEN_KEY);
-    localStorage.removeItem(SUPPORT_ACCESS_TOKEN_KEY);
-    localStorage.removeItem(SUPPORT_ACCESS_REASON_KEY);
-    localStorage.removeItem(SUPPORT_ACCESS_EXPIRES_KEY);
+    clearSupportAccessStorage();
+    setSelectedTenantId(null);
     setSupportReason('');
+    setSupportExpiresAt('');
+    setSupportTenantName('');
+    setSupportError('');
+    setSupportDetails('');
+    setSupportTargetTenantId('');
 
     if (token) {
       try {
@@ -219,25 +282,25 @@ export function Header() {
       return;
     }
 
+    setSupportError('');
     setTenantSwitching(true);
 
     if (!tenant) {
       await clearSupportAccess();
-      localStorage.removeItem(SELECTED_TENANT_ID_KEY);
-      localStorage.removeItem(SELECTED_TENANT_SLUG_KEY);
-      setSelectedTenantId(null);
       setShowTenants(false);
       navigate('/');
       window.location.reload();
       return;
     }
 
-    const motivo = window.prompt(
-      `Motivo para acessar os dados de ${tenant.nomeExibicao || tenant.nome}`,
-      'Atendimento de suporte solicitado pelo cliente.',
-    );
+    const selectedReasonOption = supportReasonOptions.find((item) => item.value === supportCategory);
+    const trimmedDetails = supportDetails.trim();
+    const motivo = trimmedDetails
+      ? `${selectedReasonOption?.label || 'Suporte'}: ${trimmedDetails}`
+      : selectedReasonOption?.label || '';
 
-    if (motivo === null) {
+    if (!supportCategory || !motivo || motivo.length < 10) {
+      setSupportError('Escolha um motivo de suporte e descreva rapidamente o contexto do acesso.');
       setTenantSwitching(false);
       return;
     }
@@ -250,15 +313,40 @@ export function Header() {
       localStorage.setItem(SUPPORT_ACCESS_TOKEN_KEY, response.data.token);
       localStorage.setItem(SUPPORT_ACCESS_REASON_KEY, response.data.motivo);
       localStorage.setItem(SUPPORT_ACCESS_EXPIRES_KEY, response.data.expiraEm);
+      localStorage.setItem(SUPPORT_ACCESS_TENANT_NAME_KEY, response.data.tenantNome);
       setSupportReason(response.data.motivo);
+      setSupportExpiresAt(response.data.expiraEm);
+      setSupportTenantName(response.data.tenantNome);
       setSelectedTenantId(String(response.data.tenantId));
+      setSupportDetails('');
+      setSupportTargetTenantId(String(response.data.tenantId));
       setShowTenants(false);
       navigate('/');
       window.location.reload();
     } catch (switchError) {
-      alert(switchError.response?.data?.message || 'Não foi possível iniciar o modo suporte.');
+      setSupportError(switchError.response?.data?.message || 'Não foi possível iniciar o modo suporte.');
       setTenantSwitching(false);
     }
+  };
+
+  const openSupportPanel = async () => {
+    if (!usuario?.isPlatformAdmin) {
+      return;
+    }
+
+    setShowTenants((current) => !current);
+    setSupportError('');
+    await loadTenants();
+  };
+
+  const startSupportForSelectedTenant = async () => {
+    const tenant = tenantOptions.find((item) => String(item.id) === String(supportTargetTenantId));
+    if (!tenant) {
+      setSupportError('Selecione a empresa que será atendida.');
+      return;
+    }
+
+    await selectTenant(tenant);
   };
 
   return (
@@ -363,51 +451,99 @@ export function Header() {
             </div>
           )}
         </div>
-        <div className="tenant-anchor">
-          <button
-            className={`tenant-switcher${selectedTenantId ? ' support-mode' : ''}`}
-            type="button"
-            disabled={tenantSwitching}
-            onClick={() => {
-              if (!usuario?.isPlatformAdmin) {
-                return;
-              }
-
-              setShowTenants((current) => !current);
-              loadTenants();
-            }}
-          >
-            <span className="tenant-dot" />
-            <span>{activeTenant?.nomeExibicao || activeTenant?.nome || 'RentalHub'}</span>
-            <ChevronDown size={16} />
-          </button>
-          {usuario?.isPlatformAdmin && showTenants && (
-            <div className="topbar-popover tenant-popover">
-              <div className="popover-heading">
-                <div>
-                  <strong>{selectedTenantId ? 'Modo suporte ativo' : 'Operar empresa'}</strong>
-                  {supportReason && <small>{supportReason}</small>}
+        {usuario?.isPlatformAdmin && (
+          <div className="tenant-anchor">
+            <button
+              className={`tenant-switcher support-access-button${supportState.isActive ? ' support-mode' : ''}`}
+              type="button"
+              disabled={tenantSwitching}
+              onClick={openSupportPanel}
+            >
+              <ShieldAlert size={16} />
+              <span>{supportState.isActive ? (supportTenantName || activeTenant?.nomeExibicao || 'Suporte ativo') : 'Modo suporte'}</span>
+              <ChevronDown size={16} />
+            </button>
+            {showTenants && (
+              <div className="topbar-popover tenant-popover">
+                <div className="popover-heading">
+                  <div>
+                    <strong>{supportState.isActive ? 'Modo suporte ativo' : 'Acesso operacional auditado'}</strong>
+                    <small>
+                      {supportState.isActive
+                        ? 'Sessão temporária registrada para atendimento.'
+                        : 'Abra uma sessão temporária para entrar nos dados do cliente.'}
+                    </small>
+                  </div>
                 </div>
+
+                {supportState.isActive ? (
+                  <div className="support-panel">
+                    <div className="support-panel-card">
+                      <strong>{supportTenantName || activeTenant?.nomeExibicao || activeTenant?.nome || 'Cliente selecionado'}</strong>
+                      <span>{supportReason}</span>
+                      {supportState.expiresLabel && <small>Expira em {supportState.expiresLabel}</small>}
+                    </div>
+                    <button type="button" onClick={() => selectTenant(null)}>
+                      <strong>Encerrar modo suporte</strong>
+                      <span>Voltar para a empresa do seu login.</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="support-panel">
+                    {supportError && <div className="form-alert support-alert">{supportError}</div>}
+                    <label className="form-field">
+                      <span>Empresa</span>
+                      <select value={supportTargetTenantId} onChange={(event) => setSupportTargetTenantId(event.target.value)}>
+                        <option value="">Selecione uma empresa</option>
+                        {tenantOptions.map((tenant) => (
+                          <option key={tenant.id} value={tenant.id}>
+                            {tenant.nomeExibicao || tenant.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="form-field">
+                      <span>Motivo</span>
+                      <select value={supportCategory} onChange={(event) => setSupportCategory(event.target.value)}>
+                        {supportReasonOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="form-field">
+                      <span>Contexto do atendimento</span>
+                      <textarea
+                        rows={3}
+                        value={supportDetails}
+                        placeholder="Descreva rapidamente o chamado, incidente ou validação solicitada."
+                        onChange={(event) => setSupportDetails(event.target.value)}
+                      />
+                    </label>
+                    <button type="button" onClick={startSupportForSelectedTenant}>
+                      <strong>{tenantSwitching ? 'Abrindo suporte...' : 'Iniciar modo suporte'}</strong>
+                      <span>O acesso ficará temporário, auditado e com expiração automática.</span>
+                    </button>
+                  </div>
+                )}
               </div>
-              <button type="button" onClick={() => selectTenant(null)}>
-                <strong>{currentTenant?.nomeExibicao || currentTenant?.nome || 'Minha empresa'}</strong>
-                <span>Empresa do meu login</span>
-              </button>
-              {tenantOptions.map((tenant) => (
-                <button type="button" key={tenant.id} onClick={() => selectTenant(tenant)}>
-                  <strong>{tenant.nomeExibicao}</strong>
-                  <span>{tenant.ativo ? 'Empresa ativa' : 'Empresa inativa'}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         <button
           className="user-menu"
           type="button"
           aria-label="Abrir configurações"
-          title="Abrir configurações"
-          onClick={() => navigate('/configuracoes')}
+          title={supportState.isActive ? 'Encerrar o modo suporte para abrir configurações da plataforma' : 'Abrir configurações'}
+          onClick={() => {
+            if (supportState.isActive && usuario?.isPlatformAdmin) {
+              navigate('/');
+              return;
+            }
+
+            navigate('/configuracoes');
+          }}
         >
           <div className="user-chip" aria-label="Usuário atual">
             {initials}

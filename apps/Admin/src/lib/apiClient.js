@@ -1,13 +1,11 @@
 import axios from 'axios';
 import {
   clearAuthStorage,
+  clearSupportAccessStorage,
   REFRESH_TOKEN_KEY,
-  SELECTED_TENANT_ID_KEY,
-  SELECTED_TENANT_SLUG_KEY,
-  SUPPORT_ACCESS_EXPIRES_KEY,
-  SUPPORT_ACCESS_TOKEN_KEY,
   TOKEN_KEY,
   USER_KEY,
+  readSupportAccessState,
 } from './authStorage';
 import { API_BASE_URL_WITH_API } from './env';
 
@@ -27,10 +25,7 @@ function clearAuthSession() {
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY);
   const usuario = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-  const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
-  const selectedTenantSlug = localStorage.getItem(SELECTED_TENANT_SLUG_KEY);
-  const supportAccessToken = localStorage.getItem(SUPPORT_ACCESS_TOKEN_KEY);
-  const supportAccessExpires = localStorage.getItem(SUPPORT_ACCESS_EXPIRES_KEY);
+  const supportAccess = readSupportAccessState(usuario?.tenantId);
   const requestUrl = String(config.url || '').toLowerCase();
   const isAuthRequest =
     requestUrl.includes('/auth/login') ||
@@ -41,14 +36,19 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  if (!isAuthRequest && usuario?.isPlatformAdmin && selectedTenantId) {
-    config.headers['X-Tenant-Id'] = selectedTenantId;
-    if (selectedTenantSlug) {
-      config.headers['X-Tenant-Slug'] = selectedTenantSlug;
+  if (!isAuthRequest && usuario?.isPlatformAdmin && supportAccess.selectedTenantId) {
+    if (supportAccess.isExpired) {
+      clearSupportAccessStorage();
+      return config;
     }
 
-    if (supportAccessToken && (!supportAccessExpires || new Date(supportAccessExpires) > new Date())) {
-      config.headers['X-Support-Access-Token'] = supportAccessToken;
+    config.headers['X-Tenant-Id'] = supportAccess.selectedTenantId;
+    if (supportAccess.selectedTenantSlug) {
+      config.headers['X-Tenant-Slug'] = supportAccess.selectedTenantSlug;
+    }
+
+    if (supportAccess.isActive && supportAccess.token) {
+      config.headers['X-Support-Access-Token'] = supportAccess.token;
     }
   }
 

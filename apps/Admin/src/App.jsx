@@ -22,6 +22,7 @@ import { RepassesPage } from '@/pages/Repasses/RepassesPage';
 import { SuportePage } from '@/pages/Suporte/SuportePage';
 import { useAuth } from '@/context/AuthContext';
 import { ConfiguracoesPage, EmpresasPage, PerfisPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
+import { readSupportAccessState } from '@/lib/authStorage';
 
 const internalRoutes = [
   { path: '/reservas', resource: 'reservas' },
@@ -76,6 +77,26 @@ function PlatformAdminRoute({ children }) {
   return children;
 }
 
+function PlatformAdminRestrictedDuringSupportRoute({ children }) {
+  const { usuario, currentTenant } = useAuth();
+  const supportState = usuario?.isPlatformAdmin
+    ? readSupportAccessState(currentTenant?.id)
+    : { isActive: false };
+
+  if (supportState.isActive) {
+    return (
+      <div className="access-denied">
+        <strong>Modo suporte em andamento</strong>
+        <span>
+          Encerre o acesso ao cliente para voltar às telas administrativas sensíveis da plataforma.
+        </span>
+      </div>
+    );
+  }
+
+  return children;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -108,20 +129,58 @@ export default function App() {
             <Route path="manutencao" element={<ProtectedRoute resource="manutencoes"><ManutencaoPage /></ProtectedRoute>} />
             <Route path="relatorios" element={<ProtectedRoute resource="relatorios"><RelatoriosPage /></ProtectedRoute>} />
             <Route path="portal-proprietario" element={<PortalProprietarioPage />} />
-            <Route path="usuarios" element={<ProtectedRoute resource="usuarios"><UsuariosPage /></ProtectedRoute>} />
-            <Route path="perfis" element={<ProtectedRoute resource="perfis-acesso"><PerfisPage /></ProtectedRoute>} />
+            <Route
+              path="usuarios"
+              element={(
+                <ProtectedRoute resource="usuarios">
+                  <PlatformAdminRestrictedDuringSupportRoute>
+                    <UsuariosPage />
+                  </PlatformAdminRestrictedDuringSupportRoute>
+                </ProtectedRoute>
+              )}
+            />
+            <Route
+              path="perfis"
+              element={(
+                <ProtectedRoute resource="perfis-acesso">
+                  <PlatformAdminRestrictedDuringSupportRoute>
+                    <PerfisPage />
+                  </PlatformAdminRestrictedDuringSupportRoute>
+                </ProtectedRoute>
+              )}
+            />
             <Route
               path="empresas"
               element={
                 <ProtectedRoute resource="tenants">
                   <PlatformAdminRoute>
-                    <EmpresasPage />
+                    <PlatformAdminRestrictedDuringSupportRoute>
+                      <EmpresasPage />
+                    </PlatformAdminRestrictedDuringSupportRoute>
                   </PlatformAdminRoute>
                 </ProtectedRoute>
               }
             />
-            <Route path="configuracoes" element={<ProtectedRoute resource="configuracoes"><ConfiguracoesPage /></ProtectedRoute>} />
-            <Route path="auditoria" element={<ProtectedRoute resource="auditoria"><AuditoriaPage /></ProtectedRoute>} />
+            <Route
+              path="configuracoes"
+              element={(
+                <ProtectedRoute resource="configuracoes">
+                  <PlatformAdminRestrictedDuringSupportRoute>
+                    <ConfiguracoesPage />
+                  </PlatformAdminRestrictedDuringSupportRoute>
+                </ProtectedRoute>
+              )}
+            />
+            <Route
+              path="auditoria"
+              element={(
+                <ProtectedRoute resource="auditoria">
+                  <PlatformAdminRestrictedDuringSupportRoute>
+                    <AuditoriaPage />
+                  </PlatformAdminRestrictedDuringSupportRoute>
+                </ProtectedRoute>
+              )}
+            />
             <Route path="suporte" element={<SuportePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
