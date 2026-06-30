@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RentalHub.API.Services;
+using RentalHub.Application.Security;
 using RentalHub.Domain.Entities;
 using RentalHub.Infrastructure.Data;
 
@@ -132,7 +133,7 @@ public sealed class SupportAccessController : ControllerBase
 
     private bool IsPlatformAdmin()
     {
-        return string.Equals(User.FindFirstValue("IsPlatformAdmin"), bool.TrueString, StringComparison.OrdinalIgnoreCase);
+        return PlatformAdminClaims.IsPlatformAdmin(User);
     }
 
     private int? GetCurrentUserId()

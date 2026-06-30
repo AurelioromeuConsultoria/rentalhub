@@ -27,6 +27,7 @@ import {
   UserX,
   Users,
 } from 'lucide-react';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { configuracoesApi, perfisAcessoApi, tenantsApi, usuariosApi } from '@/api/administracao';
 import { proprietariosApi } from '@/api/cadastros';
@@ -633,7 +634,7 @@ export function UsuariosPage() {
               </SelectField>
             )}
             <CheckboxField label="Usuário ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
-            {currentUser?.isPlatformAdmin && (
+            {isPlatformAdminUser(currentUser) && (
               <CheckboxField
                 label="Administrador da plataforma"
                 checked={form.isPlatformAdmin}

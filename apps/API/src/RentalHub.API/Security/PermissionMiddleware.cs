@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using RentalHub.Application.Security;
 using RentalHub.Domain.Security;
 
 namespace RentalHub.API.Security;
@@ -74,7 +75,7 @@ public sealed class PermissionMiddleware
             return;
         }
 
-        if (IsPlatformAdmin(context.User) || HasPermission(context.User, check))
+        if (PlatformAdminClaims.IsPlatformAdmin(context.User) || HasPermission(context.User, check))
         {
             await _next(context);
             return;
@@ -137,14 +138,6 @@ public sealed class PermissionMiddleware
                 _ => false
             };
         });
-    }
-
-    private static bool IsPlatformAdmin(ClaimsPrincipal user)
-    {
-        return string.Equals(
-            user.FindFirstValue("IsPlatformAdmin"),
-            bool.TrueString,
-            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryGetAccess(string method, out PermissionAccess access)

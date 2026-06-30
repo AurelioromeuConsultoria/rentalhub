@@ -273,10 +273,81 @@ function summarizeDayEvents(dayEvents) {
   );
 }
 
+function formatCount(value, singular, plural = `${singular}s`) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function sortCalendarEvents(left, right) {
+  const startComparison = String(left.inicio).localeCompare(String(right.inicio));
+  if (startComparison !== 0) return startComparison;
+
+  const typeOrder = { reserva: 0, bloqueio: 1, manutencao: 2, limpeza: 3 };
+  const typeComparison = (typeOrder[left.tipo] ?? 9) - (typeOrder[right.tipo] ?? 9);
+  if (typeComparison !== 0) return typeComparison;
+
+  return String(left.id).localeCompare(String(right.id));
+}
+
+function buildEventsByDay(events, rangeStart, rangeEnd) {
+  const indexedEvents = new Map();
+  const start = parseDateOnly(rangeStart);
+  const end = parseDateOnly(rangeEnd);
+
+  events.forEach((event) => {
+    let cursor = new Date(Math.max(parseDateOnly(event.inicio).getTime(), start.getTime()));
+    const eventEnd = new Date(Math.min(parseDateOnly(event.fim).getTime(), end.getTime()));
+
+    while (cursor < eventEnd) {
+      const key = toInputDate(cursor);
+      const current = indexedEvents.get(key) || [];
+      current.push(event);
+      indexedEvents.set(key, current);
+      cursor = addDays(cursor, 1);
+    }
+  });
+
+  indexedEvents.forEach((dayEvents) => dayEvents.sort(sortCalendarEvents));
+  return indexedEvents;
+}
+
+function buildEventLaneMap(events, maxLanes = 2) {
+  const lanes = Array.from({ length: maxLanes }, () => null);
+  const laneByEvent = new Map();
+
+  [...events].sort(sortCalendarEvents).forEach((event) => {
+    const eventStart = parseDateOnly(event.inicio);
+    const laneIndex = lanes.findIndex((laneEnd) => !laneEnd || laneEnd <= eventStart);
+
+    if (laneIndex >= 0) {
+      laneByEvent.set(event.id, laneIndex);
+      lanes[laneIndex] = parseDateOnly(event.fim);
+    }
+  });
+
+  return laneByEvent;
+}
+
+function getTimelinePosition(event, rangeStart, rangeEnd) {
+  const start = parseDateOnly(rangeStart);
+  const end = parseDateOnly(rangeEnd);
+  const eventStart = new Date(Math.max(parseDateOnly(event.inicio).getTime(), start.getTime()));
+  const eventEnd = new Date(Math.min(parseDateOnly(event.fim).getTime(), end.getTime()));
+
+  if (eventStart >= eventEnd) return null;
+
+  return {
+    columnStart: differenceInDays(start, eventStart) + 1,
+    columnEnd: differenceInDays(start, eventEnd) + 1,
+    clippedStart: eventStart > parseDateOnly(event.inicio),
+    clippedEnd: eventEnd < parseDateOnly(event.fim),
+  };
+}
+
 export function CalendarioPage() {
   const navigate = useNavigate();
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState('month');
+  const [displayMode, setDisplayMode] = useState('calendar');
   const [events, setEvents] = useState([]);
   const [imoveis, setImoveis] = useState([]);
   const [selectedImovelId, setSelectedImovelId] = useState('');
@@ -294,6 +365,10 @@ export function CalendarioPage() {
   const calendarCells = useMemo(() => buildCalendarCells(anchorDate, viewMode), [anchorDate, viewMode]);
   const visibleStart = days[0]?.key || toInputDate(anchorDate);
   const visibleEnd = days.length > 0 ? toInputDate(addDays(parseDateOnly(days.at(-1).key), 1)) : toInputDate(addDays(anchorDate, 1));
+  const eventsByDay = useMemo(
+    () => buildEventsByDay(events, visibleStart, visibleEnd),
+    [events, visibleEnd, visibleStart],
+  );
 
   const visibleImoveis = useMemo(() => {
     if (!selectedImovelId) return imoveis;
@@ -479,6 +554,21 @@ export function CalendarioPage() {
     setAnchorDate(parseDateOnly(dayKey));
   };
 
+  const selectTimelineDay = (imovelId, dayKey) => {
+    setSelectedDay(dayKey);
+    selectDay(imovelId, dayKey);
+  };
+
+  const focusEvent = (event) => {
+    const eventDay = String(event.inicio).slice(0, 10);
+    setSelectedDay(eventDay < visibleStart ? visibleStart : eventDay);
+    setSelection({
+      imovelId: String(event.imovelId),
+      inicio: '',
+      fim: '',
+    });
+  };
+
   const fillBlockFromSelection = () => {
     if (!selection.imovelId || !selection.inicio) return;
     setForm((current) => ({
@@ -573,12 +663,6 @@ export function CalendarioPage() {
           <p>Mapa de ocupação por imóvel com reservas, bloqueios, limpezas, manutenções e criação rápida de agenda.</p>
         </div>
         <div className="resource-actions">
-          <button className="icon-button bordered" type="button" aria-label="Período anterior" onClick={goToPreviousRange}>
-            <ChevronLeft size={18} />
-          </button>
-          <button className="icon-button bordered" type="button" aria-label="Próximo período" onClick={goToNextRange}>
-            <ChevronRight size={18} />
-          </button>
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
             <RotateCcw size={18} />
           </button>
@@ -633,12 +717,44 @@ export function CalendarioPage() {
       <section className={`calendar-layout strong${sidePanelCollapsed ? ' side-collapsed' : ''}`}>
         <article className="calendar-panel calendar-board-panel">
           <div className="calendar-toolbar strong">
-            <div>
-              <strong>{getPeriodTitle(viewMode, anchorDate, visibleStart, visibleEnd)}</strong>
-              <span>{visibleImoveis.length} imóveis · {events.length} eventos no período</span>
+            <div className="calendar-period-block">
+              <div className="calendar-period-navigation" aria-label="Navegação do período">
+                <button type="button" aria-label="Período anterior" title="Período anterior" onClick={goToPreviousRange}>
+                  <ChevronLeft size={17} />
+                </button>
+                <button className="calendar-today-button" type="button" onClick={goToToday}>
+                  Hoje
+                </button>
+                <button type="button" aria-label="Próximo período" title="Próximo período" onClick={goToNextRange}>
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+              <div>
+                <strong>{getPeriodTitle(viewMode, anchorDate, visibleStart, visibleEnd)}</strong>
+                <span>
+                  {formatCount(visibleImoveis.length, 'imóvel', 'imóveis')} · {formatCount(events.length, 'evento')} no período
+                </span>
+              </div>
             </div>
 
             <div className="calendar-toolbar-controls">
+              <div className="segmented-control calendar-display-control" aria-label="Formato de exibição">
+                <button
+                  className={displayMode === 'calendar' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setDisplayMode('calendar')}
+                >
+                  Calendário
+                </button>
+                <button
+                  className={displayMode === 'occupancy' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setDisplayMode('occupancy')}
+                >
+                  Mapa
+                </button>
+              </div>
+
               <div className="segmented-control" aria-label="Visualização do calendário">
                 {viewModes.map((mode) => (
                   <button
@@ -681,6 +797,7 @@ export function CalendarioPage() {
                 onClick={toggleSidePanel}
               >
                 {sidePanelCollapsed ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}
+                <span>{sidePanelCollapsed ? 'Abrir painel' : 'Recolher painel'}</span>
               </button>
             </div>
           </div>
@@ -696,6 +813,110 @@ export function CalendarioPage() {
               title="Nenhum imóvel ativo encontrado"
               description="Cadastre ou ative um imóvel para montar a agenda operacional."
             />
+          ) : displayMode === 'occupancy' ? (
+            <div className={`calendar-occupancy-map ${viewMode}`}>
+              <div className="calendar-occupancy-header">
+                <strong>Imóvel</strong>
+                <div
+                  className="calendar-occupancy-header-days"
+                  style={{ '--calendar-day-count': days.length }}
+                >
+                  {days.map((day) => (
+                    <span className={day.isWeekend ? 'weekend' : ''} key={day.key}>
+                      <small>{day.weekday}</small>
+                      <strong>{day.dayNumber}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="calendar-occupancy-rows">
+                {visibleImoveis.map((imovel) => {
+                  const propertyEvents = events.filter(
+                    (event) => String(event.imovelId) === String(imovel.id),
+                  );
+                  const laneMap = buildEventLaneMap(propertyEvents);
+
+                  return (
+                    <div className="calendar-occupancy-row" key={imovel.id}>
+                      <button
+                        className="calendar-occupancy-property"
+                        type="button"
+                        onClick={() => {
+                          setSelectedImovelId(String(imovel.id));
+                          setDisplayMode('calendar');
+                        }}
+                      >
+                        <strong>{imovel.nome}</strong>
+                        <span>{formatCount(propertyEvents.length, 'evento')}</span>
+                      </button>
+
+                      <div
+                        className="calendar-occupancy-days"
+                        style={{ '--calendar-day-count': days.length }}
+                      >
+                        {days.map((day) => {
+                          const hiddenCount = (eventsByDay.get(day.key) || []).filter(
+                            (event) =>
+                              String(event.imovelId) === String(imovel.id) &&
+                              !laneMap.has(event.id),
+                          ).length;
+
+                          return (
+                            <button
+                              className={`${day.isWeekend ? 'weekend ' : ''}${selectedDay === day.key ? 'active' : ''}`}
+                              key={day.key}
+                              type="button"
+                              aria-label={`${imovel.nome}, ${formatDate(day.key)}`}
+                              onClick={() => selectTimelineDay(imovel.id, day.key)}
+                            >
+                              {hiddenCount > 0 && <small>+{hiddenCount}</small>}
+                            </button>
+                          );
+                        })}
+
+                        <div
+                          className="calendar-occupancy-events"
+                          style={{ '--calendar-day-count': days.length }}
+                        >
+                          {propertyEvents.map((event) => {
+                            const lane = laneMap.get(event.id);
+                            const position = getTimelinePosition(event, visibleStart, visibleEnd);
+                            if (lane === undefined || !position) return null;
+
+                            const meta = getEventMeta(event);
+                            const Icon = meta.icon;
+                            return (
+                              <button
+                                className={`calendar-occupancy-event ${event.tipo}${position.clippedStart ? ' clipped-start' : ''}${position.clippedEnd ? ' clipped-end' : ''}`}
+                                key={event.id}
+                                type="button"
+                                title={`${event.imovelNome} · ${getEventText(event)} · ${formatDate(event.inicio)} a ${formatDate(event.fim)}`}
+                                style={{
+                                  gridColumn: `${position.columnStart} / ${position.columnEnd}`,
+                                  gridRow: lane + 1,
+                                }}
+                                onClick={() => focusEvent(event)}
+                              >
+                                <Icon size={13} />
+                                <span>{getEventText(event)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="calendar-occupancy-hint">
+                <span>Faixas contínuas representam a permanência completa.</span>
+                <button type="button" onClick={() => setDisplayMode('calendar')}>
+                  Voltar ao calendário mensal
+                </button>
+              </div>
+            </div>
           ) : (
             <div className={`calendar-readable-board ${viewMode}`}>
               {viewMode === 'month' && (
@@ -708,7 +929,7 @@ export function CalendarioPage() {
 
               <div className="calendar-month-grid">
                 {calendarCells.map((day) => {
-                  const dayEvents = events.filter((event) => eventTouchesDay(event, day.key));
+                  const dayEvents = eventsByDay.get(day.key) || [];
                   const visibleDayEvents = viewMode === 'month' ? dayEvents.slice(0, 1) : dayEvents;
                   const daySummary = summarizeDayEvents(dayEvents);
                   const primaryEvent = dayEvents[0];
@@ -796,32 +1017,22 @@ export function CalendarioPage() {
             </button>
           ) : (
             <>
-              <article className="calendar-side-overview">
+              <article className="calendar-day-agenda calendar-side-combined">
                 <div className="calendar-side-overview-header">
                   <div>
-                    <strong>Resumo rápido</strong>
+                    <strong>Agenda do dia</strong>
                     <span>{formatDate(selectedDay)}</span>
                   </div>
-                  <span className="calendar-side-overview-total">{selectedDaySummary.total} eventos</span>
+                  <span className="calendar-side-overview-total">
+                    {formatCount(selectedDaySummary.total, 'evento')}
+                  </span>
                 </div>
 
                 <div className="calendar-side-overview-stats">
-                  <span className="reserva">{selectedDaySummary.reserva} reservas</span>
-                  <span className="bloqueio">{selectedDaySummary.bloqueio} bloqueios</span>
-                  <span className="limpeza">{selectedDaySummary.limpeza} limpezas</span>
-                  <span className="manutencao">{selectedDaySummary.manutencao} manutenções</span>
-                </div>
-
-                <div className="calendar-side-overview-meta">
-                  <span>Imóvel selecionado: <strong>{selectedImovel?.nome || 'Nenhum'}</strong></span>
-                  <span>Período: <strong>{selection.inicio ? `${formatDate(selection.inicio)}${selection.fim ? ` até ${formatDate(selection.fim)}` : ''}` : 'Não definido'}</strong></span>
-                </div>
-              </article>
-
-              <article className="calendar-day-agenda">
-                <div>
-                  <strong>Detalhe do dia</strong>
-                  <span>{formatDate(selectedDay)} · {selectedDayEvents.length} eventos</span>
+                  {selectedDaySummary.reserva > 0 && <span className="reserva">{formatCount(selectedDaySummary.reserva, 'reserva')}</span>}
+                  {selectedDaySummary.bloqueio > 0 && <span className="bloqueio">{formatCount(selectedDaySummary.bloqueio, 'bloqueio')}</span>}
+                  {selectedDaySummary.limpeza > 0 && <span className="limpeza">{formatCount(selectedDaySummary.limpeza, 'limpeza')}</span>}
+                  {selectedDaySummary.manutencao > 0 && <span className="manutencao">{formatCount(selectedDaySummary.manutencao, 'manutenção', 'manutenções')}</span>}
                 </div>
 
                 {selectedDayEvents.length > 0 ? (
@@ -845,7 +1056,7 @@ export function CalendarioPage() {
                       );
                     })}
                     {selectedDayEvents.length > 4 && (
-                      <span className="calendar-day-agenda-more">+{selectedDayEvents.length - 4} eventos neste dia</span>
+                      <span className="calendar-day-agenda-more">+{selectedDayEvents.length - 4} eventos na agenda completa</span>
                     )}
                   </div>
                 ) : (
@@ -854,6 +1065,16 @@ export function CalendarioPage() {
                     <p>Use a seleção de período para criar uma reserva ou registrar um bloqueio.</p>
                   </div>
                 )}
+
+                {selection.inicio && (
+                  <div className="calendar-side-overview-meta">
+                    <span>Seleção: <strong>{selectedImovel?.nome || 'Nenhum imóvel'}</strong></span>
+                    <span>
+                      Período: <strong>{formatDate(selection.inicio)}{selection.fim ? ` até ${formatDate(selection.fim)}` : ''}</strong>
+                    </span>
+                  </div>
+                )}
+
                 <button className="secondary-action full" type="button" onClick={openDayDetails}>
                   <Maximize2 size={16} />
                   Ver agenda completa do dia

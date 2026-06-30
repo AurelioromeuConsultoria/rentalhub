@@ -23,6 +23,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useState } from 'react';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 import { NavLink } from 'react-router-dom';
 import { RentalHubMark } from '@/components/Brand/RentalHubMark';
 import { useAuth } from '@/context/AuthContext';
@@ -82,7 +83,7 @@ const menuGroups = [
 export function Sidebar() {
   const { usuario, canView } = useAuth();
   const isOwner = Number(usuario?.tipoUsuario) === 4;
-  const isPlatformAdmin = Boolean(usuario?.isPlatformAdmin);
+  const isPlatformAdmin = isPlatformAdminUser(usuario);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [openGroups, setOpenGroups] = useState({
     Operação: true,
@@ -193,13 +194,15 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="platform-card">
-          <div>
-            <Shield size={16} />
-            <strong>Modo plataforma</strong>
+        {isPlatformAdmin && (
+          <div className="platform-card">
+            <div>
+              <Shield size={16} />
+              <strong>Modo plataforma</strong>
+            </div>
+            <p>Admin geral</p>
           </div>
-          <p>{isOwner ? 'Portal do sócio' : isPlatformAdmin ? 'Admin geral' : 'Empresa ativa'}</p>
-        </div>
+        )}
         <span className="app-version">v{APP_VERSION}</span>
         <a href="https://malachdigital.com.br/" target="_blank" rel="noreferrer">
           <span className="malach-mark">M</span>

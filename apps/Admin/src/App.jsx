@@ -23,6 +23,7 @@ import { SuportePage } from '@/pages/Suporte/SuportePage';
 import { useAuth } from '@/context/AuthContext';
 import { ConfiguracoesPage, EmpresasPage, PerfisPage, UsuariosPage } from '@/pages/Administracao/AdministracaoPages';
 import { readSupportAccessState } from '@/lib/authStorage';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 
 const internalRoutes = [
   { path: '/reservas', resource: 'reservas' },
@@ -70,7 +71,7 @@ function HomeRoute() {
 function PlatformAdminRoute({ children }) {
   const { usuario } = useAuth();
 
-  if (!usuario?.isPlatformAdmin) {
+  if (!isPlatformAdminUser(usuario)) {
     return <Navigate to="/" replace />;
   }
 
@@ -79,7 +80,7 @@ function PlatformAdminRoute({ children }) {
 
 function PlatformAdminRestrictedDuringSupportRoute({ children }) {
   const { usuario, currentTenant } = useAuth();
-  const supportState = usuario?.isPlatformAdmin
+  const supportState = isPlatformAdminUser(usuario)
     ? readSupportAccessState(currentTenant?.id)
     : { isActive: false };
 

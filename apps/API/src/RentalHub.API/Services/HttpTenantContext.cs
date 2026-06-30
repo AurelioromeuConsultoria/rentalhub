@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using RentalHub.Application.Security;
 using RentalHub.Application.Services;
 using RentalHub.Domain.Entities;
 
@@ -23,10 +24,7 @@ public sealed class HttpTenantContext : ITenantContext
                 return Tenant.InitialTenantId;
             }
 
-            var isPlatformAdmin = string.Equals(
-                httpContext.User.FindFirstValue("IsPlatformAdmin"),
-                "true",
-                StringComparison.OrdinalIgnoreCase);
+            var isPlatformAdmin = PlatformAdminClaims.IsPlatformAdmin(httpContext.User);
 
             if (isPlatformAdmin &&
                 httpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var headerValue) &&
@@ -51,10 +49,7 @@ public sealed class HttpTenantContext : ITenantContext
                 return Tenant.InitialTenantSlug;
             }
 
-            var isPlatformAdmin = string.Equals(
-                httpContext.User.FindFirstValue("IsPlatformAdmin"),
-                "true",
-                StringComparison.OrdinalIgnoreCase);
+            var isPlatformAdmin = PlatformAdminClaims.IsPlatformAdmin(httpContext.User);
 
             if (isPlatformAdmin &&
                 httpContext.Request.Headers.TryGetValue("X-Tenant-Slug", out var headerValue))
@@ -66,4 +61,3 @@ public sealed class HttpTenantContext : ITenantContext
         }
     }
 }
-

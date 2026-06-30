@@ -4,6 +4,7 @@ import { sistemaApi } from '@/api/sistema';
 import { suporteApi } from '@/api/suporte';
 import { useAuth } from '@/context/AuthContext';
 import { getFriendlyErrorMessage } from '@/lib/uiFeedback';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 
 const emptyTicket = {
   titulo: '',
@@ -53,7 +54,7 @@ export function SuportePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const canManageSupport = Boolean(usuario?.isPlatformAdmin || canEdit('configuracoes'));
+  const canManageSupport = Boolean(isPlatformAdminUser(usuario) || canEdit('configuracoes'));
   const summary = useMemo(() => ({
     abertos: tickets.filter((ticket) => ticket.status === 'aberto').length,
     atendimento: tickets.filter((ticket) => ticket.status === 'em_atendimento').length,

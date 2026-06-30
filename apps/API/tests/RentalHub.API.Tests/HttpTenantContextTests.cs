@@ -53,14 +53,34 @@ public sealed class HttpTenantContextTests
         Assert.Equal(Tenant.InitialTenantId, tenantContext.TenantId);
     }
 
-    private static DefaultHttpContext CreateContext(bool isPlatformAdmin, int tenantId, string tenantSlug)
+    [Fact]
+    public void TenantId_ShouldIgnoreOverrideHeader_WhenPlatformFlagIsOnNonRootTenant()
+    {
+        var context = CreateContext(
+            isPlatformAdmin: true,
+            tenantId: 10,
+            tenantSlug: "empresa-a",
+            isRootTenant: false);
+        context.Request.Headers["X-Tenant-Id"] = "20";
+
+        var tenantContext = new HttpTenantContext(new HttpContextAccessor { HttpContext = context });
+
+        Assert.Equal(10, tenantContext.TenantId);
+    }
+
+    private static DefaultHttpContext CreateContext(
+        bool isPlatformAdmin,
+        int tenantId,
+        string tenantSlug,
+        bool isRootTenant = true)
     {
         var context = new DefaultHttpContext();
         context.User = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new Claim("TenantId", tenantId.ToString()),
             new Claim("TenantSlug", tenantSlug),
-            new Claim("IsPlatformAdmin", isPlatformAdmin.ToString().ToLowerInvariant())
+            new Claim("IsPlatformAdmin", isPlatformAdmin.ToString().ToLowerInvariant()),
+            new Claim("IsRootTenant", isRootTenant.ToString().ToLowerInvariant())
         ], "Test"));
 
         return context;

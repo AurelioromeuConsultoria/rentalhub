@@ -16,6 +16,7 @@ import {
   readSupportAccessState,
 } from '@/lib/authStorage';
 import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 import { useTheme } from '@/context/ThemeContext';
 
 const routeLabels = {
@@ -97,6 +98,7 @@ export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const { usuario, currentTenant, logout } = useAuth();
+  const isPlatformAdmin = isPlatformAdminUser(usuario);
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState([]);
   const [notificationsUpdatedAt, setNotificationsUpdatedAt] = useState(null);
@@ -197,7 +199,7 @@ export function Header() {
   }, [loadNotifications, location.pathname]);
 
   const loadTenants = useCallback(async () => {
-    if (!usuario?.isPlatformAdmin) {
+    if (!isPlatformAdmin) {
       setTenants([]);
       return;
     }
@@ -208,7 +210,7 @@ export function Header() {
     } catch {
       setTenants([]);
     }
-  }, [usuario?.isPlatformAdmin]);
+  }, [isPlatformAdmin]);
 
   useEffect(() => {
     const timeout = setTimeout(loadTenants, 0);
@@ -221,11 +223,12 @@ export function Header() {
   }, [loadTenants]);
 
   useEffect(() => {
-    syncSupportState();
+    const timeout = setTimeout(syncSupportState, 0);
     window.addEventListener('storage', syncSupportState);
     window.addEventListener('focus', syncSupportState);
 
     return () => {
+      clearTimeout(timeout);
       window.removeEventListener('storage', syncSupportState);
       window.removeEventListener('focus', syncSupportState);
     };
@@ -330,7 +333,7 @@ export function Header() {
   };
 
   const openSupportPanel = async () => {
-    if (!usuario?.isPlatformAdmin) {
+    if (!isPlatformAdmin) {
       return;
     }
 
@@ -451,7 +454,7 @@ export function Header() {
             </div>
           )}
         </div>
-        {usuario?.isPlatformAdmin && (
+        {isPlatformAdmin && (
           <div className="tenant-anchor">
             <button
               className={`tenant-switcher support-access-button${supportState.isActive ? ' support-mode' : ''}`}
@@ -537,7 +540,7 @@ export function Header() {
           aria-label="Abrir configurações"
           title={supportState.isActive ? 'Encerrar o modo suporte para abrir configurações da plataforma' : 'Abrir configurações'}
           onClick={() => {
-            if (supportState.isActive && usuario?.isPlatformAdmin) {
+            if (supportState.isActive && isPlatformAdmin) {
               navigate('/');
               return;
             }

@@ -296,7 +296,7 @@ public sealed class AuthController : ControllerBase
             usuario.Email,
             (int)usuario.TipoUsuario,
             usuario.ProprietarioId,
-            usuario.IsPlatformAdmin,
+            usuario.IsPlatformAdmin && tenant.IsRootTenant,
             permissoes);
     }
 

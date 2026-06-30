@@ -4360,7 +4360,7 @@ button:disabled {
 
 .calendar-layout.strong {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.32fr);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.28fr);
   gap: 16px;
   align-items: start;
 }
@@ -4385,8 +4385,13 @@ button:disabled {
 }
 
 .calendar-side-panel {
+  position: sticky;
+  top: 88px;
   display: grid;
+  max-height: calc(100vh - 108px);
   gap: 14px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .calendar-side-panel.collapsed {
@@ -4431,7 +4436,7 @@ button:disabled {
 
 .calendar-side-toggle {
   display: inline-flex;
-  width: 38px;
+  width: auto;
   min-height: 38px;
   align-items: center;
   justify-content: center;
@@ -4441,7 +4446,13 @@ button:disabled {
   background: var(--card-subtle);
   color: var(--muted-foreground);
   font-weight: 850;
-  padding: 0;
+  padding: 0 10px;
+}
+
+.calendar-side-toggle span {
+  color: inherit;
+  font-size: 0.68rem;
+  text-transform: none;
 }
 
 .calendar-side-toggle:hover,
@@ -4461,6 +4472,52 @@ button:disabled {
 .calendar-toolbar.strong > div:first-child {
   display: grid;
   gap: 4px;
+}
+
+.calendar-period-block {
+  display: flex !important;
+  align-items: center;
+  gap: 12px !important;
+}
+
+.calendar-period-block > div:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-period-navigation {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 3px;
+}
+
+.calendar-period-navigation button {
+  display: inline-grid;
+  min-width: 30px;
+  min-height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-weight: 850;
+  padding: 0 8px;
+}
+
+.calendar-period-navigation button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.calendar-period-navigation .calendar-today-button {
+  min-width: 54px;
+  border-inline: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--foreground);
 }
 
 .calendar-toolbar.strong strong {
@@ -4520,6 +4577,256 @@ button:disabled {
 .segmented-control button.active {
   background: var(--primary);
   color: var(--primary-foreground);
+}
+
+.calendar-occupancy-map {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.calendar-occupancy-header,
+.calendar-occupancy-row {
+  display: grid;
+  min-width: 1180px;
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+
+.calendar-occupancy-map.week .calendar-occupancy-header,
+.calendar-occupancy-map.week .calendar-occupancy-row {
+  min-width: 760px;
+}
+
+.calendar-occupancy-map.day .calendar-occupancy-header,
+.calendar-occupancy-map.day .calendar-occupancy-row {
+  min-width: 480px;
+}
+
+.calendar-occupancy-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  min-height: 54px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.calendar-occupancy-header > strong {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+
+.calendar-occupancy-header-days,
+.calendar-occupancy-days,
+.calendar-occupancy-events {
+  display: grid;
+  grid-template-columns: repeat(var(--calendar-day-count), minmax(30px, 1fr));
+}
+
+.calendar-occupancy-header-days span {
+  display: grid;
+  place-content: center;
+  border-right: 1px solid var(--border);
+  color: var(--foreground);
+  text-align: center;
+}
+
+.calendar-occupancy-header-days span.weekend,
+.calendar-occupancy-days > button.weekend {
+  background: color-mix(in srgb, var(--card) 88%, var(--primary) 12%);
+}
+
+.calendar-occupancy-header-days small {
+  color: var(--muted-foreground);
+  font-size: 0.58rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.calendar-occupancy-header-days strong {
+  font-size: 0.78rem;
+}
+
+.calendar-occupancy-row {
+  min-height: 88px;
+  border-bottom: 1px solid var(--border);
+}
+
+.calendar-occupancy-row:last-child {
+  border-bottom: 0;
+}
+
+.calendar-occupancy-property {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 3px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  padding: 0 14px;
+  text-align: left;
+}
+
+.calendar-occupancy-property:hover {
+  color: var(--primary);
+}
+
+.calendar-occupancy-property strong,
+.calendar-occupancy-property span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-occupancy-property strong {
+  font-size: 0.82rem;
+}
+
+.calendar-occupancy-property span {
+  color: var(--muted-foreground);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.calendar-occupancy-days {
+  position: relative;
+}
+
+.calendar-occupancy-days > button {
+  position: relative;
+  min-width: 0;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+}
+
+.calendar-occupancy-days > button:hover,
+.calendar-occupancy-days > button.active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+.calendar-occupancy-days > button.active::after {
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 2px;
+  background: var(--primary);
+  content: "";
+}
+
+.calendar-occupancy-days > button small {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 5;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.56rem;
+  font-weight: 900;
+  padding: 2px 4px;
+}
+
+.calendar-occupancy-events {
+  position: absolute;
+  z-index: 4;
+  inset: 10px 3px;
+  grid-template-rows: repeat(2, 28px);
+  gap: 5px 0;
+  pointer-events: none;
+}
+
+.calendar-occupancy-event {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 7px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.64rem;
+  font-weight: 850;
+  margin-inline: 1px;
+  padding: 0 8px;
+  pointer-events: auto;
+}
+
+.calendar-occupancy-event span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-occupancy-event.reserva {
+  background: color-mix(in srgb, var(--primary) 22%, var(--card));
+  color: var(--primary);
+}
+
+.calendar-occupancy-event.bloqueio {
+  background: var(--danger-background);
+  color: var(--danger);
+}
+
+.calendar-occupancy-event.limpeza {
+  background: var(--success-background);
+  color: var(--success);
+}
+
+.calendar-occupancy-event.manutencao {
+  background: var(--warning-background);
+  color: var(--warning);
+}
+
+.calendar-occupancy-event.clipped-start {
+  border-radius: 0 7px 7px 0;
+}
+
+.calendar-occupancy-event.clipped-end {
+  border-radius: 7px 0 0 7px;
+}
+
+.calendar-occupancy-event.clipped-start.clipped-end {
+  border-radius: 0;
+}
+
+.calendar-occupancy-hint {
+  position: sticky;
+  left: 0;
+  display: flex;
+  min-width: 700px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--card-subtle);
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  padding: 9px 12px;
+}
+
+.calendar-occupancy-hint button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 850;
 }
 
 .calendar-readable-board {
@@ -4687,6 +4994,66 @@ button:disabled {
   align-content: start;
   gap: 10px;
   flex: 1 1 auto;
+}
+
+.calendar-continuous-events {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: repeat(2, 25px);
+  gap: 4px;
+}
+
+.calendar-continuous-event {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  overflow: hidden;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.62rem;
+  font-weight: 850;
+  margin-inline: -10px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+.calendar-continuous-event strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-continuous-event.segment-start {
+  border-radius: 7px 0 0 7px;
+  margin-left: 0;
+}
+
+.calendar-continuous-event.segment-end {
+  border-radius: 0 7px 7px 0;
+  margin-right: 0;
+}
+
+.calendar-continuous-event.segment-start.segment-end {
+  border-radius: 7px;
+}
+
+.calendar-continuous-event.reserva {
+  background: color-mix(in srgb, var(--primary) 22%, var(--card));
+  color: var(--primary);
+}
+
+.calendar-continuous-event.bloqueio {
+  background: var(--danger-background);
+  color: var(--danger);
+}
+
+.calendar-continuous-event.limpeza {
+  background: var(--success-background);
+  color: var(--success);
+}
+
+.calendar-continuous-event.manutencao {
+  background: var(--warning-background);
+  color: var(--warning);
 }
 
 .calendar-cell-event {
@@ -4893,7 +5260,10 @@ button:disabled {
   }
 
   .calendar-side-panel {
+    position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
   }
 
   .calendar-side-panel.collapsed {
@@ -5149,7 +5519,18 @@ button:disabled {
 .calendar-agenda-event > div span {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.calendar-agenda-event > div strong {
   white-space: nowrap;
+}
+
+.calendar-agenda-event > div span {
+  display: -webkit-box;
+  line-height: 1.35;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .calendar-agenda-event button {

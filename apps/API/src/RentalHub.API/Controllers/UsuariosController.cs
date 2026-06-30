@@ -318,6 +318,20 @@ public sealed class UsuariosController : ControllerBase
             return Forbid();
         }
 
+        if (request.IsPlatformAdmin)
+        {
+            var isRootTenant = await _dbContext.Tenants
+                .IgnoreQueryFilters()
+                .AnyAsync(
+                    tenant => tenant.Id == _dbContext.CurrentTenantId && tenant.IsRootTenant,
+                    cancellationToken);
+
+            if (!isRootTenant)
+            {
+                return BadRequest(new { message = "Administrador de plataforma só pode pertencer à empresa raiz." });
+            }
+        }
+
         if (request.EnviarConvite && !string.IsNullOrWhiteSpace(request.Senha))
         {
             return BadRequest(new { message = "Use senha ou convite, não os dois ao mesmo tempo." });

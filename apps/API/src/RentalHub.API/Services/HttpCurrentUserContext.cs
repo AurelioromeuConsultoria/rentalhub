@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using RentalHub.Application.Security;
 using RentalHub.Application.Services;
 
 namespace RentalHub.API.Services;
@@ -20,9 +21,5 @@ public sealed class HttpCurrentUserContext : ICurrentUserContext
 
     public string? UserName => User?.FindFirstValue(ClaimTypes.Name);
     public string? UserEmail => User?.FindFirstValue(ClaimTypes.Email);
-    public bool IsPlatformAdmin => string.Equals(
-        User?.FindFirstValue("IsPlatformAdmin"),
-        "true",
-        StringComparison.OrdinalIgnoreCase);
+    public bool IsPlatformAdmin => PlatformAdminClaims.IsPlatformAdmin(User);
 }
-

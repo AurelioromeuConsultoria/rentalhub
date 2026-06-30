@@ -8,6 +8,7 @@ import {
   readSupportAccessState,
 } from './authStorage';
 import { API_BASE_URL_WITH_API } from './env';
+import { isPlatformAdminUser } from './platformAccess';
 
 export const api = axios.create({
   baseURL: API_BASE_URL_WITH_API,
@@ -36,7 +37,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  if (!isAuthRequest && usuario?.isPlatformAdmin && supportAccess.selectedTenantId) {
+  if (!isAuthRequest && isPlatformAdminUser(usuario) && supportAccess.selectedTenantId) {
     if (supportAccess.isExpired) {
       clearSupportAccessStorage();
       return config;

@@ -501,10 +501,7 @@ public sealed class TenantsController : ControllerBase
 
     private bool IsPlatformAdmin()
     {
-        return string.Equals(
-            User.FindFirst("IsPlatformAdmin")?.Value,
-            "true",
-            StringComparison.OrdinalIgnoreCase);
+        return PlatformAdminClaims.IsPlatformAdmin(User);
     }
 
     private ActionResult? ValidateRequest(TenantRequest request, bool validateAdmin = true)

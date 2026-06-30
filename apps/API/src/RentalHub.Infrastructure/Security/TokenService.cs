@@ -27,6 +27,7 @@ public sealed class TokenService : ITokenService
         var expiresMinutes = int.TryParse(_configuration["Jwt:ExpiresMinutes"], out var value) ? value : 120;
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var isPlatformAdmin = usuario.IsPlatformAdmin && tenant.IsRootTenant;
 
         var claims = new List<Claim>
         {
@@ -42,7 +43,7 @@ public sealed class TokenService : ITokenService
             new("IsRootTenant", tenant.IsRootTenant.ToString().ToLowerInvariant()),
             new("TipoUsuario", ((int)usuario.TipoUsuario).ToString()),
             new("ProprietarioId", usuario.ProprietarioId?.ToString() ?? string.Empty),
-            new("IsPlatformAdmin", usuario.IsPlatformAdmin.ToString().ToLowerInvariant())
+            new("IsPlatformAdmin", isPlatformAdmin.ToString().ToLowerInvariant())
         };
 
         foreach (var permissao in permissoes)

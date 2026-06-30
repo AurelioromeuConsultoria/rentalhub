@@ -6,6 +6,7 @@ import {
   clearSupportAccessStorage,
   readSupportAccessState,
 } from '@/lib/authStorage';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 
 function formatDateTime(value) {
   if (!value) return '';
@@ -38,7 +39,7 @@ export function SupportModeBanner() {
 
   const expiresLabel = useMemo(() => formatDateTime(state.expiresAt), [state.expiresAt]);
 
-  if (!usuario?.isPlatformAdmin || !state.isActive) {
+  if (!isPlatformAdminUser(usuario) || !state.isActive) {
     return null;
   }
 

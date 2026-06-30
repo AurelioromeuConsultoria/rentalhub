@@ -135,6 +135,13 @@ public sealed class DatabaseInitializerHostedService : IHostedService
             CREATE INDEX IF NOT EXISTS "IX_Usuarios_ProprietarioId" ON "Usuarios" ("ProprietarioId");
             CREATE INDEX IF NOT EXISTS "IX_Usuarios_ConviteTokenHash" ON "Usuarios" ("ConviteTokenHash");
             CREATE INDEX IF NOT EXISTS "IX_Usuarios_ResetSenhaTokenHash" ON "Usuarios" ("ResetSenhaTokenHash");
+            UPDATE "Usuarios" u
+            SET "IsPlatformAdmin" = FALSE,
+                "DataAtualizacao" = NOW()
+            FROM "Tenants" t
+            WHERE u."TenantId" = t."Id"
+              AND u."IsPlatformAdmin" = TRUE
+              AND t."IsRootTenant" = FALSE;
             DO $$
             BEGIN
                 IF NOT EXISTS (

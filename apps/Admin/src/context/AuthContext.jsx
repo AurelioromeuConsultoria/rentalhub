@@ -8,6 +8,7 @@ import {
   TOKEN_KEY,
   USER_KEY,
 } from '@/lib/authStorage';
+import { isPlatformAdminUser } from '@/lib/platformAccess';
 
 const AuthContext = createContext(null);
 
@@ -82,7 +83,7 @@ export function AuthProvider({ children }) {
       return false;
     }
 
-    if (usuario.isPlatformAdmin) {
+    if (isPlatformAdminUser(usuario)) {
       return true;
     }
 
