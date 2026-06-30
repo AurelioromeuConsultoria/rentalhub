@@ -9,6 +9,7 @@ import {
   DoorOpen,
   Hammer,
   Lock,
+  Maximize2,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -16,6 +17,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -254,6 +256,23 @@ function getSelectionMessage(selection, conflicts) {
   };
 }
 
+function summarizeDayEvents(dayEvents) {
+  return dayEvents.reduce(
+    (acc, event) => {
+      acc.total += 1;
+      acc[event.tipo] = (acc[event.tipo] || 0) + 1;
+      return acc;
+    },
+    {
+      total: 0,
+      reserva: 0,
+      bloqueio: 0,
+      limpeza: 0,
+      manutencao: 0,
+    },
+  );
+}
+
 export function CalendarioPage() {
   const navigate = useNavigate();
   const [anchorDate, setAnchorDate] = useState(() => new Date());
@@ -269,6 +288,7 @@ export function CalendarioPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(getInitialSidePanelCollapsed);
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
 
   const days = useMemo(() => buildDays(anchorDate, viewMode), [anchorDate, viewMode]);
   const calendarCells = useMemo(() => buildCalendarCells(anchorDate, viewMode), [anchorDate, viewMode]);
@@ -307,6 +327,15 @@ export function CalendarioPage() {
     return { checkIns, checkOuts, limpezas, manutencoes };
   }, [events]);
 
+  const periodSummary = useMemo(() => {
+    const reservas = events.filter((event) => event.tipo === 'reserva').length;
+    const bloqueios = events.filter((event) => event.tipo === 'bloqueio').length;
+    const limpezas = events.filter((event) => event.tipo === 'limpeza').length;
+    const manutencoes = events.filter((event) => event.tipo === 'manutencao').length;
+
+    return { reservas, bloqueios, limpezas, manutencoes };
+  }, [events]);
+
   const availableProperties = useMemo(() => {
     if (!selection.inicio || !selection.fim) return [];
     return imoveis.filter((imovel) => {
@@ -322,6 +351,8 @@ export function CalendarioPage() {
     () => events.filter((event) => eventTouchesDay(event, selectedDay)),
     [events, selectedDay],
   );
+
+  const selectedDaySummary = useMemo(() => summarizeDayEvents(selectedDayEvents), [selectedDayEvents]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -382,6 +413,34 @@ export function CalendarioPage() {
     setSelectedDay(toInputDate(new Date()));
   };
 
+  const goToCurrentMonth = () => {
+    const today = new Date();
+    setAnchorDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDay(toInputDate(today));
+    setViewMode('month');
+  };
+
+  const goToCurrentWeek = () => {
+    const today = new Date();
+    setAnchorDate(today);
+    setSelectedDay(toInputDate(today));
+    setViewMode('week');
+  };
+
+  const clearSelection = () => {
+    setSelection({ imovelId: '', inicio: '', fim: '' });
+    setSuccess('');
+    setError('');
+  };
+
+  const openDayDetails = () => {
+    setDayDetailsOpen(true);
+  };
+
+  const closeDayDetails = () => {
+    setDayDetailsOpen(false);
+  };
+
   const changeViewMode = (mode) => {
     setViewMode(mode);
     if (mode !== 'month' && selectedDay) {
@@ -417,11 +476,7 @@ export function CalendarioPage() {
     if (fallbackImovelId) {
       selectDay(fallbackImovelId, dayKey);
     }
-
-    if (viewMode !== 'day') {
-      setAnchorDate(parseDateOnly(dayKey));
-      setViewMode('day');
-    }
+    setAnchorDate(parseDateOnly(dayKey));
   };
 
   const fillBlockFromSelection = () => {
@@ -518,9 +573,6 @@ export function CalendarioPage() {
           <p>Mapa de ocupação por imóvel com reservas, bloqueios, limpezas, manutenções e criação rápida de agenda.</p>
         </div>
         <div className="resource-actions">
-          <button className="secondary-action compact" type="button" onClick={goToToday}>
-            Hoje
-          </button>
           <button className="icon-button bordered" type="button" aria-label="Período anterior" onClick={goToPreviousRange}>
             <ChevronLeft size={18} />
           </button>
@@ -554,6 +606,28 @@ export function CalendarioPage() {
           <span>Manutenções hoje</span>
           <strong>{daySummary.manutencoes}</strong>
         </article>
+      </section>
+
+      <section className="calendar-quick-bar">
+        <div className="calendar-quick-group">
+          <button className="secondary-action compact" type="button" onClick={goToToday}>
+            Hoje
+          </button>
+          <button className="secondary-action compact" type="button" onClick={goToCurrentWeek}>
+            Esta semana
+          </button>
+          <button className="secondary-action compact" type="button" onClick={goToCurrentMonth}>
+            Este mês
+          </button>
+        </div>
+
+        <div className="calendar-quick-summary" aria-label="Resumo do período">
+          <span><strong>{periodSummary.reservas}</strong> reservas</span>
+          <span><strong>{periodSummary.bloqueios}</strong> bloqueios</span>
+          <span><strong>{periodSummary.limpezas}</strong> limpezas</span>
+          <span><strong>{periodSummary.manutencoes}</strong> manutenções</span>
+          {selectedImovelId && <span className="active-filter">Filtro ativo</span>}
+        </div>
       </section>
 
       <section className={`calendar-layout strong${sidePanelCollapsed ? ' side-collapsed' : ''}`}>
@@ -591,6 +665,15 @@ export function CalendarioPage() {
               </label>
 
               <button
+                className="secondary-action compact"
+                type="button"
+                onClick={openDayDetails}
+              >
+                <Maximize2 size={16} />
+                Abrir dia
+              </button>
+
+              <button
                 className="calendar-side-toggle"
                 type="button"
                 aria-label={sidePanelCollapsed ? 'Abrir painel lateral' : 'Recolher painel lateral'}
@@ -626,7 +709,10 @@ export function CalendarioPage() {
               <div className="calendar-month-grid">
                 {calendarCells.map((day) => {
                   const dayEvents = events.filter((event) => eventTouchesDay(event, day.key));
-                  const visibleDayEvents = viewMode === 'month' ? dayEvents.slice(0, 3) : dayEvents;
+                  const visibleDayEvents = viewMode === 'month' ? dayEvents.slice(0, 1) : dayEvents;
+                  const daySummary = summarizeDayEvents(dayEvents);
+                  const primaryEvent = dayEvents[0];
+                  const isActiveDay = selectedDay === day.key;
                   const selected =
                     selection.inicio &&
                     parseDateOnly(selection.inicio) <= parseDateOnly(day.key) &&
@@ -634,7 +720,7 @@ export function CalendarioPage() {
 
                   return (
                     <button
-                      className={`calendar-day-card${day.inRange ? '' : ' muted'}${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}${selected ? ' selected' : ''}`}
+                      className={`calendar-day-card${day.inRange ? '' : ' muted'}${day.isToday ? ' today' : ''}${day.isWeekend ? ' weekend' : ''}${selected ? ' selected' : ''}${isActiveDay ? ' active-day' : ''}${daySummary.total === 0 ? ' empty' : ''}`}
                       data-calendar-day={day.key}
                       key={day.key}
                       type="button"
@@ -645,24 +731,54 @@ export function CalendarioPage() {
                         {viewMode !== 'month' && <span>{dayFormatter.format(day.date).replace('.', '')}</span>}
                       </div>
 
-                      <div className="calendar-cell-events">
-                        {visibleDayEvents.map((event) => {
-                          const meta = getEventMeta(event);
-                          const Icon = meta.icon;
-                          return (
-                            <span className={`calendar-cell-event ${event.tipo}`} key={event.id} title={`${event.imovelNome} · ${getEventText(event)}`}>
-                              {viewMode !== 'month' && <Icon size={15} />}
+                      {viewMode === 'month' ? (
+                        <div className="calendar-month-day-body">
+                          {primaryEvent ? (
+                            <span
+                              className={`calendar-cell-event ${primaryEvent.tipo} compact`}
+                              title={`${primaryEvent.imovelNome} · ${getEventText(primaryEvent)}`}
+                            >
                               <span>
-                                <strong>{getEventText(event)}</strong>
-                                {viewMode !== 'month' && <em>{event.imovelNome}</em>}
+                                <strong>{primaryEvent.imovelNome}</strong>
+                                <em>{getEventText(primaryEvent)}</em>
                               </span>
                             </span>
-                          );
-                        })}
-                        {viewMode === 'month' && dayEvents.length > visibleDayEvents.length && (
-                          <span className="calendar-cell-more">+{dayEvents.length - visibleDayEvents.length} eventos</span>
-                        )}
-                      </div>
+                          ) : (
+                            <div className="calendar-day-empty-state" aria-hidden="true" />
+                          )}
+
+                          {daySummary.total > 0 && (
+                            <>
+                              <div className="calendar-day-mini-stats" aria-label={`Resumo de ${daySummary.total} eventos`}>
+                                {daySummary.reserva > 0 && <span className="reserva">{daySummary.reserva} reserva{daySummary.reserva > 1 ? 's' : ''}</span>}
+                                {daySummary.bloqueio > 0 && <span className="bloqueio">{daySummary.bloqueio} bloqueio{daySummary.bloqueio > 1 ? 's' : ''}</span>}
+                                {daySummary.limpeza > 0 && <span className="limpeza">{daySummary.limpeza} limpeza{daySummary.limpeza > 1 ? 's' : ''}</span>}
+                                {daySummary.manutencao > 0 && <span className="manutencao">{daySummary.manutencao} manutenção{daySummary.manutencao > 1 ? 'ões' : ''}</span>}
+                              </div>
+
+                              {dayEvents.length > visibleDayEvents.length && (
+                                <span className="calendar-cell-more">+{dayEvents.length - visibleDayEvents.length} no detalhe</span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="calendar-cell-events">
+                          {visibleDayEvents.map((event) => {
+                            const meta = getEventMeta(event);
+                            const Icon = meta.icon;
+                            return (
+                              <span className={`calendar-cell-event ${event.tipo}`} key={event.id} title={`${event.imovelNome} · ${getEventText(event)}`}>
+                                <Icon size={15} />
+                                <span>
+                                  <strong>{getEventText(event)}</strong>
+                                  <em>{event.imovelNome}</em>
+                                </span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -680,6 +796,28 @@ export function CalendarioPage() {
             </button>
           ) : (
             <>
+              <article className="calendar-side-overview">
+                <div className="calendar-side-overview-header">
+                  <div>
+                    <strong>Resumo rápido</strong>
+                    <span>{formatDate(selectedDay)}</span>
+                  </div>
+                  <span className="calendar-side-overview-total">{selectedDaySummary.total} eventos</span>
+                </div>
+
+                <div className="calendar-side-overview-stats">
+                  <span className="reserva">{selectedDaySummary.reserva} reservas</span>
+                  <span className="bloqueio">{selectedDaySummary.bloqueio} bloqueios</span>
+                  <span className="limpeza">{selectedDaySummary.limpeza} limpezas</span>
+                  <span className="manutencao">{selectedDaySummary.manutencao} manutenções</span>
+                </div>
+
+                <div className="calendar-side-overview-meta">
+                  <span>Imóvel selecionado: <strong>{selectedImovel?.nome || 'Nenhum'}</strong></span>
+                  <span>Período: <strong>{selection.inicio ? `${formatDate(selection.inicio)}${selection.fim ? ` até ${formatDate(selection.fim)}` : ''}` : 'Não definido'}</strong></span>
+                </div>
+              </article>
+
               <article className="calendar-day-agenda">
                 <div>
                   <strong>Detalhe do dia</strong>
@@ -688,7 +826,7 @@ export function CalendarioPage() {
 
                 {selectedDayEvents.length > 0 ? (
                   <div className="calendar-day-agenda-list">
-                    {selectedDayEvents.map((event) => {
+                    {selectedDayEvents.slice(0, 4).map((event) => {
                       const meta = getEventMeta(event);
                       const Icon = meta.icon;
                       return (
@@ -706,10 +844,20 @@ export function CalendarioPage() {
                         </article>
                       );
                     })}
+                    {selectedDayEvents.length > 4 && (
+                      <span className="calendar-day-agenda-more">+{selectedDayEvents.length - 4} eventos neste dia</span>
+                    )}
                   </div>
                 ) : (
-                  <p>Dia livre no período filtrado. Clique em outro dia ou selecione um intervalo para criar reserva/bloqueio.</p>
+                  <div className="calendar-empty-panel">
+                    <strong>Nada agendado neste dia</strong>
+                    <p>Use a seleção de período para criar uma reserva ou registrar um bloqueio.</p>
+                  </div>
                 )}
+                <button className="secondary-action full" type="button" onClick={openDayDetails}>
+                  <Maximize2 size={16} />
+                  Ver agenda completa do dia
+                </button>
               </article>
 
               <article className={`calendar-selection-card ${selectionStatus.tone}`}>
@@ -765,6 +913,14 @@ export function CalendarioPage() {
                     onClick={fillBlockFromSelection}
                   >
                     Usar no bloqueio
+                  </button>
+                  <button
+                    className="secondary-action full"
+                    type="button"
+                    disabled={!selection.imovelId && !selection.inicio}
+                    onClick={clearSelection}
+                  >
+                    Limpar seleção
                   </button>
                 </div>
               </article>
@@ -835,15 +991,18 @@ export function CalendarioPage() {
               </form>
 
               <article className="calendar-availability-list">
-                <strong>Imóveis livres no período</strong>
+                <strong>Sugestões de imóveis livres</strong>
                 {selection.inicio && selection.fim ? (
                   availableProperties.length > 0 ? (
                     <div>
-                      {availableProperties.slice(0, 8).map((imovel) => (
+                      {availableProperties.slice(0, 5).map((imovel) => (
                         <button
                           key={imovel.id}
                           type="button"
-                          onClick={() => setSelection((current) => ({ ...current, imovelId: String(imovel.id) }))}
+                          onClick={() => {
+                            setSelection((current) => ({ ...current, imovelId: String(imovel.id) }));
+                            setForm((current) => ({ ...current, imovelId: String(imovel.id) }));
+                          }}
                         >
                           {imovel.nome}
                           <span>{imovel.quantidadeHospedes || 0} hóspedes</span>
@@ -858,7 +1017,7 @@ export function CalendarioPage() {
                 )}
               </article>
 
-              <div className="calendar-legend">
+              <div className="calendar-legend compact">
                 <span className="reserva">Reserva</span>
                 <span className="bloqueio">Bloqueio</span>
                 <span className="limpeza">Limpeza</span>
@@ -868,6 +1027,61 @@ export function CalendarioPage() {
           )}
         </aside>
       </section>
+
+      {dayDetailsOpen && (
+        <div className="calendar-day-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="calendar-day-modal-title">
+          <section className="calendar-day-modal">
+            <div className="calendar-day-modal-header">
+              <div>
+                <span className="eyebrow">Agenda do dia</span>
+                <h2 id="calendar-day-modal-title">{formatDate(selectedDay)}</h2>
+                <p>{selectedDayEvents.length} eventos encontrados no filtro atual.</p>
+              </div>
+              <button className="icon-button bordered" type="button" aria-label="Fechar detalhe do dia" onClick={closeDayDetails}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="calendar-day-modal-summary">
+              <span className="reserva">{selectedDaySummary.reserva} reservas</span>
+              <span className="bloqueio">{selectedDaySummary.bloqueio} bloqueios</span>
+              <span className="limpeza">{selectedDaySummary.limpeza} limpezas</span>
+              <span className="manutencao">{selectedDaySummary.manutencao} manutenções</span>
+            </div>
+
+            {selectedDayEvents.length > 0 ? (
+              <div className="calendar-day-modal-list">
+                {selectedDayEvents.map((event) => {
+                  const meta = getEventMeta(event);
+                  const Icon = meta.icon;
+                  return (
+                    <article className={`calendar-day-modal-event ${event.tipo}`} key={event.id}>
+                      <div className="calendar-day-modal-event-icon">
+                        <Icon size={18} />
+                      </div>
+                      <div>
+                        <strong>{getEventText(event)}</strong>
+                        <span>{event.imovelNome}</span>
+                        <small>{formatDate(event.inicio)} a {formatDate(event.fim)}</small>
+                      </div>
+                      {event.id.startsWith('bloqueio-') && (
+                        <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="calendar-empty-panel large">
+                <strong>Dia sem eventos</strong>
+                <p>Isso abre espaço para uma nova reserva ou para um bloqueio preventivo, sem conflito no filtro atual.</p>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
