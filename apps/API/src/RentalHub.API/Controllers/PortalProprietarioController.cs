@@ -21,7 +21,7 @@ public sealed class PortalProprietarioController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<PortalProprietarioResponse>> GetPortal(
+    public async Task<IActionResult> GetPortal(
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
         [FromQuery] int? imovelId,
@@ -29,264 +29,14 @@ public sealed class PortalProprietarioController : ControllerBase
         [FromQuery] string? origem,
         CancellationToken cancellationToken)
     {
-        var proprietarioId = GetProprietarioId();
-        if (!proprietarioId.HasValue)
+        var result = await LoadPortalDataAsync(inicio, fim, imovelId, reservaStatus, origem, cancellationToken);
+        var error = ToErrorResult(result);
+        if (error is not null)
         {
-            return Forbid();
+            return error;
         }
 
-        var now = DateTime.UtcNow;
-        var start = NormalizeDate(inicio ?? new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc));
-        var end = NormalizeDate(fim ?? now);
-        if (end < start)
-        {
-            return BadRequest(new { message = "Período final deve ser maior ou igual ao período inicial." });
-        }
-
-        var reservaStatusFilter = ParseEnumFilter<ReservaStatus>(reservaStatus, "status da reserva");
-        if (reservaStatusFilter.ErrorMessage is not null)
-        {
-            return BadRequest(new { message = reservaStatusFilter.ErrorMessage });
-        }
-
-        var origemFilter = ParseEnumFilter<ReservaOrigem>(origem, "origem da reserva");
-        if (origemFilter.ErrorMessage is not null)
-        {
-            return BadRequest(new { message = origemFilter.ErrorMessage });
-        }
-
-        var proprietario = await _dbContext.Proprietarios
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == proprietarioId.Value && p.Ativo, cancellationToken);
-
-        if (proprietario is null)
-        {
-            return Forbid();
-        }
-
-        var imoveis = await _dbContext.Imoveis
-            .AsNoTracking()
-            .Where(i => i.ProprietarioId == proprietarioId.Value)
-            .OrderBy(i => i.Nome)
-            .Select(i => new PortalImovelResponse(
-                i.Id,
-                i.Nome,
-                i.CodigoInterno,
-                i.Cidade,
-                i.Estado,
-                i.Status.ToString(),
-                i.QuantidadeHospedes,
-                i.QuantidadeQuartos,
-                i.QuantidadeBanheiros,
-                i.Fotos
-                    .OrderByDescending(f => f.Principal)
-                    .ThenBy(f => f.Ordem)
-                    .Select(f => f.Url)
-                    .FirstOrDefault()))
-            .ToListAsync(cancellationToken);
-
-        var imovelIds = imoveis.Select(i => i.Id).ToArray();
-        if (imovelId.HasValue && !imovelIds.Contains(imovelId.Value))
-        {
-            return BadRequest(new { message = "Imóvel não pertence ao sócio autenticado." });
-        }
-
-        var selectedImovelIds = imovelId.HasValue ? [imovelId.Value] : imovelIds;
-
-        var reservasQuery = _dbContext.Reservas
-            .AsNoTracking()
-            .Include(r => r.Imovel)
-            .Include(r => r.Hospede)
-            .Where(r =>
-                selectedImovelIds.Contains(r.ImovelId) &&
-                (reservaStatusFilter.Value == ReservaStatus.Cancelada || r.Status != ReservaStatus.Cancelada) &&
-                r.CheckOut >= start &&
-                r.CheckIn <= end);
-
-        if (reservaStatusFilter.Value.HasValue)
-        {
-            reservasQuery = reservasQuery.Where(r => r.Status == reservaStatusFilter.Value.Value);
-        }
-
-        if (origemFilter.Value.HasValue)
-        {
-            reservasQuery = reservasQuery.Where(r => r.Origem == origemFilter.Value.Value);
-        }
-
-        var reservas = await reservasQuery
-            .OrderBy(r => r.CheckIn)
-            .Select(r => new PortalReservaResponse(
-                r.Id,
-                r.ImovelId,
-                r.Imovel == null ? string.Empty : r.Imovel.Nome,
-                r.Hospede == null ? string.Empty : r.Hospede.Nome,
-                r.CheckIn,
-                r.CheckOut,
-                r.Origem.ToString(),
-                r.Status.ToString(),
-                r.ValorHospedagem + r.TaxaLimpeza,
-                r.ValorLiquido))
-            .ToListAsync(cancellationToken);
-
-        var movimentacoes = await _dbContext.MovimentacoesFinanceiras
-            .AsNoTracking()
-            .Include(m => m.Imovel)
-            .Include(m => m.CategoriaFinanceira)
-            .Where(m =>
-                m.Data >= start &&
-                m.Data <= end &&
-                ((!imovelId.HasValue && m.ProprietarioId == proprietarioId.Value) ||
-                 (m.ImovelId.HasValue && selectedImovelIds.Contains(m.ImovelId.Value))))
-            .OrderByDescending(m => m.Data)
-            .Select(m => new PortalMovimentacaoResponse(
-                m.Id,
-                m.ImovelId,
-                m.Data,
-                m.Tipo.ToString(),
-                m.CategoriaFinanceira == null ? string.Empty : m.CategoriaFinanceira.Nome,
-                m.Imovel == null ? null : m.Imovel.Nome,
-                m.Descricao,
-                m.Valor))
-            .ToListAsync(cancellationToken);
-
-        var repasses = await _dbContext.RepassesProprietarios
-            .AsNoTracking()
-            .Include(r => r.Imovel)
-            .Where(r =>
-                r.ProprietarioId == proprietarioId.Value &&
-                (!imovelId.HasValue || r.ImovelId == imovelId.Value) &&
-                r.PeriodoFim >= start &&
-                r.PeriodoInicio <= end)
-            .OrderByDescending(r => r.PeriodoFim)
-            .Select(r => new PortalRepasseResponse(
-                r.Id,
-                r.ImovelId,
-                r.Imovel == null ? null : r.Imovel.Nome,
-                r.PeriodoInicio,
-                r.PeriodoFim,
-                r.ValorRepassar,
-                r.ValorPago,
-                r.ValorRepassar - r.ValorPago,
-                r.Status.ToString()))
-            .ToListAsync(cancellationToken);
-
-        var bloqueios = await _dbContext.BloqueiosCalendario
-            .AsNoTracking()
-            .Include(b => b.Imovel)
-            .Where(b =>
-                selectedImovelIds.Contains(b.ImovelId) &&
-                b.Fim >= start &&
-                b.Inicio <= end)
-            .OrderBy(b => b.Inicio)
-            .Select(b => new PortalCalendarioEventoResponse(
-                $"bloqueio-{b.Id}",
-                b.ImovelId,
-                b.Imovel == null ? null : b.Imovel.Nome,
-                b.Tipo == BloqueioCalendarioTipo.Manutencao ? "manutencao" : "bloqueio",
-                string.IsNullOrWhiteSpace(b.Motivo) ? b.Tipo.ToString() : b.Motivo,
-                b.Inicio,
-                b.Fim,
-                b.Tipo.ToString()))
-            .ToListAsync(cancellationToken);
-
-        var manutencoes = await _dbContext.Manutencoes
-            .AsNoTracking()
-            .Include(m => m.Imovel)
-            .Where(m =>
-                selectedImovelIds.Contains(m.ImovelId) &&
-                m.Status != ManutencaoStatus.Cancelada &&
-                ((m.DataPrevista.HasValue && m.DataPrevista.Value >= start && m.DataPrevista.Value <= end) ||
-                 (!m.DataPrevista.HasValue && m.DataAbertura >= start && m.DataAbertura <= end)))
-            .OrderBy(m => m.DataPrevista ?? m.DataAbertura)
-            .Select(m => new PortalCalendarioEventoResponse(
-                $"manutencao-{m.Id}",
-                m.ImovelId,
-                m.Imovel == null ? null : m.Imovel.Nome,
-                "manutencao",
-                string.IsNullOrWhiteSpace(m.Categoria) ? "Manutenção" : m.Categoria,
-                m.DataPrevista ?? m.DataAbertura,
-                (m.DataPrevista ?? m.DataAbertura).AddDays(1),
-                m.Status.ToString()))
-            .ToListAsync(cancellationToken);
-
-        var calendario = reservas
-            .Select(r => new PortalCalendarioEventoResponse(
-                $"reserva-{r.Id}",
-                r.ImovelId,
-                r.ImovelNome,
-                "reserva",
-                r.ImovelNome,
-                r.CheckIn,
-                r.CheckOut,
-                r.Status))
-            .Concat(repasses.Select(r => new PortalCalendarioEventoResponse(
-                $"repasse-{r.Id}",
-                r.ImovelId,
-                r.ImovelNome,
-                "repasse",
-                "Repasse",
-                r.PeriodoFim,
-                r.PeriodoFim.AddDays(1),
-                r.Status)))
-            .Concat(bloqueios)
-            .Concat(manutencoes)
-            .OrderBy(e => e.Inicio)
-            .ToList();
-
-        var receitas = movimentacoes
-            .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita.ToString())
-            .Sum(m => m.Valor);
-
-        var custos = movimentacoes
-            .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString())
-            .Sum(m => m.Valor);
-
-        var resumoPorImovel = imoveis
-            .Where(i => selectedImovelIds.Contains(i.Id))
-            .Select(i =>
-            {
-                var reservasImovel = reservas.Where(r => r.ImovelId == i.Id).ToArray();
-                var movimentacoesImovel = movimentacoes.Where(m => m.ImovelId == i.Id).ToArray();
-                var repassesImovel = repasses.Where(r => r.ImovelId == i.Id).ToArray();
-                var receitaImovel = reservasImovel.Sum(r => r.Receita) +
-                    movimentacoesImovel
-                        .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita.ToString())
-                        .Sum(m => m.Valor);
-                var custosImovel = movimentacoesImovel
-                    .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString())
-                    .Sum(m => m.Valor);
-
-                return new PortalImovelResumoResponse(
-                    i.Id,
-                    i.Nome,
-                    i.FotoPrincipal,
-                    receitaImovel,
-                    custosImovel,
-                    receitaImovel - custosImovel,
-                    reservasImovel.Length,
-                    repassesImovel.Sum(r => r.SaldoPendente));
-            })
-            .OrderByDescending(i => i.Lucro)
-            .ToList();
-
-        return Ok(new PortalProprietarioResponse(
-            proprietario.Id,
-            proprietario.Nome,
-            start,
-            end,
-            imovelId,
-            imoveis.Count,
-            reservas.Count,
-            receitas,
-            custos,
-            repasses.Sum(r => r.ValorRepassar),
-            repasses.Sum(r => r.SaldoPendente),
-            imoveis,
-            reservas,
-            movimentacoes,
-            repasses,
-            calendario,
-            resumoPorImovel));
+        return Ok(result.Data);
     }
 
     [HttpGet("reservas.pdf")]
@@ -427,6 +177,7 @@ public sealed class PortalProprietarioController : ControllerBase
             repasse.TaxasPlataforma,
             repasse.CustosVinculados,
             repasse.ComissaoAdministradora,
+            repasse.PercentualSocio,
             repasse.ValorRepassar,
             repasse.ValorPago,
             repasse.ValorRepassar - repasse.ValorPago,
@@ -530,6 +281,7 @@ public sealed class PortalProprietarioController : ControllerBase
                 i.QuantidadeHospedes,
                 i.QuantidadeQuartos,
                 i.QuantidadeBanheiros,
+                i.PercentualRepasseSocio ?? 100,
                 i.Fotos
                     .OrderByDescending(f => f.Principal)
                     .ThenBy(f => f.Ordem)
@@ -616,10 +368,50 @@ public sealed class PortalProprietarioController : ControllerBase
                 r.Imovel == null ? null : r.Imovel.Nome,
                 r.PeriodoInicio,
                 r.PeriodoFim,
+                r.PercentualSocio,
                 r.ValorRepassar,
                 r.ValorPago,
                 r.ValorRepassar - r.ValorPago,
                 r.Status.ToString()))
+            .ToListAsync(cancellationToken);
+
+        var bloqueios = await _dbContext.BloqueiosCalendario
+            .AsNoTracking()
+            .Include(b => b.Imovel)
+            .Where(b =>
+                selectedImovelIds.Contains(b.ImovelId) &&
+                b.Fim >= start &&
+                b.Inicio <= end)
+            .OrderBy(b => b.Inicio)
+            .Select(b => new PortalCalendarioEventoResponse(
+                $"bloqueio-{b.Id}",
+                b.ImovelId,
+                b.Imovel == null ? null : b.Imovel.Nome,
+                b.Tipo == BloqueioCalendarioTipo.Manutencao ? "manutencao" : "bloqueio",
+                string.IsNullOrWhiteSpace(b.Motivo) ? b.Tipo.ToString() : b.Motivo,
+                b.Inicio,
+                b.Fim,
+                b.Tipo.ToString()))
+            .ToListAsync(cancellationToken);
+
+        var manutencoes = await _dbContext.Manutencoes
+            .AsNoTracking()
+            .Include(m => m.Imovel)
+            .Where(m =>
+                selectedImovelIds.Contains(m.ImovelId) &&
+                m.Status != ManutencaoStatus.Cancelada &&
+                ((m.DataPrevista.HasValue && m.DataPrevista.Value >= start && m.DataPrevista.Value <= end) ||
+                 (!m.DataPrevista.HasValue && m.DataAbertura >= start && m.DataAbertura <= end)))
+            .OrderBy(m => m.DataPrevista ?? m.DataAbertura)
+            .Select(m => new PortalCalendarioEventoResponse(
+                $"manutencao-{m.Id}",
+                m.ImovelId,
+                m.Imovel == null ? null : m.Imovel.Nome,
+                "manutencao",
+                string.IsNullOrWhiteSpace(m.Categoria) ? "Manutenção" : m.Categoria,
+                m.DataPrevista ?? m.DataAbertura,
+                (m.DataPrevista ?? m.DataAbertura).AddDays(1),
+                m.Status.ToString()))
             .ToListAsync(cancellationToken);
 
         var calendario = reservas
@@ -641,6 +433,8 @@ public sealed class PortalProprietarioController : ControllerBase
                 r.PeriodoFim,
                 r.PeriodoFim.AddDays(1),
                 r.Status)))
+            .Concat(bloqueios)
+            .Concat(manutencoes)
             .OrderBy(e => e.Inicio)
             .ToList();
 
@@ -675,10 +469,13 @@ public sealed class PortalProprietarioController : ControllerBase
                     custosImovel,
                     receitaImovel - custosImovel,
                     reservasImovel.Length,
-                    repassesImovel.Sum(r => r.SaldoPendente));
+                    repassesImovel.Sum(r => r.SaldoPendente),
+                    i.PercentualSocio);
             })
             .OrderByDescending(i => i.Lucro)
             .ToList();
+
+        var visaoCalculo = PortalSocioInsightBuilder.Build(imoveis, reservas, movimentacoes, repasses);
 
         return PortalDataResult.Success(new PortalProprietarioResponse(
             proprietario.Id,
@@ -697,7 +494,8 @@ public sealed class PortalProprietarioController : ControllerBase
             movimentacoes,
             repasses,
             calendario,
-            resumoPorImovel));
+            resumoPorImovel,
+            visaoCalculo));
     }
 
     private IActionResult? ToErrorResult(PortalDataResult result)
@@ -740,16 +538,19 @@ public sealed class PortalProprietarioController : ControllerBase
     private static byte[] BuildDemonstrativoRepassePdf(Domain.Entities.RepasseProprietario repasse)
     {
         var propertyName = repasse.Imovel?.Nome ?? "Todos os imoveis";
+        var baseCalculo = repasse.ReceitaReservas - repasse.TaxasPlataforma - repasse.CustosVinculados - repasse.ComissaoAdministradora;
         var summary = new List<SimplePdfSummaryItem>
         {
-            new("Proprietario", repasse.Proprietario?.Nome ?? "-"),
-            new("Imovel", propertyName),
-            new("Periodo", $"{FormatDate(repasse.PeriodoInicio)} a {FormatDate(repasse.PeriodoFim)}"),
+            new("Sócio", repasse.Proprietario?.Nome ?? "-"),
+            new("Imóvel", propertyName),
+            new("Período", $"{FormatDate(repasse.PeriodoInicio)} a {FormatDate(repasse.PeriodoFim)}"),
             new("Status", repasse.Status.ToString()),
             new("Receitas de reservas", FormatCurrency(repasse.ReceitaReservas)),
             new("Taxas da plataforma", FormatCurrency(repasse.TaxasPlataforma)),
             new("Custos vinculados", FormatCurrency(repasse.CustosVinculados)),
-            new("Comissao administradora", FormatCurrency(repasse.ComissaoAdministradora)),
+            new("Comissão administradora", FormatCurrency(repasse.ComissaoAdministradora)),
+            new("Base do cálculo", FormatCurrency(baseCalculo)),
+            new("Percentual do sócio", $"{repasse.PercentualSocio:0.##}%"),
             new("Valor a repassar", FormatCurrency(repasse.ValorRepassar)),
             new("Valor pago", FormatCurrency(repasse.ValorPago)),
             new("Saldo pendente", FormatCurrency(repasse.ValorRepassar - repasse.ValorPago))
@@ -774,13 +575,14 @@ public sealed class PortalProprietarioController : ControllerBase
             summary,
             [
                 new SimplePdfTable(
-                    "Itens do demonstrativo",
+                    "Memória de cálculo",
                     ["Descricao", "Receita", "Taxas", "Custos", "Comissao", "Liquido"],
                     rows)
             ],
             [
                 "Documento gerado automaticamente pelo RentalHub.",
-                "Os valores devem ser conferidos conforme contrato de administracao do imovel.",
+                "Os valores devem ser conferidos conforme contrato de administração do imóvel.",
+                $"Percentual aplicado neste fechamento: {repasse.PercentualSocio:0.##}%.",
                 $"Emitido em {FormatDate(DateTime.UtcNow)}."
             ]));
     }
@@ -803,7 +605,7 @@ public sealed class PortalProprietarioController : ControllerBase
             .ToList();
 
         return SimplePdfBuilder.CreateReport(new SimplePdfReport(
-            "Reservas do Proprietario",
+            "Reservas do Sócio",
             BuildPortalSubtitle(data),
             BuildPortalSummary(data),
             [
@@ -812,7 +614,7 @@ public sealed class PortalProprietarioController : ControllerBase
                     ["Check-in", "Check-out", "Imovel", "Hospede", "Origem", "Receita", "Liquido", "Status"],
                     rows)
             ],
-            ["Relatorio gerado pelo Portal do Proprietario."]));
+            ["Relatório gerado pelo Portal do Sócio."]));
     }
 
     private static byte[] BuildMovimentacoesPdf(PortalProprietarioResponse data)
@@ -845,7 +647,7 @@ public sealed class PortalProprietarioController : ControllerBase
             .ToList();
 
         return SimplePdfBuilder.CreateReport(new SimplePdfReport(
-            "Receitas e Custos do Proprietario",
+            "Receitas e Custos do Sócio",
             BuildPortalSubtitle(data),
             summary,
             [
@@ -854,7 +656,7 @@ public sealed class PortalProprietarioController : ControllerBase
                     ["Data", "Tipo", "Categoria", "Imovel", "Descricao", "Valor"],
                     rows)
             ],
-            ["Relatorio gerado pelo Portal do Proprietario."]));
+            ["Relatório gerado pelo Portal do Sócio."]));
     }
 
     private static byte[] BuildRepassesPdf(PortalProprietarioResponse data)
@@ -865,6 +667,7 @@ public sealed class PortalProprietarioController : ControllerBase
             [
                 $"{FormatDate(r.PeriodoInicio)} a {FormatDate(r.PeriodoFim)}",
                 r.ImovelNome ?? "Todos",
+                $"{r.PercentualSocio:0.##}%",
                 FormatCurrency(r.ValorRepassar),
                 FormatCurrency(r.ValorPago),
                 FormatCurrency(r.SaldoPendente),
@@ -880,52 +683,55 @@ public sealed class PortalProprietarioController : ControllerBase
             .ToList();
 
         return SimplePdfBuilder.CreateReport(new SimplePdfReport(
-            "Repasses do Proprietario",
+            "Repasses do Sócio",
             BuildPortalSubtitle(data),
             summary,
             [
                 new SimplePdfTable(
                     "Repasses",
-                    ["Periodo", "Imovel", "Valor", "Pago", "Pendente", "Status"],
+                    ["Periodo", "Imovel", "% Sócio", "Valor", "Pago", "Pendente", "Status"],
                     rows)
             ],
-            ["Relatorio gerado pelo Portal do Proprietario."]));
+            ["Relatório gerado pelo Portal do Sócio."]));
     }
 
     private static byte[] BuildDemonstrativoMensalPdf(PortalProprietarioResponse data)
     {
-        var receitasOperacionais = data.Movimentacoes
-            .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Receita.ToString())
-            .Sum(m => m.Valor);
-        var despesasOperacionais = data.Movimentacoes
-            .Where(m => m.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString())
-            .Sum(m => m.Valor);
-        var receitaReservas = data.Reservas.Sum(r => r.Receita);
+        var visao = data.VisaoCalculo;
         var liquidoReservas = data.Reservas.Sum(r => r.ValorLiquido);
-
-        var summary = new List<SimplePdfSummaryItem>
+        var executiveSummary = new List<SimplePdfSummaryItem>
         {
-            new("Proprietario", data.ProprietarioNome),
-            new("Periodo", $"{FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}"),
-            new("Imoveis no filtro", data.ResumoPorImovel.Count.ToString()),
-            new("Reservas", data.Reservas.Count.ToString()),
-            new("Receita bruta das reservas", FormatCurrency(receitaReservas)),
-            new("Liquido das reservas", FormatCurrency(liquidoReservas)),
-            new("Receitas extras", FormatCurrency(receitasOperacionais)),
-            new("Custos operacionais", FormatCurrency(despesasOperacionais)),
-            new("Resultado estimado", FormatCurrency(receitaReservas + receitasOperacionais - despesasOperacionais)),
-            new("Valor a receber", FormatCurrency(data.RepassesPendentes))
+            new("Sócio", data.ProprietarioNome),
+            new("Período", $"{FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}"),
+            new("Imóveis analisados", data.ResumoPorImovel.Count.ToString()),
+            new("Reservas no período", data.Reservas.Count.ToString()),
+            new("Receita bruta", FormatCurrency(visao.ReceitaReservas)),
+            new("Líquido das reservas", FormatCurrency(liquidoReservas)),
+            new("Base operacional", FormatCurrency(visao.ResultadoOperacional)),
+            new("Repasse oficial gerado", FormatCurrency(visao.RepassesGerados)),
+            new("Saldo pendente", FormatCurrency(visao.RepassesPendentes))
         };
 
-        var propertyRows = data.ResumoPorImovel
-            .OrderByDescending(i => i.Lucro)
+        var compositionSummary = new List<SimplePdfSummaryItem>
+        {
+            new("Receitas extras", FormatCurrency(visao.ReceitasExtras)),
+            new("Custos vinculados", FormatCurrency(visao.CustosVinculados)),
+            new("Custos sem vínculo", FormatCurrency(visao.CustosSemVinculo)),
+            new("Imóveis sem repasse", visao.ImoveisSemRepasseNoPeriodo.ToString()),
+            new("Percentuais a conferir", visao.ImoveisComPercentualDivergente.ToString())
+        };
+
+        var propertyRows = visao.MemoriaCalculo
+            .OrderByDescending(i => i.ResultadoOperacional)
             .Select(i => (IReadOnlyCollection<string>)
             [
                 i.ImovelNome,
-                i.Reservas.ToString(),
-                FormatCurrency(i.Receitas),
+                $"{i.PercentualSocioAtual:0.##}%",
+                FormatCurrency(i.ReceitaReservas),
+                FormatCurrency(i.ReceitasExtras),
                 FormatCurrency(i.Custos),
-                FormatCurrency(i.Lucro),
+                FormatCurrency(i.ResultadoOperacional),
+                FormatCurrency(i.RepassesGerados),
                 FormatCurrency(i.RepassesPendentes)
             ])
             .ToList();
@@ -949,6 +755,7 @@ public sealed class PortalProprietarioController : ControllerBase
             [
                 $"{FormatDate(r.PeriodoInicio)} a {FormatDate(r.PeriodoFim)}",
                 r.ImovelNome ?? "Todos",
+                $"{r.PercentualSocio:0.##}%",
                 FormatCurrency(r.ValorRepassar),
                 FormatCurrency(r.ValorPago),
                 FormatCurrency(r.SaldoPendente),
@@ -956,29 +763,51 @@ public sealed class PortalProprietarioController : ControllerBase
             ])
             .ToList();
 
-        return SimplePdfBuilder.CreateReport(new SimplePdfReport(
-            "Demonstrativo Mensal do Proprietario",
-            BuildPortalSubtitle(data),
-            summary,
-            [
-                new SimplePdfTable(
-                    "Resumo por imovel",
-                    ["Imovel", "Reservas", "Receitas", "Custos", "Resultado", "A receber"],
-                    propertyRows),
-                new SimplePdfTable(
-                    "Reservas do periodo",
-                    ["Periodo", "Imovel", "Hospede", "Origem", "Bruto", "Liquido"],
-                    reservationRows),
-                new SimplePdfTable(
-                    "Repasses",
-                    ["Periodo", "Imovel", "Valor", "Pago", "Pendente", "Status"],
-                    transferRows)
-            ],
-            [
-                "Documento consolidado gerado pelo Portal do Proprietario.",
-                "Use este demonstrativo como conferencia operacional e financeira do periodo.",
-                "Valores sujeitos a ajustes conforme contrato, pagamentos e custos registrados."
-            ]));
+        var lines = new List<string>
+        {
+            "RentalHub",
+            "# Demonstrativo mensal do sócio",
+            $"> {data.ProprietarioNome} · {FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}",
+            $"> Emitido em {FormatDate(DateTime.UtcNow)}",
+            string.Empty,
+            "## Visão executiva",
+        };
+
+        lines.AddRange(SimplePdfBuilder.RenderSummary(executiveSummary));
+        lines.Add(string.Empty);
+        lines.Add("## Composição do período");
+        lines.AddRange(SimplePdfBuilder.RenderSummary(compositionSummary));
+        lines.Add(string.Empty);
+        lines.Add("## Leitura por imóvel");
+        lines.Add("> Esta seção ajuda a entender formação do resultado e o que já virou repasse oficial.");
+        lines.AddRange(SimplePdfBuilder.RenderTable(new SimplePdfTable(
+            "Memória de cálculo por imóvel",
+            ["Imovel", "% Sócio", "Reservas", "Receitas extras", "Custos", "Base operacional", "Repasse gerado", "A receber"],
+            propertyRows)));
+        lines.Add(string.Empty);
+        lines.Add("## Repasses emitidos");
+        lines.AddRange(SimplePdfBuilder.RenderTable(new SimplePdfTable(
+            "Repasses",
+            ["Periodo", "Imovel", "% Sócio", "Valor", "Pago", "Pendente", "Status"],
+            transferRows)));
+        lines.Add(string.Empty);
+        lines.Add("## Reservas do período");
+        lines.AddRange(SimplePdfBuilder.RenderTable(new SimplePdfTable(
+            "Reservas do período",
+            ["Periodo", "Imovel", "Hospede", "Origem", "Bruto", "Liquido"],
+            reservationRows)));
+        lines.Add(string.Empty);
+        lines.Add("## Pontos de atenção");
+        lines.AddRange(visao.Alertas.Select(alerta => $"- {alerta}"));
+        lines.Add("- Custos sem vínculo não entram no repasse até serem associados a um imóvel ou reserva.");
+        lines.Add("- Quando houver mudança de percentual no tempo, o repasse oficial prevalece sobre a leitura resumida do portal.");
+        lines.Add(string.Empty);
+        lines.Add("## Leitura rápida");
+        lines.Add($"> Base operacional do período: {FormatCurrency(visao.ResultadoOperacional)}");
+        lines.Add($"> Repasse oficial gerado: {FormatCurrency(visao.RepassesGerados)}");
+        lines.Add($"> Saldo pendente ao sócio: {FormatCurrency(visao.RepassesPendentes)}");
+
+        return SimplePdfBuilder.Create(lines);
     }
 
     private static byte[] BuildReservaDetalhePdf(Domain.Entities.Reserva reserva)
@@ -988,29 +817,29 @@ public sealed class PortalProprietarioController : ControllerBase
         var summary = new List<SimplePdfSummaryItem>
         {
             new("Reserva", $"#{reserva.Id}"),
-            new("Imovel", reserva.Imovel?.Nome ?? "-"),
-            new("Hospede", reserva.Hospede?.Nome ?? "-"),
+            new("Imóvel", reserva.Imovel?.Nome ?? "-"),
+            new("Hóspede", reserva.Hospede?.Nome ?? "-"),
             new("Origem", reserva.Origem.ToString()),
             new("Status", reserva.Status.ToString()),
             new("Check-in", FormatDate(reserva.CheckIn)),
             new("Check-out", FormatDate(reserva.CheckOut)),
-            new("Diarias", nights.ToString()),
-            new("Hospedes", reserva.NumeroHospedes.ToString()),
-            new("Bruto por diaria", FormatCurrency(receitaBruta / nights)),
-            new("Liquido por diaria", FormatCurrency(reserva.ValorLiquido / nights)),
+            new("Diárias", nights.ToString()),
+            new("Hóspedes", reserva.NumeroHospedes.ToString()),
+            new("Bruto por diária", FormatCurrency(receitaBruta / nights)),
+            new("Líquido por diária", FormatCurrency(reserva.ValorLiquido / nights)),
             new("Receita bruta", FormatCurrency(receitaBruta)),
             new("Taxa da plataforma", FormatCurrency(reserva.TaxaPlataforma)),
-            new("Comissao administradora", FormatCurrency(reserva.ComissaoAdministradora)),
-            new("Valor liquido", FormatCurrency(reserva.ValorLiquido))
+            new("Comissão administradora", FormatCurrency(reserva.ComissaoAdministradora)),
+            new("Valor líquido", FormatCurrency(reserva.ValorLiquido))
         };
 
         return SimplePdfBuilder.CreateReport(new SimplePdfReport(
             "Detalhe da Reserva",
-            $"{reserva.Imovel?.Nome ?? "Imovel"} - {FormatDate(reserva.CheckIn)} a {FormatDate(reserva.CheckOut)}",
+            $"{reserva.Imovel?.Nome ?? "Imóvel"} - {FormatDate(reserva.CheckIn)} a {FormatDate(reserva.CheckOut)}",
             summary,
             [],
             [
-                string.IsNullOrWhiteSpace(reserva.Observacoes) ? "Sem observacoes registradas." : $"Observacoes: {reserva.Observacoes}",
+                string.IsNullOrWhiteSpace(reserva.Observacoes) ? "Sem observações registradas." : $"Observações: {reserva.Observacoes}",
                 "Documento gerado automaticamente pelo RentalHub."
             ]));
     }
@@ -1019,16 +848,16 @@ public sealed class PortalProprietarioController : ControllerBase
     {
         return
         [
-            new("Proprietario", data.ProprietarioNome),
-            new("Periodo", $"{FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}"),
-            new("Imoveis", data.TotalImoveis.ToString()),
+            new("Sócio", data.ProprietarioNome),
+            new("Período", $"{FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}"),
+            new("Imóveis", data.TotalImoveis.ToString()),
             new("Reservas", data.TotalReservas.ToString())
         ];
     }
 
     private static string BuildPortalSubtitle(PortalProprietarioResponse data)
     {
-        return $"Periodo {FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}";
+        return $"Período {FormatDate(data.PeriodoInicio)} a {FormatDate(data.PeriodoFim)}";
     }
 
     private static string FormatDate(DateTime value) => value.ToString("dd/MM/yyyy");
@@ -1070,7 +899,8 @@ public sealed record PortalProprietarioResponse(
     IReadOnlyCollection<PortalMovimentacaoResponse> Movimentacoes,
     IReadOnlyCollection<PortalRepasseResponse> Repasses,
     IReadOnlyCollection<PortalCalendarioEventoResponse> Calendario,
-    IReadOnlyCollection<PortalImovelResumoResponse> ResumoPorImovel);
+    IReadOnlyCollection<PortalImovelResumoResponse> ResumoPorImovel,
+    PortalVisaoCalculoResponse VisaoCalculo);
 
 public sealed record PortalImovelResponse(
     int Id,
@@ -1082,6 +912,7 @@ public sealed record PortalImovelResponse(
     int QuantidadeHospedes,
     int QuantidadeQuartos,
     int QuantidadeBanheiros,
+    decimal PercentualSocio,
     string? FotoPrincipal);
 
 public sealed record PortalReservaResponse(
@@ -1112,6 +943,7 @@ public sealed record PortalRepasseResponse(
     string? ImovelNome,
     DateTime PeriodoInicio,
     DateTime PeriodoFim,
+    decimal PercentualSocio,
     decimal ValorRepassar,
     decimal ValorPago,
     decimal SaldoPendente,
@@ -1127,6 +959,7 @@ public sealed record PortalRepasseDetalheResponse(
     decimal TaxasPlataforma,
     decimal CustosVinculados,
     decimal ComissaoAdministradora,
+    decimal PercentualSocio,
     decimal ValorRepassar,
     decimal ValorPago,
     decimal SaldoPendente,
@@ -1164,4 +997,32 @@ public sealed record PortalImovelResumoResponse(
     decimal Custos,
     decimal Lucro,
     int Reservas,
-    decimal RepassesPendentes);
+    decimal RepassesPendentes,
+    decimal PercentualSocio);
+
+public sealed record PortalVisaoCalculoResponse(
+    decimal ReceitaReservas,
+    decimal ReceitasExtras,
+    decimal CustosVinculados,
+    decimal CustosSemVinculo,
+    decimal ResultadoOperacional,
+    decimal RepassesGerados,
+    decimal RepassesPendentes,
+    int CustosSemVinculoQuantidade,
+    int ImoveisSemRepasseNoPeriodo,
+    int ImoveisComPercentualDivergente,
+    IReadOnlyCollection<PortalMemoriaCalculoItemResponse> MemoriaCalculo,
+    IReadOnlyCollection<string> Alertas);
+
+public sealed record PortalMemoriaCalculoItemResponse(
+    int ImovelId,
+    string ImovelNome,
+    decimal PercentualSocioAtual,
+    decimal ReceitaReservas,
+    decimal ReceitasExtras,
+    decimal Custos,
+    decimal ResultadoOperacional,
+    decimal RepassesGerados,
+    decimal RepassesPendentes,
+    bool TemRepasseNoPeriodo,
+    bool PercentualDivergenteNoPeriodo);

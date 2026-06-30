@@ -8,6 +8,16 @@ public static class SimplePdfBuilder
     private const int LinesPerPage = 44;
     private const int MaxLineLength = 105;
 
+    public static IReadOnlyCollection<string> RenderSummary(IReadOnlyCollection<SimplePdfSummaryItem> summary)
+    {
+        return summary.Select(FormatSummaryLine).ToList();
+    }
+
+    public static IReadOnlyCollection<string> RenderTable(SimplePdfTable table)
+    {
+        return CreateTableLines(table);
+    }
+
     public static byte[] CreateReport(SimplePdfReport report)
     {
         var lines = new List<string>
@@ -59,7 +69,8 @@ public static class SimplePdfBuilder
         {
             "<< /Type /Catalog /Pages 2 0 R >>",
             string.Empty,
-            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
         };
 
         var pageObjectIds = new List<int>();
@@ -69,7 +80,7 @@ public static class SimplePdfBuilder
             var contentObjectId = pageObjectId + 1;
             pageObjectIds.Add(pageObjectId);
 
-            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents {contentObjectId} 0 R >>");
+            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {contentObjectId} 0 R >>");
             objects.Add(CreateContentObject(pageLines));
         }
 
@@ -109,13 +120,16 @@ public static class SimplePdfBuilder
     {
         var content = new StringBuilder();
         var y = 800;
-        foreach (var line in lines)
+        var index = 0;
+        foreach (var rawLine in lines)
         {
-            var fontSize = y == 800 ? 14 : 9;
-            content.Append("BT /F1 ").Append(fontSize).Append(" Tf 42 ")
+            var style = GetLineStyle(rawLine, index);
+            content.Append("BT /").Append(style.FontKey).Append(' ').Append(style.FontSize).Append(" Tf ")
+                .Append(style.X.ToString(CultureInfo.InvariantCulture)).Append(' ')
                 .Append(y.ToString(CultureInfo.InvariantCulture))
-                .Append(" Td (").Append(EscapePdfText(line)).Append(") Tj ET\n");
-            y -= y == 800 ? 22 : 15;
+                .Append(" Td (").Append(EscapePdfText(style.Text)).Append(") Tj ET\n");
+            y -= style.LineHeight;
+            index++;
         }
 
         var stream = content.ToString();
@@ -227,6 +241,39 @@ public static class SimplePdfBuilder
 
         return width <= 3 ? normalized[..width] : string.Concat(normalized.AsSpan(0, width - 3), "...");
     }
+
+    private static PdfLineStyle GetLineStyle(string line, int index)
+    {
+        var normalized = ToAscii(line);
+        if (normalized.StartsWith("# ", StringComparison.Ordinal))
+        {
+            return new PdfLineStyle(normalized[2..], "F2", 16, 42, 24);
+        }
+
+        if (normalized.StartsWith("## ", StringComparison.Ordinal))
+        {
+            return new PdfLineStyle(normalized[3..], "F2", 11, 42, 18);
+        }
+
+        if (normalized.StartsWith("> ", StringComparison.Ordinal))
+        {
+            return new PdfLineStyle(normalized[2..], "F1", 9, 56, 15);
+        }
+
+        if (normalized.StartsWith("- ", StringComparison.Ordinal))
+        {
+            return new PdfLineStyle($"* {normalized[2..]}", "F1", 9, 52, 15);
+        }
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return new PdfLineStyle(string.Empty, "F1", 9, 42, 12);
+        }
+
+        return index == 0
+            ? new PdfLineStyle(normalized, "F2", 14, 42, 22)
+            : new PdfLineStyle(normalized, "F1", 9, 42, 15);
+    }
 }
 
 public sealed record SimplePdfReport(
@@ -242,3 +289,10 @@ public sealed record SimplePdfTable(
     string Title,
     IReadOnlyCollection<string> Headers,
     IReadOnlyCollection<IReadOnlyCollection<string>> Rows);
+
+internal sealed record PdfLineStyle(
+    string Text,
+    string FontKey,
+    int FontSize,
+    int X,
+    int LineHeight);

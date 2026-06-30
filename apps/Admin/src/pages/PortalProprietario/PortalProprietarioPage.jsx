@@ -1,4 +1,5 @@
 import {
+  TriangleAlert,
   Bath,
   BedDouble,
   Building2,
@@ -25,6 +26,21 @@ import { portalProprietarioApi } from '@/api/portalProprietario';
 const currentMonthStart = new Date();
 currentMonthStart.setDate(1);
 
+const emptyVisaoCalculo = {
+  receitaReservas: 0,
+  receitasExtras: 0,
+  custosVinculados: 0,
+  custosSemVinculo: 0,
+  resultadoOperacional: 0,
+  repassesGerados: 0,
+  repassesPendentes: 0,
+  custosSemVinculoQuantidade: 0,
+  imoveisSemRepasseNoPeriodo: 0,
+  imoveisComPercentualDivergente: 0,
+  memoriaCalculo: [],
+  alertas: [],
+};
+
 const emptyPortal = {
   proprietarioNome: '',
   imovelSelecionadoId: null,
@@ -40,6 +56,7 @@ const emptyPortal = {
   repasses: [],
   calendario: [],
   resumoPorImovel: [],
+  visaoCalculo: emptyVisaoCalculo,
 };
 
 const reservaStatusOptions = [
@@ -242,6 +259,18 @@ function StatusBadge({ value }) {
   return <span className={`status-pill ${statusClass(value)}`}>{statusLabel(value)}</span>;
 }
 
+function MemoryStatusBadge({ item }) {
+  if (item.percentualDivergenteNoPeriodo) {
+    return <span className="status-pill pending">Conferir %</span>;
+  }
+
+  if (!item.temRepasseNoPeriodo) {
+    return <span className="status-pill inactive">Sem repasse</span>;
+  }
+
+  return <span className="status-pill active">Fechado</span>;
+}
+
 function PortalHero({ data, nextReservation, pendingTransfers, periodLabel }) {
   return (
     <section className="portal-owner-hero">
@@ -414,6 +443,10 @@ function PropertyDetail({
           <strong>{money(summary?.lucro)}</strong>
         </article>
         <article>
+          <span>% sócio</span>
+          <strong>{Number(summary?.percentualSocio || property.percentualSocio || 0).toFixed(2).replace('.', ',')}%</strong>
+        </article>
+        <article>
           <span>A receber</span>
           <strong>{money(summary?.repassesPendentes)}</strong>
         </article>
@@ -510,6 +543,10 @@ function TransferDetail({ transfer, detail, loading, onClose, onDownloadPdf }) {
 
   const current = detail?.id === transfer.id ? detail : transfer;
   const itens = detail?.id === transfer.id ? detail.itens || [] : [];
+  const baseCalculo = Number(current.receitaReservas || 0)
+    - Number(current.taxasPlataforma || 0)
+    - Number(current.custosVinculados || 0)
+    - Number(current.comissaoAdministradora || 0);
 
   return (
     <section className="resource-panel portal-transfer-detail">
@@ -543,6 +580,14 @@ function TransferDetail({ transfer, detail, loading, onClose, onDownloadPdf }) {
           <strong>{money(current.comissaoAdministradora)}</strong>
         </article>
         <article>
+          <span>Base cálculo</span>
+          <strong>{money(baseCalculo)}</strong>
+        </article>
+        <article>
+          <span>% sócio</span>
+          <strong>{Number(current.percentualSocio || 0).toFixed(2).replace('.', ',')}%</strong>
+        </article>
+        <article>
           <span>Valor a repassar</span>
           <strong>{money(current.valorRepassar)}</strong>
         </article>
@@ -569,12 +614,17 @@ function TransferDetail({ transfer, detail, loading, onClose, onDownloadPdf }) {
         <div className="resource-panel-heading compact-heading">
           <div>
             <strong>Composição</strong>
-            <small>Itens que formam o demonstrativo.</small>
+            <small>Itens que formam o demonstrativo oficial do sócio.</small>
           </div>
           <span>{loading ? 'Carregando...' : `${itens.length} itens`}</span>
         </div>
         <PortalTable
           columns={[
+            {
+              key: 'origem',
+              label: 'Origem',
+              render: (item) => (item.reservaId ? `Reserva #${item.reservaId}` : item.movimentacaoFinanceiraId ? `Custo #${item.movimentacaoFinanceiraId}` : '-'),
+            },
             { key: 'descricao', label: 'Descrição' },
             { key: 'receita', label: 'Receita', render: (item) => money(item.receita) },
             { key: 'taxas', label: 'Taxas', render: (item) => money(item.taxas) },
@@ -658,10 +708,80 @@ function DocumentsPanel({ data, downloadingPdfType, onDownloadPdf }) {
   );
 }
 
+function CalculationOverview({ calculo, onExportCsv }) {
+  return (
+    <section className="resource-panel portal-calculation-panel">
+      <div className="resource-panel-heading">
+        <div>
+          <strong>Memória de cálculo do sócio</strong>
+          <small>Leitura operacional do período, com base vinculada, repasses oficiais e alertas de conferência.</small>
+        </div>
+        <div className="portal-heading-actions">
+          <span>{calculo.memoriaCalculo?.length || 0} imóveis</span>
+          <button className="portal-export-button" type="button" onClick={onExportCsv}>
+            <Download size={16} />
+            CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="portal-calculation-highlights">
+        <article>
+          <span>Base operacional</span>
+          <strong>{money(calculo.resultadoOperacional)}</strong>
+          <small>Reservas + receitas extras - custos vinculados.</small>
+        </article>
+        <article>
+          <span>Repasse oficial</span>
+          <strong>{money(calculo.repassesGerados)}</strong>
+          <small>Valor já fechado em demonstrativos do período.</small>
+        </article>
+        <article>
+          <span>Saldo pendente</span>
+          <strong>{money(calculo.repassesPendentes)}</strong>
+          <small>Parte ainda não quitada ao sócio.</small>
+        </article>
+        <article>
+          <span>Custos sem vínculo</span>
+          <strong>{money(calculo.custosSemVinculo)}</strong>
+          <small>{calculo.custosSemVinculoQuantidade || 0} lançamento(s) fora do cálculo.</small>
+        </article>
+      </div>
+
+      <div className="portal-callout-grid">
+        {(calculo.alertas || []).map((alerta, index) => (
+          <div className="portal-callout" key={`${alerta}-${index}`}>
+            <TriangleAlert size={16} />
+            <span>{alerta}</span>
+          </div>
+        ))}
+      </div>
+
+      <PortalTable
+        columns={[
+          { key: 'imovelNome', label: 'Imóvel' },
+          { key: 'percentualSocioAtual', label: '% Sócio', render: (item) => `${Number(item.percentualSocioAtual || 0).toFixed(2).replace('.', ',')}%` },
+          { key: 'receitaReservas', label: 'Reservas', render: (item) => money(item.receitaReservas) },
+          { key: 'receitasExtras', label: 'Receitas extras', render: (item) => money(item.receitasExtras) },
+          { key: 'custos', label: 'Custos', render: (item) => money(item.custos) },
+          { key: 'resultadoOperacional', label: 'Base operacional', render: (item) => money(item.resultadoOperacional) },
+          { key: 'repassesGerados', label: 'Repasse oficial', render: (item) => money(item.repassesGerados) },
+          { key: 'repassesPendentes', label: 'Pendente', render: (item) => money(item.repassesPendentes) },
+          { key: 'status', label: 'Situação', render: (item) => <MemoryStatusBadge item={item} /> },
+        ]}
+        emptyText="Sem imóveis no filtro para montar a memória de cálculo."
+        items={calculo.memoriaCalculo}
+      />
+    </section>
+  );
+}
+
 export function PortalProprietarioPage() {
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
   const [filters, setFilters] = useState({
     inicio: currentMonthStart.toISOString().slice(0, 10),
-    fim: new Date().toISOString().slice(0, 10),
+    fim: todayIso,
     imovelId: '',
     reservaStatus: '',
     origem: '',
@@ -705,6 +825,16 @@ export function PortalProprietarioPage() {
     const timeout = setTimeout(load, 0);
     return () => clearTimeout(timeout);
   }, [load]);
+
+  useEffect(() => {
+    const startDate = parseDate(filters.inicio);
+    if (!startDate) return;
+
+    const nextMonth = monthKeyFromDate(startDate);
+    if (nextMonth !== calendarMonth) {
+      setCalendarMonth(nextMonth);
+    }
+  }, [filters.inicio, calendarMonth]);
 
   useEffect(() => {
     if (!selectedTransferId) {
@@ -806,10 +936,12 @@ export function PortalProprietarioPage() {
 
   const saldoOperacional = Number(data.receitas || 0) - Number(data.custos || 0);
   const receitaReservas = (data.reservas || []).reduce((total, reserva) => total + Number(reserva.receita || 0), 0);
-  const resultadoEstimado = (data.resumoPorImovel || []).reduce((total, imovel) => total + Number(imovel.lucro || 0), 0);
+  const visaoCalculo = data.visaoCalculo || emptyVisaoCalculo;
+  const resultadoEstimado = Number(visaoCalculo.resultadoOperacional || 0)
+    || (data.resumoPorImovel || []).reduce((total, imovel) => total + Number(imovel.lucro || 0), 0);
   const noitesReservadas = (data.reservas || []).reduce((total, reserva) => total + reservationNights(reserva), 0);
   const ocupacaoEstimada = clampPercent((noitesReservadas / Math.max(1, periodDays(filters.inicio, filters.fim) * Math.max(1, data.totalImoveis || 1))) * 100);
-  const hoje = new Date();
+  const hoje = new Date(today);
   hoje.setHours(0, 0, 0, 0);
   const nextReservation = (data.reservas || [])
     .filter((reserva) => {
@@ -861,6 +993,36 @@ export function PortalProprietarioPage() {
     }));
   };
 
+  const applyRangePreset = (preset) => {
+    const now = new Date();
+    let inicio = '';
+    let fim = now.toISOString().slice(0, 10);
+
+    if (preset === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      inicio = start.toISOString().slice(0, 10);
+      fim = end.toISOString().slice(0, 10);
+    }
+
+    if (preset === '30days') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 29);
+      inicio = start.toISOString().slice(0, 10);
+    }
+
+    if (preset === 'year') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      inicio = start.toISOString().slice(0, 10);
+    }
+
+    setFilters((current) => ({
+      ...current,
+      inicio,
+      fim,
+    }));
+  };
+
   return (
     <div className="resource-page">
       <PortalHero
@@ -909,6 +1071,11 @@ export function PortalProprietarioPage() {
             <RotateCcw size={18} />
           </button>
         </div>
+        <div className="portal-filter-presets">
+          <button className="portal-filter-chip" type="button" onClick={() => applyRangePreset('month')}>Mês atual</button>
+          <button className="portal-filter-chip" type="button" onClick={() => applyRangePreset('30days')}>Últimos 30 dias</button>
+          <button className="portal-filter-chip" type="button" onClick={() => applyRangePreset('year')}>Ano atual</button>
+        </div>
       </section>
 
       {error && <div className="form-alert">{error}</div>}
@@ -927,9 +1094,9 @@ export function PortalProprietarioPage() {
           <div className="metric-icon blue">
             <TrendingUp size={19} />
           </div>
-          <span>Resultado estimado</span>
+          <span>Base operacional</span>
           <strong>{money(resultadoEstimado || saldoOperacional)}</strong>
-          <small className="metric-note">Receitas menos custos.</small>
+          <small className="metric-note">A base vinculada do cálculo do sócio.</small>
         </article>
         <article className="metric-card" title="Soma do valor bruto das reservas mais taxa de limpeza.">
           <div className="metric-icon yellow">
@@ -973,6 +1140,26 @@ export function PortalProprietarioPage() {
         onTransferClick={setSelectedTransferId}
       />
 
+      <CalculationOverview
+        calculo={visaoCalculo}
+        onExportCsv={() => exportRows(
+          'portal-memoria-calculo-socio.csv',
+          [
+            { label: 'Imóvel', value: (item) => item.imovelNome },
+            { label: '% Sócio', value: (item) => `${Number(item.percentualSocioAtual || 0).toFixed(2).replace('.', ',')}%` },
+            { label: 'Reservas', value: (item) => money(item.receitaReservas) },
+            { label: 'Receitas extras', value: (item) => money(item.receitasExtras) },
+            { label: 'Custos', value: (item) => money(item.custos) },
+            { label: 'Base operacional', value: (item) => money(item.resultadoOperacional) },
+            { label: 'Repasse oficial', value: (item) => money(item.repassesGerados) },
+            { label: 'Pendente', value: (item) => money(item.repassesPendentes) },
+            { label: 'Situação', value: (item) => item.percentualDivergenteNoPeriodo ? 'Conferir percentual' : item.temRepasseNoPeriodo ? 'Fechado' : 'Sem repasse' },
+          ],
+          visaoCalculo.memoriaCalculo,
+          'Não há memória de cálculo para exportar neste período.',
+        )}
+      />
+
       <DocumentsPanel
         data={data}
         downloadingPdfType={downloadingPdfType}
@@ -998,7 +1185,7 @@ export function PortalProprietarioPage() {
                 )}
                 <div>
                   <strong>{item.imovelNome}</strong>
-                  <small>{item.reservas} reservas no período</small>
+                  <small>{item.reservas} reservas no período · {Number(item.percentualSocio || 0).toFixed(2).replace('.', ',')}% do sócio</small>
                 </div>
                 <dl>
                   <div>
@@ -1284,6 +1471,7 @@ export function PortalProprietarioPage() {
                   [
                     { label: 'Período', value: (item) => `${formatDate(item.periodoInicio)} - ${formatDate(item.periodoFim)}` },
                     { label: 'Imóvel', value: (item) => item.imovelNome || 'Todos' },
+                    { label: '% Sócio', value: (item) => `${Number(item.percentualSocio || 0).toFixed(2).replace('.', ',')}%` },
                     { label: 'Valor', value: (item) => money(item.valorRepassar) },
                     { label: 'Pago', value: (item) => money(item.valorPago) },
                     { label: 'Pendente', value: (item) => money(item.saldoPendente) },
@@ -1312,6 +1500,7 @@ export function PortalProprietarioPage() {
             columns={[
               { key: 'periodoFim', label: 'Período', render: (item) => `${formatDate(item.periodoInicio)} - ${formatDate(item.periodoFim)}` },
               { key: 'imovelNome', label: 'Imóvel', render: (item) => item.imovelNome || 'Todos' },
+              { key: 'percentualSocio', label: '% Sócio', render: (item) => `${Number(item.percentualSocio || 0).toFixed(2).replace('.', ',')}%` },
               { key: 'valorRepassar', label: 'Valor', render: (item) => money(item.valorRepassar) },
               { key: 'valorPago', label: 'Pago', render: (item) => money(item.valorPago) },
               { key: 'saldoPendente', label: 'Pendente', render: (item) => money(item.saldoPendente) },

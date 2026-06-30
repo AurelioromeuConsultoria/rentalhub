@@ -1181,6 +1181,35 @@ button:disabled {
   align-items: end;
 }
 
+.portal-filter-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.portal-filter-chip {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 850;
+  padding: 0 12px;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.portal-filter-chip:hover {
+  border-color: rgba(110, 182, 255, 0.42);
+  background: rgba(110, 182, 255, 0.08);
+  color: var(--foreground);
+}
+
 .portal-owner-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.5fr) minmax(260px, 0.55fr);
@@ -2183,6 +2212,73 @@ button:disabled {
 .portal-documents-panel {
   display: grid;
   gap: 14px;
+}
+
+.portal-calculation-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.portal-calculation-highlights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.portal-calculation-highlights article,
+.portal-callout {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-subtle);
+  padding: 12px;
+}
+
+.portal-calculation-highlights span {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.portal-calculation-highlights strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--foreground);
+  font-size: 1.08rem;
+}
+
+.portal-calculation-highlights small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.portal-callout-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.portal-callout {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  background: rgba(110, 182, 255, 0.06);
+}
+
+.portal-callout svg {
+  flex: none;
+  color: var(--primary);
+  margin-top: 1px;
+}
+
+.portal-callout span {
+  color: var(--foreground);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .portal-documents-grid {
@@ -5318,6 +5414,7 @@ button:disabled {
   .portal-kpi-grid,
   .portal-property-grid,
   .portal-documents-grid,
+  .portal-calculation-highlights,
   .portal-detail-grid,
   .portal-detail-columns,
   .tenant-commercial-kpis {
