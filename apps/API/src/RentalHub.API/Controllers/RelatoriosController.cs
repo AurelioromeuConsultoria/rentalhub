@@ -111,7 +111,7 @@ public sealed class RelatoriosController : ControllerBase
         }
 
         var items = await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken);
-        return Ok(BuildFinanceiroReport(period.Inicio, period.Fim, items));
+        return Ok(await BuildFinanceiroReportAsync(period.Inicio, period.Fim, items, imovelId, cancellationToken));
     }
 
     [HttpGet("financeiro.csv")]
@@ -128,10 +128,12 @@ public sealed class RelatoriosController : ControllerBase
             return period.Error;
         }
 
-        var report = BuildFinanceiroReport(
+        var report = await BuildFinanceiroReportAsync(
             period.Inicio,
             period.Fim,
-            await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken));
+            await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken),
+            imovelId,
+            cancellationToken);
 
         return Csv(BuildReportFileName("financeiro", period.Inicio, period.Fim, "csv"), report.Itens, [
             "Id", "Data", "Tipo", "Categoria", "Imovel", "Descricao", "Valor"
@@ -160,10 +162,12 @@ public sealed class RelatoriosController : ControllerBase
             return period.Error;
         }
 
-        var report = BuildFinanceiroReport(
+        var report = await BuildFinanceiroReportAsync(
             period.Inicio,
             period.Fim,
-            await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken));
+            await GetFinanceiroItemsAsync(period.Inicio, period.Fim, categoriaId, imovelId, cancellationToken),
+            imovelId,
+            cancellationToken);
 
         return Pdf(BuildReportFileName("financeiro", period.Inicio, period.Fim, "pdf"), BuildFinanceiroPdf(report));
     }
@@ -425,40 +429,69 @@ public sealed class RelatoriosController : ControllerBase
 
     private static byte[] BuildFinanceiroPdf(RelatorioFinanceiroResponse report)
     {
+        var linhasResumo = new List<SimplePdfSummaryItem>
+        {
+            new("Receitas", FormatCurrency(report.Receitas)),
+            new("Despesas", FormatCurrency(report.Despesas)),
+            new("Lucro operacional", FormatCurrency(report.Lucro)),
+            new("Repasse do socio", FormatCurrency(report.RepasseSocio)),
+            new("Lucro apos socio", FormatCurrency(report.LucroAposSocio)),
+            new("Linhas adicionais", FormatCurrency(report.TotalLinhasAdicionais)),
+            new("Resultado final", FormatCurrency(report.ResultadoFinal)),
+            new("Categorias movimentadas", report.PorCategoria.Count.ToString(CultureInfo.InvariantCulture)),
+            new("Movimentacoes", report.Itens.Count.ToString(CultureInfo.InvariantCulture))
+        };
+
+        var tables = new List<SimplePdfTable>
+        {
+            new(
+                "Resumo por categoria",
+                ["Tipo", "Categoria", "Total"],
+                report.PorCategoria.Select(item => (IReadOnlyCollection<string>)
+                [
+                    item.Tipo,
+                    item.CategoriaNome,
+                    FormatCurrency(item.Total)
+                ]).ToList())
+        };
+
+        if (report.LinhasAdicionais.Count > 0)
+        {
+            tables.Add(new SimplePdfTable(
+                "Linhas adicionais",
+                ["Linha", "Tipo", "Base", "Valor config.", "Valor calculado"],
+                report.LinhasAdicionais.Select(item => (IReadOnlyCollection<string>)
+                [
+                    item.Nome,
+                    item.TipoValor == ConfiguracaoRelatorioMensalTipoValor.Percentual ? "Percentual" : "Valor fixo",
+                    FormatBaseCalculo(item.BaseCalculo),
+                    item.TipoValor == ConfiguracaoRelatorioMensalTipoValor.Percentual ? $"{FormatDecimal(item.ValorConfigurado)}%" : FormatCurrency(item.ValorConfigurado),
+                    FormatCurrency(item.ValorCalculado)
+                ]).ToList()));
+        }
+
+        tables.Add(new SimplePdfTable(
+            "Movimentacoes",
+            ["Data", "Tipo", "Categoria", "Imovel", "Descricao", "Valor"],
+            report.Itens.Select(item => (IReadOnlyCollection<string>)
+            [
+                FormatDate(item.Data),
+                item.Tipo,
+                item.CategoriaNome,
+                item.ImovelNome ?? "-",
+                item.Descricao,
+                FormatCurrency(item.Valor)
+            ]).ToList()));
+
         return SimplePdfBuilder.CreateReport(new SimplePdfReport(
             "Relatorio Financeiro",
             FormatPeriod(report.PeriodoInicio, report.PeriodoFim),
+            linhasResumo,
+            tables,
             [
-                new("Receitas", FormatCurrency(report.Receitas)),
-                new("Despesas", FormatCurrency(report.Despesas)),
-                new("Lucro", FormatCurrency(report.Lucro)),
-                new("Categorias movimentadas", report.PorCategoria.Count.ToString(CultureInfo.InvariantCulture)),
-                new("Movimentacoes", report.Itens.Count.ToString(CultureInfo.InvariantCulture))
-            ],
-            [
-                new SimplePdfTable(
-                    "Resumo por categoria",
-                    ["Tipo", "Categoria", "Total"],
-                    report.PorCategoria.Select(item => (IReadOnlyCollection<string>)
-                    [
-                        item.Tipo,
-                        item.CategoriaNome,
-                        FormatCurrency(item.Total)
-                    ]).ToList()),
-                new SimplePdfTable(
-                    "Movimentacoes",
-                    ["Data", "Tipo", "Categoria", "Imovel", "Descricao", "Valor"],
-                    report.Itens.Select(item => (IReadOnlyCollection<string>)
-                    [
-                        FormatDate(item.Data),
-                        item.Tipo,
-                        item.CategoriaNome,
-                        item.ImovelNome ?? "-",
-                        item.Descricao,
-                        FormatCurrency(item.Valor)
-                    ]).ToList())
-            ],
-            ["O lucro considera receitas menos despesas no periodo selecionado."]));
+                "O repasse do socio aparece apenas como linha de composicao do relatorio.",
+                "As linhas adicionais nao alteram o demonstrativo oficial de repasse."
+            ]));
     }
 
     private static byte[] BuildImoveisPdf(RelatorioImoveisResponse report)
@@ -618,26 +651,82 @@ public sealed class RelatoriosController : ControllerBase
             items);
     }
 
-    private static RelatorioFinanceiroResponse BuildFinanceiroReport(
+    private async Task<RelatorioFinanceiroResponse> BuildFinanceiroReportAsync(
         DateTime inicio,
         DateTime fim,
-        IReadOnlyCollection<RelatorioFinanceiroItemResponse> items)
+        IReadOnlyCollection<RelatorioFinanceiroItemResponse> items,
+        int? imovelId,
+        CancellationToken cancellationToken)
     {
         var receitas = items.Where(i => i.Tipo == MovimentacaoFinanceiraTipo.Receita.ToString()).Sum(i => i.Valor);
         var despesas = items.Where(i => i.Tipo == MovimentacaoFinanceiraTipo.Despesa.ToString()).Sum(i => i.Valor);
+        var lucro = receitas - despesas;
+
+        var repassesQuery = _dbContext.RepassesProprietarios
+            .AsNoTracking()
+            .Where(r => r.PeriodoFim >= inicio && r.PeriodoInicio <= fim);
+
+        if (imovelId.HasValue)
+        {
+            repassesQuery = repassesQuery.Where(r => r.ImovelId == imovelId.Value);
+        }
+
+        var repasseSocio = await repassesQuery.SumAsync(r => r.ValorRepassar, cancellationToken);
+        var lucroAposSocio = lucro - repasseSocio;
+
+        var configuracoes = await _dbContext.ConfiguracoesRelatorioMensal
+            .AsNoTracking()
+            .Where(item => item.Ativo)
+            .OrderBy(item => item.Ordem)
+            .ThenBy(item => item.Nome)
+            .ToListAsync(cancellationToken);
+
+        var linhasAdicionais = configuracoes
+            .Select(configuracao =>
+            {
+                var baseValor = configuracao.BaseCalculo switch
+                {
+                    ConfiguracaoRelatorioMensalBaseCalculo.ReceitaTotal => receitas,
+                    ConfiguracaoRelatorioMensalBaseCalculo.LucroOperacional => lucro,
+                    _ => lucroAposSocio
+                };
+
+                var valorCalculado = configuracao.TipoValor == ConfiguracaoRelatorioMensalTipoValor.Percentual
+                    ? Math.Round(baseValor * configuracao.Valor / 100, 2, MidpointRounding.AwayFromZero)
+                    : configuracao.Valor;
+
+                return new RelatorioFinanceiroLinhaAdicionalResponse(
+                    configuracao.Id,
+                    configuracao.Nome,
+                    configuracao.TipoValor,
+                    configuracao.Valor,
+                    configuracao.BaseCalculo,
+                    baseValor,
+                    valorCalculado,
+                    configuracao.Ordem);
+            })
+            .ToList();
+
+        var totalLinhasAdicionais = linhasAdicionais.Sum(item => item.ValorCalculado);
+        var resultadoFinal = lucroAposSocio - totalLinhasAdicionais;
 
         return new RelatorioFinanceiroResponse(
             inicio,
             fim,
             receitas,
             despesas,
-            receitas - despesas,
+            lucro,
+            repasseSocio,
+            lucroAposSocio,
+            totalLinhasAdicionais,
+            resultadoFinal,
             items
                 .GroupBy(i => new { i.Tipo, i.CategoriaNome })
                 .Select(g => new RelatorioFinanceiroCategoriaResponse(g.Key.Tipo, g.Key.CategoriaNome, g.Sum(i => i.Valor)))
                 .OrderBy(g => g.Tipo)
                 .ThenByDescending(g => g.Total)
                 .ToList(),
+            linhasAdicionais,
             items);
     }
 
@@ -804,6 +893,16 @@ public sealed class RelatoriosController : ControllerBase
 
     private static string FormatPeriod(DateTime inicio, DateTime fim) => $"Periodo: {FormatDate(inicio)} a {FormatDate(fim)}";
 
+    private static string FormatBaseCalculo(ConfiguracaoRelatorioMensalBaseCalculo baseCalculo)
+    {
+        return baseCalculo switch
+        {
+            ConfiguracaoRelatorioMensalBaseCalculo.ReceitaTotal => "Receita total",
+            ConfiguracaoRelatorioMensalBaseCalculo.LucroOperacional => "Lucro operacional",
+            _ => "Lucro apos socio"
+        };
+    }
+
     private static string BuildReportFileName(string report, DateTime inicio, DateTime fim, string extension)
     {
         return $"relatorio-{report}-{FormatDate(inicio)}-a-{FormatDate(fim)}.{extension}";
@@ -859,10 +958,25 @@ public sealed record RelatorioFinanceiroResponse(
     decimal Receitas,
     decimal Despesas,
     decimal Lucro,
+    decimal RepasseSocio,
+    decimal LucroAposSocio,
+    decimal TotalLinhasAdicionais,
+    decimal ResultadoFinal,
     IReadOnlyCollection<RelatorioFinanceiroCategoriaResponse> PorCategoria,
+    IReadOnlyCollection<RelatorioFinanceiroLinhaAdicionalResponse> LinhasAdicionais,
     IReadOnlyCollection<RelatorioFinanceiroItemResponse> Itens);
 
 public sealed record RelatorioFinanceiroCategoriaResponse(string Tipo, string CategoriaNome, decimal Total);
+
+public sealed record RelatorioFinanceiroLinhaAdicionalResponse(
+    int Id,
+    string Nome,
+    ConfiguracaoRelatorioMensalTipoValor TipoValor,
+    decimal ValorConfigurado,
+    ConfiguracaoRelatorioMensalBaseCalculo BaseCalculo,
+    decimal BaseValor,
+    decimal ValorCalculado,
+    int Ordem);
 
 public sealed record RelatorioFinanceiroItemResponse(
     int Id,

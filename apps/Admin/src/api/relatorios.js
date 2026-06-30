@@ -9,6 +9,10 @@ function exportPdf(path, params = {}) {
 }
 
 export const relatoriosApi = {
+  configuracoesMensais: (params = {}) => api.get('/relatorios/configuracoes-mensais', { params }),
+  createConfiguracaoMensal: (payload) => api.post('/relatorios/configuracoes-mensais', payload),
+  updateConfiguracaoMensal: (id, payload) => api.put(`/relatorios/configuracoes-mensais/${id}`, payload),
+  deleteConfiguracaoMensal: (id) => api.delete(`/relatorios/configuracoes-mensais/${id}`),
   reservas: (params = {}) => api.get('/relatorios/reservas', { params }),
   reservasCsv: (params = {}) => exportCsv('/relatorios/reservas.csv', params),
   reservasPdf: (params = {}) => exportPdf('/relatorios/reservas.pdf', params),

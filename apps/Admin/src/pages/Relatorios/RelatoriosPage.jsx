@@ -1,8 +1,11 @@
-import { Download, FileSpreadsheet, FileText, RotateCcw } from 'lucide-react';
+import { Download, Edit3, FileSpreadsheet, FileText, Plus, RotateCcw, Save, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { categoriasFinanceirasApi } from '@/api/financeiro';
 import { imoveisApi, proprietariosApi } from '@/api/cadastros';
 import { relatoriosApi } from '@/api/relatorios';
+import { EmptyState } from '@/components/EmptyState';
+import { MoneyField } from '@/components/Form/MoneyField';
+import { confirmAction, getFriendlyErrorMessage } from '@/lib/uiFeedback';
 
 const currentMonthStart = new Date();
 currentMonthStart.setDate(1);
@@ -36,7 +39,7 @@ function percent(value) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível carregar o relatório.';
+  return getFriendlyErrorMessage(error);
 }
 
 function dateOnly(value) {
@@ -70,6 +73,29 @@ function SummaryCard({ label, value }) {
       <strong>{value}</strong>
     </article>
   );
+}
+
+const tipoValorOptions = [
+  { value: 1, label: 'Percentual' },
+  { value: 2, label: 'Valor fixo' },
+];
+
+const baseCalculoOptions = [
+  { value: 1, label: 'Receita total' },
+  { value: 2, label: 'Lucro operacional' },
+  { value: 3, label: 'Lucro após sócio' },
+];
+
+const emptyConfiguracao = {
+  nome: '',
+  tipoValor: 1,
+  valor: '',
+  baseCalculo: 3,
+  ordem: '0',
+};
+
+function labelFor(options, value) {
+  return options.find((option) => Number(option.value) === Number(value))?.label || '-';
 }
 
 function ReportTable({ columns, items, emptyText }) {
@@ -120,9 +146,13 @@ export function RelatoriosPage() {
   const [imoveis, setImoveis] = useState([]);
   const [proprietarios, setProprietarios] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [configuracoesMensais, setConfiguracoesMensais] = useState([]);
+  const [configuracaoForm, setConfiguracaoForm] = useState(emptyConfiguracao);
+  const [editingConfiguracaoId, setEditingConfiguracaoId] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exportingFormat, setExportingFormat] = useState('');
+  const [savingConfiguracao, setSavingConfiguracao] = useState(false);
   const [error, setError] = useState('');
 
   const baseParams = useMemo(
@@ -174,16 +204,18 @@ export function RelatoriosPage() {
     setError('');
     try {
       const reportRequest = relatoriosApi[activeTab](reportParams);
-      const [reportResponse, imoveisResponse, proprietariosResponse, categoriasResponse] = await Promise.all([
+      const [reportResponse, imoveisResponse, proprietariosResponse, categoriasResponse, configuracoesResponse] = await Promise.all([
         reportRequest,
         imoveisApi.list({ status: 1, pageSize: 100 }),
         proprietariosApi.list({ ativo: true, pageSize: 100 }),
         categoriasFinanceirasApi.list({ ativo: true }),
+        relatoriosApi.configuracoesMensais({ ativo: true }),
       ]);
       setData(reportResponse.data);
       setImoveis(extractItems(imoveisResponse));
       setProprietarios(extractItems(proprietariosResponse));
       setCategorias(extractItems(categoriasResponse));
+      setConfiguracoesMensais(configuracoesResponse.data || []);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -207,6 +239,75 @@ export function RelatoriosPage() {
       setError(getErrorMessage(exportError));
     } finally {
       setExportingFormat('');
+    }
+  };
+
+  const startEditConfiguracao = (configuracao) => {
+    setEditingConfiguracaoId(configuracao.id);
+    setConfiguracaoForm({
+      nome: configuracao.nome || '',
+      tipoValor: Number(configuracao.tipoValor || 1),
+      valor: configuracao.valor ?? '',
+      baseCalculo: Number(configuracao.baseCalculo || 3),
+      ordem: String(configuracao.ordem ?? 0),
+    });
+    setError('');
+  };
+
+  const resetConfiguracaoForm = () => {
+    setEditingConfiguracaoId(null);
+    setConfiguracaoForm(emptyConfiguracao);
+  };
+
+  const saveConfiguracao = async (event) => {
+    event.preventDefault();
+    setSavingConfiguracao(true);
+    setError('');
+
+    try {
+      const payload = {
+        nome: configuracaoForm.nome.trim(),
+        tipoValor: Number(configuracaoForm.tipoValor),
+        valor: Number(configuracaoForm.valor || 0),
+        baseCalculo: Number(configuracaoForm.baseCalculo),
+        ordem: Number(configuracaoForm.ordem || 0),
+        ativo: true,
+      };
+
+      if (editingConfiguracaoId) {
+        await relatoriosApi.updateConfiguracaoMensal(editingConfiguracaoId, payload);
+      } else {
+        await relatoriosApi.createConfiguracaoMensal(payload);
+      }
+
+      resetConfiguracaoForm();
+      await load();
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setSavingConfiguracao(false);
+    }
+  };
+
+  const deleteConfiguracao = async (configuracao) => {
+    const confirmed = confirmAction(
+      'Excluir esta linha?',
+      `${configuracao.nome} deixará de aparecer na composição do relatório mensal.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError('');
+    try {
+      await relatoriosApi.deleteConfiguracaoMensal(configuracao.id);
+      if (editingConfiguracaoId === configuracao.id) {
+        resetConfiguracaoForm();
+      }
+      await load();
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
     }
   };
 
@@ -289,8 +390,8 @@ export function RelatoriosPage() {
           <section className="kpi-grid secondary-kpis">
             <SummaryCard label="Receitas" value={money(data?.receitas)} />
             <SummaryCard label="Despesas" value={money(data?.despesas)} />
-            <SummaryCard label="Lucro" value={money(data?.lucro)} />
-            <SummaryCard label="Categorias" value={data?.porCategoria?.length || 0} />
+            <SummaryCard label="Lucro operacional" value={money(data?.lucro)} />
+            <SummaryCard label="Resultado final" value={money(data?.resultadoFinal)} />
           </section>
 
           <section className="content-grid">
@@ -330,6 +431,189 @@ export function RelatoriosPage() {
                 </div>
               )}
             </article>
+
+            <article className="panel">
+              <div className="panel-heading">
+                <h2>Composição mensal</h2>
+                <span>Apuração</span>
+              </div>
+              <div className="status-board report-composition-board">
+                <div>
+                  <small>Receita total</small>
+                  <strong>{money(data?.receitas)}</strong>
+                </div>
+                <div>
+                  <small>Despesas</small>
+                  <strong>{money(data?.despesas)}</strong>
+                </div>
+                <div>
+                  <small>Lucro operacional</small>
+                  <strong>{money(data?.lucro)}</strong>
+                </div>
+                <div>
+                  <small>Repasse do sócio</small>
+                  <strong>{money(data?.repasseSocio)}</strong>
+                </div>
+                <div>
+                  <small>Lucro após sócio</small>
+                  <strong>{money(data?.lucroAposSocio)}</strong>
+                </div>
+                <div>
+                  <small>Linhas adicionais</small>
+                  <strong>{money(data?.totalLinhasAdicionais)}</strong>
+                </div>
+                <div>
+                  <small>Resultado final</small>
+                  <strong>{money(data?.resultadoFinal)}</strong>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section className="resource-layout">
+            <article className="resource-panel">
+              <div className="resource-panel-heading">
+                <div>
+                  <strong>Linhas configuráveis</strong>
+                  <small>Entram no relatório mensal, sem mexer no repasse do sócio.</small>
+                </div>
+                <span>{configuracoesMensais.length} ativas</span>
+              </div>
+
+              {configuracoesMensais.length > 0 ? (
+                <div className="data-table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Linha</th>
+                        <th>Tipo</th>
+                        <th>Base</th>
+                        <th>Configuração</th>
+                        <th>No período</th>
+                        <th className="table-actions">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {configuracoesMensais.map((configuracao) => {
+                        const linhaAplicada = (data?.linhasAdicionais || []).find((item) => item.id === configuracao.id);
+                        return (
+                          <tr key={configuracao.id}>
+                            <td>
+                              <strong>{configuracao.nome}</strong>
+                              <small>Ordem {configuracao.ordem ?? 0}</small>
+                            </td>
+                            <td>{labelFor(tipoValorOptions, configuracao.tipoValor)}</td>
+                            <td>{labelFor(baseCalculoOptions, configuracao.baseCalculo)}</td>
+                            <td>{Number(configuracao.tipoValor) === 1 ? percent(configuracao.valor) : money(configuracao.valor)}</td>
+                            <td>{linhaAplicada ? money(linhaAplicada.valorCalculado) : '-'}</td>
+                            <td className="table-actions">
+                              <button type="button" aria-label="Editar linha" onClick={() => startEditConfiguracao(configuracao)}>
+                                <Edit3 size={17} />
+                              </button>
+                              <button type="button" aria-label="Excluir linha" onClick={() => deleteConfiguracao(configuracao)}>
+                                <Trash2 size={17} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState
+                  icon={SlidersHorizontal}
+                  title="Nenhuma linha configurada"
+                  description="Crie linhas como dízimo, fundo de reserva ou outras retenções internas do relatório."
+                />
+              )}
+            </article>
+
+            <form className="resource-form" onSubmit={saveConfiguracao}>
+              <div className="form-title">
+                {editingConfiguracaoId ? <Edit3 size={18} /> : <Plus size={18} />}
+                <strong>{editingConfiguracaoId ? 'Editar linha mensal' : 'Nova linha mensal'}</strong>
+              </div>
+
+              <div className="form-grid">
+                <label className="form-field span-2">
+                  <span>Nome</span>
+                  <input
+                    type="text"
+                    value={configuracaoForm.nome}
+                    onChange={(event) => setConfiguracaoForm((current) => ({ ...current, nome: event.target.value }))}
+                    placeholder="Ex.: Dízimo"
+                    required
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Tipo</span>
+                  <select
+                    value={configuracaoForm.tipoValor}
+                    onChange={(event) => setConfiguracaoForm((current) => ({ ...current, tipoValor: Number(event.target.value) }))}
+                  >
+                    {tipoValorOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                {Number(configuracaoForm.tipoValor) === 1 ? (
+                  <label className="form-field">
+                    <span>Percentual</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={configuracaoForm.valor}
+                      onChange={(event) => setConfiguracaoForm((current) => ({ ...current, valor: event.target.value }))}
+                      required
+                    />
+                  </label>
+                ) : (
+                  <MoneyField
+                    label="Valor fixo"
+                    value={configuracaoForm.valor}
+                    onChange={(value) => setConfiguracaoForm((current) => ({ ...current, valor: value }))}
+                    required
+                  />
+                )}
+                <label className="form-field span-2">
+                  <span>Base de cálculo</span>
+                  <select
+                    value={configuracaoForm.baseCalculo}
+                    onChange={(event) => setConfiguracaoForm((current) => ({ ...current, baseCalculo: Number(event.target.value) }))}
+                  >
+                    {baseCalculoOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Ordem</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={configuracaoForm.ordem}
+                    onChange={(event) => setConfiguracaoForm((current) => ({ ...current, ordem: event.target.value }))}
+                    required
+                  />
+                </label>
+              </div>
+
+              <div className="button-row">
+                <button className="primary-action" type="submit" disabled={savingConfiguracao}>
+                  <Save size={18} />
+                  {savingConfiguracao ? 'Salvando...' : 'Salvar linha'}
+                </button>
+                {editingConfiguracaoId && (
+                  <button className="secondary-action" type="button" onClick={resetConfiguracaoForm}>
+                    Cancelar edição
+                  </button>
+                )}
+              </div>
+            </form>
           </section>
         </>
       );

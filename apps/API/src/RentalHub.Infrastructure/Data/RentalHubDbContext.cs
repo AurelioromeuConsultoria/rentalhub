@@ -46,6 +46,7 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<ReservaVeiculoCadastro> ReservaVeiculosCadastro => Set<ReservaVeiculoCadastro>();
     public DbSet<BloqueioCalendario> BloqueiosCalendario => Set<BloqueioCalendario>();
     public DbSet<CategoriaFinanceira> CategoriasFinanceiras => Set<CategoriaFinanceira>();
+    public DbSet<ConfiguracaoRelatorioMensal> ConfiguracoesRelatorioMensal => Set<ConfiguracaoRelatorioMensal>();
     public DbSet<MovimentacaoFinanceira> MovimentacoesFinanceiras => Set<MovimentacaoFinanceira>();
     public DbSet<RepasseProprietario> RepassesProprietarios => Set<RepasseProprietario>();
     public DbSet<RepasseItem> RepasseItens => Set<RepasseItem>();
@@ -479,6 +480,23 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.Ativo).IsRequired();
             entity.Property(e => e.DataCriacao).IsRequired();
             entity.HasIndex(e => new { e.TenantId, e.Nome, e.Tipo }).IsUnique();
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ConfiguracaoRelatorioMensal>(entity =>
+        {
+            entity.ToTable("ConfiguracoesRelatorioMensal");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.Nome).IsRequired().HasMaxLength(140);
+            entity.Property(e => e.TipoValor).IsRequired();
+            entity.Property(e => e.Valor).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.BaseCalculo).IsRequired();
+            entity.Property(e => e.Ordem).IsRequired();
+            entity.Property(e => e.Ativo).IsRequired();
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.Nome }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.Ativo, e.Ordem });
             entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
