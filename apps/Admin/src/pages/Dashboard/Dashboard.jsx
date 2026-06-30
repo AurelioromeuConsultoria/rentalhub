@@ -1,22 +1,16 @@
 import {
   ArrowDownRight,
-  ArrowUpRight,
   BarChart3,
   CalendarCheck,
   Home,
   PieChart,
   RotateCcw,
-  Sparkles,
   WalletCards,
-  Wrench,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dashboardApi } from '@/api/dashboard';
 import { EmptyState } from '@/components/EmptyState';
-
-const currentMonthStart = new Date();
-currentMonthStart.setDate(1);
 
 const emptyDashboard = {
   receitaMes: 0,
@@ -51,6 +45,21 @@ function shortDate(value) {
   if (!value) return '';
   const [, month, day] = String(value).slice(0, 10).split('-');
   return `${day}/${month}`;
+}
+
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthRange() {
+  const today = new Date();
+  return {
+    inicio: toDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)),
+    fim: toDateInputValue(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
+  };
 }
 
 function FlowChart({ items }) {
@@ -184,10 +193,7 @@ function PerformanceList({ title, badge, items, emptyText }) {
 }
 
 export function Dashboard() {
-  const [filters, setFilters] = useState({
-    inicio: currentMonthStart.toISOString().slice(0, 10),
-    fim: new Date().toISOString().slice(0, 10),
-  });
+  const [filters, setFilters] = useState(getCurrentMonthRange);
   const [data, setData] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -218,12 +224,6 @@ export function Dashboard() {
     return () => clearTimeout(timeout);
   }, [load]);
 
-  const kpis = [
-    { label: 'Receita do período', value: money(data.receitaMes), icon: ArrowUpRight, tone: 'green' },
-    { label: 'Despesa do período', value: money(data.despesaMes), icon: ArrowDownRight, tone: 'red' },
-    { label: 'Lucro do período', value: money(data.lucroMes), icon: WalletCards, tone: 'blue' },
-    { label: 'Reservas do período', value: String(data.reservasMes || 0), icon: CalendarCheck, tone: 'yellow' },
-  ];
   const lucro = Number(data.lucroMes || 0);
   const receita = Number(data.receitaMes || 0);
   const reservas = Number(data.reservasMes || 0);
@@ -232,36 +232,42 @@ export function Dashboard() {
   const limpezas = Number(data.limpezasPendentes || 0);
   const manutencoes = Number(data.manutencoesPendentes || 0);
   const blockers = [repasses > 0, limpezas > 0, manutencoes > 0].filter(Boolean).length;
-  const healthLabel = blockers > 1 || lucro < 0 ? 'Atenção operacional' : reservas === 0 ? 'Primeira operação' : 'Operação sob controle';
+  const kpis = [
+    { label: 'Lucro', value: money(data.lucroMes), icon: WalletCards, tone: lucro < 0 ? 'red' : 'blue', note: `${money(data.receitaMes)} em receitas` },
+    { label: 'Reservas', value: String(data.reservasMes || 0), icon: CalendarCheck, tone: 'yellow', note: `${money(data.ticketMedio)} ticket médio` },
+    { label: 'Ocupação', value: percent(data.taxaOcupacao), icon: Home, tone: 'green', note: `${data.imoveisAtivos || 0} imóveis ativos` },
+    { label: 'Pendências', value: String(blockers), icon: ArrowDownRight, tone: blockers > 0 ? 'red' : 'green', note: 'limpeza, manutenção e repasses' },
+  ];
+  const healthLabel = blockers > 1 || lucro < 0 ? 'Precisa de atenção' : reservas === 0 ? 'Pronto para começar' : 'Operação saudável';
   const healthTone = blockers > 1 || lucro < 0 ? 'warning' : reservas === 0 ? 'neutral' : 'healthy';
-  const nextActions = [
+  const alerts = [
     {
-      title: reservas === 0 ? 'Cadastre a primeira reserva' : 'Acompanhe a agenda',
-      description: reservas === 0 ? 'Transforme um imóvel cadastrado em operação real.' : 'Veja disponibilidade, check-ins, check-outs e bloqueios.',
+      title: reservas === 0 ? 'Nenhuma reserva no período' : `${reservas} reserva(s) no período`,
+      description: reservas === 0 ? 'Crie uma reserva para movimentar calendário e financeiro.' : `${percent(ocupacao)} de ocupação.`,
       to: reservas === 0 ? '/reservas' : '/calendario',
-      label: reservas === 0 ? 'Nova reserva' : 'Abrir calendário',
-      tone: reservas === 0 ? 'primary' : 'blue',
+      label: reservas === 0 ? 'Criar reserva' : 'Ver calendário',
+      active: reservas === 0,
     },
     {
-      title: limpezas > 0 ? 'Limpezas pendentes' : 'Limpeza em dia',
-      description: limpezas > 0 ? `${limpezas} tarefa(s) precisam de execução ou conclusão.` : 'Mantenha a agenda pronta para próximos check-ins.',
+      title: limpezas > 0 ? `${limpezas} limpeza(s) pendente(s)` : 'Limpeza em dia',
+      description: limpezas > 0 ? 'Há tarefas aguardando execução ou conclusão.' : 'Sem alerta de limpeza.',
       to: '/limpeza',
-      label: 'Ver limpeza',
-      tone: limpezas > 0 ? 'warning' : 'green',
+      label: 'Abrir',
+      active: limpezas > 0,
     },
     {
-      title: repasses > 0 ? 'Repasses em aberto' : 'Repasses sem alerta',
-      description: repasses > 0 ? `${money(repasses)} aguardando pagamento ou baixa.` : 'Gere demonstrativos quando fechar um período.',
+      title: repasses > 0 ? `${money(repasses)} em repasses` : 'Repasses sem alerta',
+      description: repasses > 0 ? 'Valores aguardando pagamento ou baixa.' : 'Nada crítico agora.',
       to: '/repasses',
-      label: 'Ver repasses',
-      tone: repasses > 0 ? 'warning' : 'green',
+      label: 'Abrir',
+      active: repasses > 0,
     },
     {
-      title: manutencoes > 0 ? 'Manutenção pendente' : 'Imóveis operacionais',
-      description: manutencoes > 0 ? `${manutencoes} ocorrência(s) abertas ou em andamento.` : 'Sem ocorrência crítica no período selecionado.',
+      title: manutencoes > 0 ? `${manutencoes} manutenção(ões)` : 'Sem manutenção crítica',
+      description: manutencoes > 0 ? 'Ocorrências abertas ou em andamento.' : 'Imóveis sem alerta crítico.',
       to: '/manutencao',
-      label: 'Ver manutenção',
-      tone: manutencoes > 0 ? 'danger' : 'green',
+      label: 'Abrir',
+      active: manutencoes > 0,
     },
   ];
 
@@ -271,7 +277,7 @@ export function Dashboard() {
         <div>
           <span className="eyebrow">Dashboard executivo</span>
           <h1>Visão geral</h1>
-          <p>Indicadores operacionais e financeiros calculados a partir das reservas, caixa, repasses e pendências.</p>
+          <p>Resumo financeiro, ocupação e pendências principais do período.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -305,6 +311,7 @@ export function Dashboard() {
               </div>
               <span>{kpi.label}</span>
               <strong>{kpi.value}</strong>
+              <small className="metric-note">{kpi.note}</small>
             </article>
           );
         })}
@@ -312,57 +319,40 @@ export function Dashboard() {
 
       <section className="executive-pulse" aria-label="Central operacional">
         <article className={`operation-health ${healthTone}`}>
-          <span className="eyebrow">Central operacional</span>
+          <span className="eyebrow">Leitura rápida</span>
           <h2>{healthLabel}</h2>
           <p>
             {reservas === 0
-              ? 'Comece pela reserva: ela movimenta calendário, financeiro, limpeza e repasses.'
-              : `No período, você tem ${reservas} reserva(s), ${percent(ocupacao)} de ocupação e ${money(receita)} em receita.`}
+              ? 'O período ainda não tem reservas. O próximo passo mais importante é criar ou importar uma reserva.'
+              : `Receita de ${money(receita)}, lucro de ${money(lucro)} e ${percent(ocupacao)} de ocupação.`}
           </p>
           <div className="health-metrics">
             <span>
-              <strong>{money(lucro)}</strong>
-              Lucro
+              <strong>{money(data.despesaMes)}</strong>
+              Despesas
             </span>
             <span>
-              <strong>{blockers}</strong>
-              Alertas
+              <strong>{money(data.ticketMedio)}</strong>
+              Ticket médio
             </span>
             <span>
-              <strong>{percent(ocupacao)}</strong>
-              Ocupação
+              <strong>{data.imoveisAtivos || 0}</strong>
+              Imóveis ativos
             </span>
           </div>
         </article>
 
-        <div className="next-action-grid">
-          {nextActions.map((action) => (
-            <Link className={`next-action-card ${action.tone}`} key={action.title} to={action.to}>
-              <strong>{action.title}</strong>
-              <span>{action.description}</span>
-              <small>{action.label}</small>
+        <div className="dashboard-alert-list">
+          {alerts.map((alert) => (
+            <Link className={`dashboard-alert ${alert.active ? 'active' : ''}`} key={alert.title} to={alert.to}>
+              <div>
+                <strong>{alert.title}</strong>
+                <span>{alert.description}</span>
+              </div>
+              <small>{alert.label}</small>
             </Link>
           ))}
         </div>
-      </section>
-
-      <section className="kpi-grid secondary-kpis" aria-label="Indicadores operacionais">
-        <article className="metric-card">
-          <span>Taxa de ocupação</span>
-          <strong>{percent(data.taxaOcupacao)}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Ticket médio</span>
-          <strong>{money(data.ticketMedio)}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Repasses pendentes</span>
-          <strong>{money(data.repassesPendentes)}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Imóveis ativos</span>
-          <strong>{data.imoveisAtivos || 0}</strong>
-        </article>
       </section>
 
       <section className="content-grid dashboard-charts">
@@ -370,7 +360,7 @@ export function Dashboard() {
         <OriginChart items={data.reservasPorOrigem || []} />
       </section>
 
-      <section className="content-grid">
+      <section className="content-grid dashboard-rankings">
         <PerformanceList
           title="Imóveis mais rentáveis"
           badge="Top 5"
@@ -383,54 +373,6 @@ export function Dashboard() {
           items={data.imoveisMenorDesempenho || []}
           emptyText="Ainda não há imóveis com resultado no período."
         />
-      </section>
-
-      <section className="content-grid">
-        <article className="panel">
-          <div className="panel-heading">
-            <h2>Pendências operacionais</h2>
-            <span>Hoje</span>
-          </div>
-          <div className="status-board">
-            <div>
-              <small>Limpezas pendentes</small>
-              <strong>
-                <Sparkles size={16} /> {data.limpezasPendentes || 0}
-              </strong>
-            </div>
-            <div>
-              <small>Manutenções pendentes</small>
-              <strong>
-                <Wrench size={16} /> {data.manutencoesPendentes || 0}
-              </strong>
-            </div>
-            <div>
-              <small>Saldo de repasses</small>
-              <strong>{money(data.repassesPendentes)}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-heading">
-            <h2>Leitura rápida</h2>
-            <span>Período</span>
-          </div>
-          <div className="status-board">
-            <div>
-              <small>Receita menos despesa</small>
-              <strong>{money(data.lucroMes)}</strong>
-            </div>
-            <div>
-              <small>Reservas consideradas</small>
-              <strong>{data.reservasMes || 0}</strong>
-            </div>
-            <div>
-              <small>Ocupação</small>
-              <strong>{percent(data.taxaOcupacao)}</strong>
-            </div>
-          </div>
-        </article>
       </section>
     </div>
   );

@@ -36,6 +36,23 @@ public sealed class Tenant
     public string? AvisoAtualizacaoVersao { get; set; }
     public DateTime? AvisoAtualizacaoPublicadoEm { get; set; }
     public bool AvisoAtualizacaoAtivo { get; set; }
+    public string? PlanoNome { get; set; }
+    public string StatusAssinatura { get; set; } = "trial";
+    public string CicloCobranca { get; set; } = "mensal";
+    public decimal? ValorPlano { get; set; }
+    public DateTime? DataInicioAssinatura { get; set; }
+    public DateTime? TrialExpiraEm { get; set; }
+    public int? DiaVencimento { get; set; }
+    public DateTime? ProximoVencimentoEm { get; set; }
+    public int? LimiteImoveis { get; set; }
+    public int? LimiteUsuarios { get; set; }
+    public string? ResponsavelFinanceiro { get; set; }
+    public string? EmailFinanceiro { get; set; }
+    public string? ObservacoesComerciais { get; set; }
+    public DateTime? UltimoPagamentoEm { get; set; }
+    public decimal? UltimoPagamentoValor { get; set; }
+    public DateTime? CanceladoEm { get; set; }
+    public DateTime? ComercialAtualizadoEm { get; set; }
     public bool IsRootTenant { get; set; }
     public bool Ativo { get; set; } = true;
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;

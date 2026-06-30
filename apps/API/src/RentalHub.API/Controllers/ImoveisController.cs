@@ -88,6 +88,7 @@ public sealed class ImoveisController : ControllerBase
                 i.QuantidadeHospedes,
                 i.QuantidadeQuartos,
                 i.QuantidadeBanheiros,
+                i.PercentualRepasseSocio,
                 i.Status,
                 i.Comodidades.OrderBy(c => c.Nome).Select(c => c.Nome).ToArray(),
                 i.Fotos.OrderBy(f => f.Ordem).Select(f => new ImovelFotoResponse(f.Id, f.Url, f.Descricao, f.Ordem, f.Principal)).ToArray(),
@@ -139,6 +140,7 @@ public sealed class ImoveisController : ControllerBase
             QuantidadeHospedes = request.QuantidadeHospedes,
             QuantidadeQuartos = request.QuantidadeQuartos,
             QuantidadeBanheiros = request.QuantidadeBanheiros,
+            PercentualRepasseSocio = NormalizePercentualSocio(request.ProprietarioId, request.PercentualRepasseSocio),
             Status = request.Status,
             DataCriacao = DateTime.UtcNow
         };
@@ -192,6 +194,7 @@ public sealed class ImoveisController : ControllerBase
         imovel.QuantidadeHospedes = request.QuantidadeHospedes;
         imovel.QuantidadeQuartos = request.QuantidadeQuartos;
         imovel.QuantidadeBanheiros = request.QuantidadeBanheiros;
+        imovel.PercentualRepasseSocio = NormalizePercentualSocio(request.ProprietarioId, request.PercentualRepasseSocio);
         imovel.Status = request.Status;
         imovel.DataAtualizacao = DateTime.UtcNow;
 
@@ -280,10 +283,30 @@ public sealed class ImoveisController : ControllerBase
             return BadRequest(new { message = "Quantidades do imóvel estão inválidas." });
         }
 
-        var proprietarioExists = await _dbContext.Proprietarios
-            .AnyAsync(p => p.Id == request.ProprietarioId && p.Ativo, cancellationToken);
+        if (request.PercentualRepasseSocio.HasValue && (request.PercentualRepasseSocio < 0 || request.PercentualRepasseSocio > 100))
+        {
+            return BadRequest(new { message = "Percentual de repasse do sócio deve ficar entre 0% e 100%." });
+        }
 
-        return proprietarioExists ? null : BadRequest(new { message = "Proprietário ativo não encontrado." });
+        if (!request.ProprietarioId.HasValue)
+        {
+            return null;
+        }
+
+        var proprietarioExists = await _dbContext.Proprietarios
+            .AnyAsync(p => p.Id == request.ProprietarioId.Value && p.Ativo, cancellationToken);
+
+        return proprietarioExists ? null : BadRequest(new { message = "Sócio ativo não encontrado." });
+    }
+
+    private static decimal? NormalizePercentualSocio(int? proprietarioId, decimal? percentualRepasseSocio)
+    {
+        if (!proprietarioId.HasValue)
+        {
+            return null;
+        }
+
+        return percentualRepasseSocio ?? 100;
     }
 
     private static void ReplaceCollections(Imovel imovel, ImovelRequest request, int tenantId)
@@ -329,6 +352,7 @@ public sealed class ImoveisController : ControllerBase
             imovel.QuantidadeHospedes,
             imovel.QuantidadeQuartos,
             imovel.QuantidadeBanheiros,
+            imovel.PercentualRepasseSocio,
             imovel.Status,
             imovel.Comodidades.OrderBy(c => c.Nome).Select(c => c.Nome).ToArray(),
             imovel.Fotos.OrderBy(f => f.Ordem).Select(f => new ImovelFotoResponse(f.Id, f.Url, f.Descricao, f.Ordem, f.Principal)).ToArray(),
@@ -338,7 +362,7 @@ public sealed class ImoveisController : ControllerBase
 }
 
 public sealed record ImovelRequest(
-    int ProprietarioId,
+    int? ProprietarioId,
     string Nome,
     string CodigoInterno,
     string? Descricao,
@@ -349,6 +373,7 @@ public sealed record ImovelRequest(
     int QuantidadeHospedes,
     int QuantidadeQuartos,
     int QuantidadeBanheiros,
+    decimal? PercentualRepasseSocio,
     ImovelStatus Status,
     IReadOnlyCollection<string> Comodidades,
     IReadOnlyCollection<ImovelFotoRequest> Fotos);
@@ -357,7 +382,7 @@ public sealed record ImovelFotoRequest(string Url, string? Descricao, int Ordem,
 
 public sealed record ImovelResponse(
     int Id,
-    int ProprietarioId,
+    int? ProprietarioId,
     string ProprietarioNome,
     string Nome,
     string CodigoInterno,
@@ -369,6 +394,7 @@ public sealed record ImovelResponse(
     int QuantidadeHospedes,
     int QuantidadeQuartos,
     int QuantidadeBanheiros,
+    decimal? PercentualRepasseSocio,
     ImovelStatus Status,
     IReadOnlyCollection<string> Comodidades,
     IReadOnlyCollection<ImovelFotoResponse> Fotos,

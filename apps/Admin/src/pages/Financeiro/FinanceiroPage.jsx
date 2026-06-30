@@ -182,7 +182,7 @@ export function FinanceiroPage() {
         financeiroApi.listMovimentacoes(params),
         financeiroApi.fluxoCaixa(params),
         categoriasFinanceirasApi.list({ ativo: true }),
-        imoveisApi.list({ pageSize: 100 }),
+        imoveisApi.list({ status: 1, pageSize: 100 }),
         proprietariosApi.list({ ativo: true, pageSize: 100 }),
         reservasApi.list({ pageSize: 100 }),
       ]);
@@ -368,7 +368,7 @@ export function FinanceiroPage() {
         <div>
           <span className="eyebrow">Gestão financeira</span>
           <h1>Financeiro</h1>
-          <p>Controle entradas, saídas, categorias e fluxo de caixa por período, imóvel e proprietário.</p>
+          <p>Controle entradas, saídas, categorias e fluxo de caixa por período, imóvel e sócio.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={() => load()}>
@@ -444,7 +444,7 @@ export function FinanceiroPage() {
           ))}
         </SelectField>
         <SelectField
-          label="Proprietário"
+          label="Sócio"
           value={filters.proprietarioId}
           onChange={(proprietarioId) => setFilters((current) => ({ ...current, proprietarioId }))}
         >
@@ -584,7 +584,7 @@ export function FinanceiroPage() {
                 ))}
               </SelectField>
               <SelectField
-                label="Proprietário"
+                label="Sócio"
                 value={form.proprietarioId}
                 onChange={(proprietarioId) => setForm((current) => ({ ...current, proprietarioId }))}
               >

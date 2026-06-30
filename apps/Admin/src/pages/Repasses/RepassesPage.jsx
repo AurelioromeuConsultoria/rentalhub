@@ -154,6 +154,14 @@ export function RepassesPage() {
     [repasses],
   );
 
+  const imoveisDoSocioSelecionado = useMemo(() => {
+    if (!generateForm.proprietarioId) {
+      return [];
+    }
+
+    return imoveis.filter((imovel) => Number(imovel.proprietarioId) === Number(generateForm.proprietarioId));
+  }, [generateForm.proprietarioId, imoveis]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -161,7 +169,7 @@ export function RepassesPage() {
       const [repassesResponse, proprietariosResponse, imoveisResponse] = await Promise.all([
         repassesApi.list(filterParams),
         proprietariosApi.list({ ativo: true, pageSize: 100 }),
-        imoveisApi.list({ pageSize: 100 }),
+        imoveisApi.list({ status: 1, pageSize: 100 }),
       ]);
       setRepasses(extractItems(repassesResponse));
       setProprietarios(extractItems(proprietariosResponse));
@@ -281,7 +289,7 @@ export function RepassesPage() {
         <div>
           <span className="eyebrow">Gestão financeira</span>
           <h1>Repasses</h1>
-          <p>Geração de demonstrativos, descontos, custos e controle de pagamento aos proprietários.</p>
+          <p>Geração de demonstrativos, descontos, custos e controle de pagamento aos sócios.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -325,7 +333,7 @@ export function RepassesPage() {
         <TextField label="Início" type="date" value={filters.inicio} onChange={(inicio) => setFilters((current) => ({ ...current, inicio }))} />
         <TextField label="Fim" type="date" value={filters.fim} onChange={(fim) => setFilters((current) => ({ ...current, fim }))} />
         <SelectField
-          label="Proprietário"
+          label="Sócio"
           value={filters.proprietarioId}
           onChange={(proprietarioId) => setFilters((current) => ({ ...current, proprietarioId }))}
         >
@@ -359,7 +367,7 @@ export function RepassesPage() {
           <div className="resource-panel-heading">
             <div>
               <strong>Demonstrativos</strong>
-              <small>Repasses gerados por proprietário e período.</small>
+              <small>Repasses gerados por sócio, imóvel e período.</small>
             </div>
             <span>{repasses.length} registros</span>
           </div>
@@ -380,7 +388,7 @@ export function RepassesPage() {
                 <thead>
                   <tr>
                     <th>Período</th>
-                    <th>Proprietário</th>
+                    <th>Sócio</th>
                     <th>Resumo</th>
                     <th>Valor</th>
                     <th>Status</th>
@@ -402,7 +410,7 @@ export function RepassesPage() {
                           Receita {money(repasse.receitaReservas)} · Custos {money(repasse.custosVinculados)}
                         </strong>
                         <small>
-                          Taxas {money(repasse.taxasPlataforma)} · Comissão {money(repasse.comissaoAdministradora)}
+                          Taxas {money(repasse.taxasPlataforma)} · Comissão {money(repasse.comissaoAdministradora)} · Sócio {Number(repasse.percentualSocio ?? 100).toLocaleString('pt-BR')}%
                         </small>
                       </td>
                       <td>
@@ -439,9 +447,9 @@ export function RepassesPage() {
             </div>
             <div className="form-grid">
               <SelectField
-                label="Proprietário"
+                label="Sócio"
                 value={generateForm.proprietarioId}
-                onChange={(proprietarioId) => setGenerateForm((current) => ({ ...current, proprietarioId }))}
+                onChange={(proprietarioId) => setGenerateForm((current) => ({ ...current, proprietarioId, imovelId: '' }))}
                 required
               >
                 <option value="">Selecione</option>
@@ -451,11 +459,11 @@ export function RepassesPage() {
                   </option>
                 ))}
               </SelectField>
-              <SelectField label="Imóvel" value={generateForm.imovelId} onChange={(imovelId) => setGenerateForm((current) => ({ ...current, imovelId }))}>
-                <option value="">Todos</option>
-                {imoveis.map((imovel) => (
+              <SelectField label="Imóvel" value={generateForm.imovelId} onChange={(imovelId) => setGenerateForm((current) => ({ ...current, imovelId }))} required>
+                <option value="">Selecione</option>
+                {imoveisDoSocioSelecionado.map((imovel) => (
                   <option key={imovel.id} value={imovel.id}>
-                    {imovel.nome}
+                    {imovel.nome} · {Number(imovel.percentualRepasseSocio ?? 100).toLocaleString('pt-BR')}%
                   </option>
                 ))}
               </SelectField>

@@ -60,6 +60,10 @@ public sealed class ManutencoesController : ControllerBase
         {
             query = query.Where(m => m.Status == status.Value);
         }
+        else
+        {
+            query = query.Where(m => m.Status != ManutencaoStatus.Cancelada);
+        }
 
         if (!string.IsNullOrWhiteSpace(categoria))
         {

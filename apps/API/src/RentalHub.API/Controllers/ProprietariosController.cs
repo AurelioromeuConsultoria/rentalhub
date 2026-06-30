@@ -61,6 +61,7 @@ public sealed class ProprietariosController : ControllerBase
                 p.Telefone,
                 p.Email,
                 p.DadosBancarios,
+                p.ChavePix,
                 p.Observacoes,
                 p.Ativo,
                 p.Imoveis.Count,
@@ -105,6 +106,7 @@ public sealed class ProprietariosController : ControllerBase
             Telefone = request.Telefone?.Trim(),
             Email = request.Email?.Trim(),
             DadosBancarios = request.DadosBancarios?.Trim(),
+            ChavePix = request.ChavePix?.Trim(),
             Observacoes = request.Observacoes?.Trim(),
             Ativo = request.Ativo,
             DataCriacao = DateTime.UtcNow
@@ -118,7 +120,7 @@ public sealed class ProprietariosController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            return Conflict(new { message = "Já existe um proprietário com este documento." });
+            return Conflict(new { message = "Já existe um sócio com este documento." });
         }
 
         return CreatedAtAction(nameof(GetById), new { id = proprietario.Id }, ToResponse(proprietario));
@@ -149,6 +151,7 @@ public sealed class ProprietariosController : ControllerBase
         proprietario.Telefone = request.Telefone?.Trim();
         proprietario.Email = request.Email?.Trim();
         proprietario.DadosBancarios = request.DadosBancarios?.Trim();
+        proprietario.ChavePix = request.ChavePix?.Trim();
         proprietario.Observacoes = request.Observacoes?.Trim();
         proprietario.Ativo = request.Ativo;
         proprietario.DataAtualizacao = DateTime.UtcNow;
@@ -159,7 +162,7 @@ public sealed class ProprietariosController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            return Conflict(new { message = "Já existe um proprietário com este documento." });
+            return Conflict(new { message = "Já existe um sócio com este documento." });
         }
 
         return Ok(ToResponse(proprietario));
@@ -190,6 +193,7 @@ public sealed class ProprietariosController : ControllerBase
             proprietario.Telefone,
             proprietario.Email,
             proprietario.DadosBancarios,
+            proprietario.ChavePix,
             proprietario.Observacoes,
             proprietario.Ativo,
             proprietario.Imoveis.Count,
@@ -204,6 +208,7 @@ public sealed record ProprietarioRequest(
     string? Telefone,
     string? Email,
     string? DadosBancarios,
+    string? ChavePix,
     string? Observacoes,
     bool Ativo = true);
 
@@ -214,6 +219,7 @@ public sealed record ProprietarioResponse(
     string? Telefone,
     string? Email,
     string? DadosBancarios,
+    string? ChavePix,
     string? Observacoes,
     bool Ativo,
     int TotalImoveis,

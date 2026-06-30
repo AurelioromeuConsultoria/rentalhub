@@ -44,9 +44,10 @@ const menuGroups = [
     items: [
       { label: 'Dashboard', href: '/', icon: BarChart3, resource: 'dashboard' },
       { label: 'Reservas', href: '/reservas', icon: CalendarDays, resource: 'reservas' },
+      { label: 'Pré-check-in', href: '/pre-checkins', icon: ClipboardCheck, resource: 'reservas' },
       { label: 'Calendário', href: '/calendario', icon: ClipboardCheck, resource: 'calendario' },
       { label: 'Imóveis', href: '/imoveis', icon: Hotel, resource: 'imoveis' },
-      { label: 'Proprietários', href: '/proprietarios', icon: Users, resource: 'proprietarios' },
+      { label: 'Sócios', href: '/proprietarios', icon: Users, resource: 'proprietarios' },
       { label: 'Hóspedes', href: '/hospedes', icon: UserRound, resource: 'hospedes' },
     ],
   },
@@ -139,7 +140,7 @@ export function Sidebar() {
           </div>
           <div className="brand-copy">
             <strong>RentalHub</strong>
-            <span>{isOwner ? 'Proprietário' : 'Admin'}</span>
+            <span>{isOwner ? 'Sócio' : 'Admin'}</span>
           </div>
         </div>
 
@@ -197,7 +198,7 @@ export function Sidebar() {
             <Shield size={16} />
             <strong>Modo plataforma</strong>
           </div>
-          <p>{isOwner ? 'Portal do proprietário' : isPlatformAdmin ? 'Admin geral' : 'Empresa ativa'}</p>
+          <p>{isOwner ? 'Portal do sócio' : isPlatformAdmin ? 'Admin geral' : 'Empresa ativa'}</p>
         </div>
         <span className="app-version">v{APP_VERSION}</span>
         <a href="https://malachdigital.com.br/" target="_blank" rel="noreferrer">

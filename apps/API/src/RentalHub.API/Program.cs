@@ -52,6 +52,7 @@ builder.Services.AddScoped<PasswordPolicyService>();
 builder.Services.AddScoped<SecurityAuditService>();
 builder.Services.AddHostedService<DatabaseInitializerHostedService>();
 builder.Services.AddHostedService<EmailNotificationDigestHostedService>();
+builder.Services.AddHostedService<PreCheckinDocumentRetentionHostedService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is not configured.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "RentalHub";
@@ -127,6 +128,7 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.UseRateLimiter();
 app.UseAuthentication();
+app.UsePlatformSupportAccess();
 app.Use(async (context, next) =>
 {
     var isOwner = string.Equals(context.User.FindFirst("TipoUsuario")?.Value, "4", StringComparison.Ordinal);
@@ -143,7 +145,7 @@ app.Use(async (context, next) =>
     if (isOwner && path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && !isAllowedOwnerPath)
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new { message = "Acesso restrito ao portal do proprietário." });
+        await context.Response.WriteAsJsonAsync(new { message = "Acesso restrito ao portal do sócio." });
         return;
     }
 

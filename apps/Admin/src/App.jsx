@@ -14,6 +14,8 @@ import { SetPassword } from '@/pages/Login/SetPassword';
 import { ContractPage, PrivacyPage, TermsPage } from '@/pages/Legal/LegalPages';
 import { ManutencaoPage } from '@/pages/Manutencao/ManutencaoPage';
 import { PortalProprietarioPage } from '@/pages/PortalProprietario/PortalProprietarioPage';
+import { PreCheckinPublicPage } from '@/pages/PreCheckin/PreCheckinPublicPage';
+import { PreCheckinsPage } from '@/pages/PreCheckin/PreCheckinsPage';
 import { RelatoriosPage } from '@/pages/Relatorios/RelatoriosPage';
 import { ReservasPage } from '@/pages/Reservas/ReservasPage';
 import { RepassesPage } from '@/pages/Repasses/RepassesPage';
@@ -23,6 +25,7 @@ import { ConfiguracoesPage, EmpresasPage, PerfisPage, UsuariosPage } from '@/pag
 
 const internalRoutes = [
   { path: '/reservas', resource: 'reservas' },
+  { path: '/pre-checkins', resource: 'reservas' },
   { path: '/calendario', resource: 'calendario' },
   { path: '/imoveis', resource: 'imoveis' },
   { path: '/proprietarios', resource: 'proprietarios' },
@@ -83,6 +86,7 @@ export default function App() {
           <Route path="/termos-de-uso" element={<TermsPage />} />
           <Route path="/privacidade" element={<PrivacyPage />} />
           <Route path="/contrato" element={<ContractPage />} />
+          <Route path="/pre-checkin/:token" element={<PreCheckinPublicPage />} />
           <Route
             path="/"
             element={
@@ -93,6 +97,7 @@ export default function App() {
           >
             <Route index element={<HomeRoute />} />
             <Route path="reservas" element={<ProtectedRoute resource="reservas"><ReservasPage /></ProtectedRoute>} />
+            <Route path="pre-checkins" element={<ProtectedRoute resource="reservas"><PreCheckinsPage /></ProtectedRoute>} />
             <Route path="calendario" element={<ProtectedRoute resource="calendario"><CalendarioPage /></ProtectedRoute>} />
             <Route path="imoveis" element={<ProtectedRoute resource="imoveis"><ImoveisPage /></ProtectedRoute>} />
             <Route path="proprietarios" element={<ProtectedRoute resource="proprietarios"><ProprietariosPage /></ProtectedRoute>} />

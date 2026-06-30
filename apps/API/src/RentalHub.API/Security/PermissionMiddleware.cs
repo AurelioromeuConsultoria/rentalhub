@@ -37,6 +37,7 @@ public sealed class PermissionMiddleware
         ["proprietarios"] = Resources.Proprietarios,
         ["hospedes"] = Resources.Hospedes,
         ["reservas"] = Resources.Reservas,
+        ["precheckins"] = Resources.Reservas,
         ["calendario"] = Resources.Calendario,
         ["financeiro"] = Resources.Financeiro,
         ["categoriasfinanceiras"] = Resources.Financeiro,

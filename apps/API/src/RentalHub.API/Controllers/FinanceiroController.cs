@@ -320,7 +320,7 @@ public sealed class FinanceiroController : ControllerBase
         if (request.ProprietarioId.HasValue &&
             !await _dbContext.Proprietarios.AnyAsync(p => p.Id == request.ProprietarioId.Value, cancellationToken))
         {
-            return BadRequest(new { message = "Proprietário não encontrado." });
+            return BadRequest(new { message = "Sócio não encontrado." });
         }
 
         if (request.ReservaId.HasValue &&

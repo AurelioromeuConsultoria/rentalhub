@@ -185,7 +185,7 @@ public sealed class OperationalNotificationService
             $"repasse-{ownerTransfer.Id}",
             "repasse",
             "Repasse pendente",
-            $"{ownerTransfer.Proprietario?.Nome ?? "Proprietário"} · saldo {FormatCurrency(ownerTransfer.ValorRepassar - ownerTransfer.ValorPago)}",
+            $"{ownerTransfer.Proprietario?.Nome ?? "Sócio"} · saldo {FormatCurrency(ownerTransfer.ValorRepassar - ownerTransfer.ValorPago)}",
             ownerTransfer.PeriodoFim,
             "media",
             request.IsOwner ? "/portal-proprietario" : "/repasses")));

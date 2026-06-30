@@ -3,8 +3,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { tenantsApi } from '@/api/administracao';
 import { buscaGlobalApi, notificacoesApi } from '@/api/operacao';
+import { supportAccessApi } from '@/api/supportAccess';
 import { useAuth } from '@/context/AuthContext';
-import { SELECTED_TENANT_ID_KEY, SELECTED_TENANT_SLUG_KEY } from '@/lib/authStorage';
+import {
+  SELECTED_TENANT_ID_KEY,
+  SELECTED_TENANT_SLUG_KEY,
+  SUPPORT_ACCESS_EXPIRES_KEY,
+  SUPPORT_ACCESS_REASON_KEY,
+  SUPPORT_ACCESS_TOKEN_KEY,
+} from '@/lib/authStorage';
 import { TENANTS_UPDATED_EVENT } from '@/lib/tenantEvents';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -13,14 +20,14 @@ const routeLabels = {
   reservas: 'Reservas',
   calendario: 'Calendário',
   imoveis: 'Imóveis',
-  proprietarios: 'Proprietários',
+  proprietarios: 'Sócios',
   hospedes: 'Hóspedes',
   financeiro: 'Financeiro',
   repasses: 'Repasses',
   limpeza: 'Limpeza',
   manutencao: 'Manutenção',
   relatorios: 'Relatórios',
-  'portal-proprietario': 'Portal do Proprietário',
+  'portal-proprietario': 'Portal do Sócio',
   usuarios: 'Usuários',
   perfis: 'Perfis',
   empresas: 'Empresas',
@@ -90,6 +97,8 @@ export function Header() {
   const [tenants, setTenants] = useState([]);
   const [showTenants, setShowTenants] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState(() => localStorage.getItem(SELECTED_TENANT_ID_KEY));
+  const [supportReason, setSupportReason] = useState(() => localStorage.getItem(SUPPORT_ACCESS_REASON_KEY) || '');
+  const [tenantSwitching, setTenantSwitching] = useState(false);
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const highPriorityCount = useMemo(
     () => notifications.filter((item) => item.prioridade === 'alta').length,
@@ -189,20 +198,67 @@ export function Header() {
     navigate(href);
   };
 
-  const selectTenant = (tenant) => {
+  const clearSupportAccess = async () => {
+    const token = localStorage.getItem(SUPPORT_ACCESS_TOKEN_KEY);
+    localStorage.removeItem(SUPPORT_ACCESS_TOKEN_KEY);
+    localStorage.removeItem(SUPPORT_ACCESS_REASON_KEY);
+    localStorage.removeItem(SUPPORT_ACCESS_EXPIRES_KEY);
+    setSupportReason('');
+
+    if (token) {
+      try {
+        await supportAccessApi.end(token);
+      } catch {
+        // A sessão local já foi removida; falha no encerramento remoto não deve travar a troca.
+      }
+    }
+  };
+
+  const selectTenant = async (tenant) => {
+    if (tenantSwitching) {
+      return;
+    }
+
+    setTenantSwitching(true);
+
     if (!tenant) {
+      await clearSupportAccess();
       localStorage.removeItem(SELECTED_TENANT_ID_KEY);
       localStorage.removeItem(SELECTED_TENANT_SLUG_KEY);
       setSelectedTenantId(null);
-    } else {
-      localStorage.setItem(SELECTED_TENANT_ID_KEY, String(tenant.id));
-      localStorage.setItem(SELECTED_TENANT_SLUG_KEY, tenant.slug);
-      setSelectedTenantId(String(tenant.id));
+      setShowTenants(false);
+      navigate('/');
+      window.location.reload();
+      return;
     }
 
-    setShowTenants(false);
-    navigate('/');
-    window.location.reload();
+    const motivo = window.prompt(
+      `Motivo para acessar os dados de ${tenant.nomeExibicao || tenant.nome}`,
+      'Atendimento de suporte solicitado pelo cliente.',
+    );
+
+    if (motivo === null) {
+      setTenantSwitching(false);
+      return;
+    }
+
+    try {
+      await clearSupportAccess();
+      const response = await supportAccessApi.start({ tenantId: tenant.id, motivo });
+      localStorage.setItem(SELECTED_TENANT_ID_KEY, String(response.data.tenantId));
+      localStorage.setItem(SELECTED_TENANT_SLUG_KEY, response.data.tenantSlug);
+      localStorage.setItem(SUPPORT_ACCESS_TOKEN_KEY, response.data.token);
+      localStorage.setItem(SUPPORT_ACCESS_REASON_KEY, response.data.motivo);
+      localStorage.setItem(SUPPORT_ACCESS_EXPIRES_KEY, response.data.expiraEm);
+      setSupportReason(response.data.motivo);
+      setSelectedTenantId(String(response.data.tenantId));
+      setShowTenants(false);
+      navigate('/');
+      window.location.reload();
+    } catch (switchError) {
+      alert(switchError.response?.data?.message || 'Não foi possível iniciar o modo suporte.');
+      setTenantSwitching(false);
+    }
   };
 
   return (
@@ -309,8 +365,9 @@ export function Header() {
         </div>
         <div className="tenant-anchor">
           <button
-            className="tenant-switcher"
+            className={`tenant-switcher${selectedTenantId ? ' support-mode' : ''}`}
             type="button"
+            disabled={tenantSwitching}
             onClick={() => {
               if (!usuario?.isPlatformAdmin) {
                 return;
@@ -327,7 +384,10 @@ export function Header() {
           {usuario?.isPlatformAdmin && showTenants && (
             <div className="topbar-popover tenant-popover">
               <div className="popover-heading">
-                <strong>Operar empresa</strong>
+                <div>
+                  <strong>{selectedTenantId ? 'Modo suporte ativo' : 'Operar empresa'}</strong>
+                  {supportReason && <small>{supportReason}</small>}
+                </div>
               </div>
               <button type="button" onClick={() => selectTenant(null)}>
                 <strong>{currentTenant?.nomeExibicao || currentTenant?.nome || 'Minha empresa'}</strong>

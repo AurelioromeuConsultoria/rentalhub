@@ -10,7 +10,7 @@ public sealed class DefaultAccessProfilesTests
     {
         var names = DefaultAccessProfiles.Templates.Select(profile => profile.Nome).ToArray();
 
-        Assert.Equal(["Administrador", "Financeiro", "Operacional", "Proprietário"], names);
+        Assert.Equal(["Administrador", "Financeiro", "Operacional", "Sócio"], names);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class DefaultAccessProfilesTests
     [Fact]
     public void OwnerProfile_ShouldOnlyAccessOwnerPortal()
     {
-        var owner = GetTemplate("Proprietário");
+        var owner = GetTemplate("Sócio");
 
         Assert.False(owner.CanEdit);
         Assert.False(owner.CanDelete);

@@ -9,6 +9,8 @@ import {
   DoorOpen,
   Hammer,
   Lock,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   RotateCcw,
   Save,
@@ -38,6 +40,16 @@ const viewModes = [
 ];
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const sidePanelCollapsedStorageKey = 'rentalhub:calendar-side-panel-collapsed';
+
+function getInitialSidePanelCollapsed() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(sidePanelCollapsedStorageKey) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 const emptyBlock = {
   imovelId: '',
@@ -256,6 +268,7 @@ export function CalendarioPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [sidePanelCollapsed, setSidePanelCollapsed] = useState(getInitialSidePanelCollapsed);
 
   const days = useMemo(() => buildDays(anchorDate, viewMode), [anchorDate, viewMode]);
   const calendarCells = useMemo(() => buildCalendarCells(anchorDate, viewMode), [anchorDate, viewMode]);
@@ -484,6 +497,18 @@ export function CalendarioPage() {
     }
   };
 
+  const toggleSidePanel = () => {
+    setSidePanelCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(sidePanelCollapsedStorageKey, String(next));
+      } catch {
+        // Prefer keeping the UI usable even if the browser blocks local persistence.
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="calendar-page">
       <section className="page-heading calendar-heading">
@@ -531,7 +556,7 @@ export function CalendarioPage() {
         </article>
       </section>
 
-      <section className="calendar-layout strong">
+      <section className={`calendar-layout strong${sidePanelCollapsed ? ' side-collapsed' : ''}`}>
         <article className="calendar-panel calendar-board-panel">
           <div className="calendar-toolbar strong">
             <div>
@@ -564,6 +589,16 @@ export function CalendarioPage() {
                   ))}
                 </select>
               </label>
+
+              <button
+                className="calendar-side-toggle"
+                type="button"
+                aria-label={sidePanelCollapsed ? 'Abrir painel lateral' : 'Recolher painel lateral'}
+                title={sidePanelCollapsed ? 'Abrir painel lateral' : 'Recolher painel lateral'}
+                onClick={toggleSidePanel}
+              >
+                {sidePanelCollapsed ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}
+              </button>
             </div>
           </div>
 
@@ -636,191 +671,201 @@ export function CalendarioPage() {
           )}
         </article>
 
-        <aside className="calendar-side-panel">
-          <article className="calendar-day-agenda">
-            <div>
-              <strong>Detalhe do dia</strong>
-              <span>{formatDate(selectedDay)} · {selectedDayEvents.length} eventos</span>
-            </div>
-
-            {selectedDayEvents.length > 0 ? (
-              <div className="calendar-day-agenda-list">
-                {selectedDayEvents.map((event) => {
-                  const meta = getEventMeta(event);
-                  const Icon = meta.icon;
-                  return (
-                    <article className={`calendar-agenda-event ${event.tipo}`} key={event.id}>
-                      <Icon size={16} />
-                      <div>
-                        <strong>{getEventText(event)}</strong>
-                        <span>{event.imovelNome} · {formatDate(event.inicio)} a {formatDate(event.fim)}</span>
-                      </div>
-                      {event.id.startsWith('bloqueio-') && (
-                        <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
-            ) : (
-              <p>Dia livre no período filtrado. Clique em outro dia ou selecione um intervalo para criar reserva/bloqueio.</p>
-            )}
-          </article>
-
-          <article className={`calendar-selection-card ${selectionStatus.tone}`}>
-            <div className="form-title">
-              {selectionStatus.tone === 'danger' ? <AlertTriangle size={18} /> : <CalendarCheck size={18} />}
-              <strong>Disponibilidade</strong>
-            </div>
-            <h2>{selectionStatus.title}</h2>
-            <p>{selectionStatus.description}</p>
-
-            <dl className="calendar-selection-details">
-              <div>
-                <dt>Imóvel</dt>
-                <dd>{selectedImovel?.nome || 'Não selecionado'}</dd>
-              </div>
-              <div>
-                <dt>Check-in</dt>
-                <dd>{formatDate(selection.inicio)}</dd>
-              </div>
-              <div>
-                <dt>Check-out</dt>
-                <dd>{formatDate(selection.fim)}</dd>
-              </div>
-              <div>
-                <dt>Diárias</dt>
-                <dd>{selection.inicio && selection.fim ? differenceInDays(parseDateOnly(selection.inicio), parseDateOnly(selection.fim)) : 0}</dd>
-              </div>
-            </dl>
-
-            {selectedConflicts.length > 0 && (
-              <div className="calendar-conflict-list">
-                <strong>Conflitos no período</strong>
-                {selectedConflicts.slice(0, 4).map((event) => (
-                  <span key={event.id}>{getEventText(event)} · {formatDate(event.inicio)} a {formatDate(event.fim)}</span>
-                ))}
-              </div>
-            )}
-
-            <div className="calendar-selection-actions">
-              <button
-                className="primary-action full"
-                type="button"
-                disabled={!selection.imovelId || !selection.inicio || !selection.fim || selectedConflicts.length > 0}
-                onClick={createReservaFromSelection}
-              >
-                <Plus size={18} />
-                Criar reserva
-              </button>
-              <button
-                className="secondary-action full"
-                type="button"
-                disabled={!selection.imovelId || !selection.inicio}
-                onClick={fillBlockFromSelection}
-              >
-                Usar no bloqueio
-              </button>
-            </div>
-          </article>
-
-          <form className="resource-form calendar-block-form" onSubmit={saveBlock}>
-            <div className="form-title">
-              <Plus size={18} />
-              <strong>Novo bloqueio</strong>
-            </div>
-            <div className="form-grid">
-              <label className="form-field span-2">
-                <span>Imóvel</span>
-                <select
-                  value={form.imovelId}
-                  onChange={(event) => setForm((current) => ({ ...current, imovelId: event.target.value }))}
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {imoveis.map((imovel) => (
-                    <option key={imovel.id} value={imovel.id}>
-                      {imovel.nome}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-field">
-                <span>Início</span>
-                <input
-                  type="date"
-                  value={form.inicio}
-                  onChange={(event) => setForm((current) => ({ ...current, inicio: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="form-field">
-                <span>Fim</span>
-                <input
-                  type="date"
-                  value={form.fim}
-                  onChange={(event) => setForm((current) => ({ ...current, fim: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="form-field span-2">
-                <span>Tipo</span>
-                <select value={form.tipo} onChange={(event) => setForm((current) => ({ ...current, tipo: Number(event.target.value) }))}>
-                  {tipoOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-field span-2">
-                <span>Motivo</span>
-                <textarea
-                  value={form.motivo}
-                  onChange={(event) => setForm((current) => ({ ...current, motivo: event.target.value }))}
-                  placeholder="Ex.: manutenção preventiva, bloqueio do proprietário"
-                  required
-                />
-              </label>
-            </div>
-            <button className="primary-action full" type="submit" disabled={saving || imoveis.length === 0}>
-              <Save size={18} />
-              {saving ? 'Salvando...' : 'Salvar bloqueio'}
+        <aside className={`calendar-side-panel${sidePanelCollapsed ? ' collapsed' : ''}`}>
+          {sidePanelCollapsed ? (
+            <button className="calendar-side-rail" type="button" onClick={toggleSidePanel}>
+              <PanelRightOpen size={18} />
+              <strong>Painel</strong>
+              <span>{selectedDayEvents.length} eventos</span>
             </button>
-          </form>
-
-          <article className="calendar-availability-list">
-            <strong>Imóveis livres no período</strong>
-            {selection.inicio && selection.fim ? (
-              availableProperties.length > 0 ? (
+          ) : (
+            <>
+              <article className="calendar-day-agenda">
                 <div>
-                  {availableProperties.slice(0, 8).map((imovel) => (
-                    <button
-                      key={imovel.id}
-                      type="button"
-                      onClick={() => setSelection((current) => ({ ...current, imovelId: String(imovel.id) }))}
-                    >
-                      {imovel.nome}
-                      <span>{imovel.quantidadeHospedes || 0} hóspedes</span>
-                    </button>
-                  ))}
+                  <strong>Detalhe do dia</strong>
+                  <span>{formatDate(selectedDay)} · {selectedDayEvents.length} eventos</span>
                 </div>
-              ) : (
-                <p>Nenhum imóvel livre nesse intervalo.</p>
-              )
-            ) : (
-              <p>Selecione check-in e check-out para consultar disponibilidade.</p>
-            )}
-          </article>
 
-          <div className="calendar-legend">
-            <span className="reserva">Reserva</span>
-            <span className="bloqueio">Bloqueio</span>
-            <span className="limpeza">Limpeza</span>
-            <span className="manutencao">Manutenção</span>
-          </div>
+                {selectedDayEvents.length > 0 ? (
+                  <div className="calendar-day-agenda-list">
+                    {selectedDayEvents.map((event) => {
+                      const meta = getEventMeta(event);
+                      const Icon = meta.icon;
+                      return (
+                        <article className={`calendar-agenda-event ${event.tipo}`} key={event.id}>
+                          <Icon size={16} />
+                          <div>
+                            <strong>{getEventText(event)}</strong>
+                            <span>{event.imovelNome} · {formatDate(event.inicio)} a {formatDate(event.fim)}</span>
+                          </div>
+                          {event.id.startsWith('bloqueio-') && (
+                            <button type="button" aria-label="Remover bloqueio" onClick={() => deleteBlock(event)}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p>Dia livre no período filtrado. Clique em outro dia ou selecione um intervalo para criar reserva/bloqueio.</p>
+                )}
+              </article>
+
+              <article className={`calendar-selection-card ${selectionStatus.tone}`}>
+                <div className="form-title">
+                  {selectionStatus.tone === 'danger' ? <AlertTriangle size={18} /> : <CalendarCheck size={18} />}
+                  <strong>Disponibilidade</strong>
+                </div>
+                <h2>{selectionStatus.title}</h2>
+                <p>{selectionStatus.description}</p>
+
+                <dl className="calendar-selection-details">
+                  <div>
+                    <dt>Imóvel</dt>
+                    <dd>{selectedImovel?.nome || 'Não selecionado'}</dd>
+                  </div>
+                  <div>
+                    <dt>Check-in</dt>
+                    <dd>{formatDate(selection.inicio)}</dd>
+                  </div>
+                  <div>
+                    <dt>Check-out</dt>
+                    <dd>{formatDate(selection.fim)}</dd>
+                  </div>
+                  <div>
+                    <dt>Diárias</dt>
+                    <dd>{selection.inicio && selection.fim ? differenceInDays(parseDateOnly(selection.inicio), parseDateOnly(selection.fim)) : 0}</dd>
+                  </div>
+                </dl>
+
+                {selectedConflicts.length > 0 && (
+                  <div className="calendar-conflict-list">
+                    <strong>Conflitos no período</strong>
+                    {selectedConflicts.slice(0, 4).map((event) => (
+                      <span key={event.id}>{getEventText(event)} · {formatDate(event.inicio)} a {formatDate(event.fim)}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="calendar-selection-actions">
+                  <button
+                    className="primary-action full"
+                    type="button"
+                    disabled={!selection.imovelId || !selection.inicio || !selection.fim || selectedConflicts.length > 0}
+                    onClick={createReservaFromSelection}
+                  >
+                    <Plus size={18} />
+                    Criar reserva
+                  </button>
+                  <button
+                    className="secondary-action full"
+                    type="button"
+                    disabled={!selection.imovelId || !selection.inicio}
+                    onClick={fillBlockFromSelection}
+                  >
+                    Usar no bloqueio
+                  </button>
+                </div>
+              </article>
+
+              <form className="resource-form calendar-block-form" onSubmit={saveBlock}>
+                <div className="form-title">
+                  <Plus size={18} />
+                  <strong>Novo bloqueio</strong>
+                </div>
+                <div className="form-grid">
+                  <label className="form-field span-2">
+                    <span>Imóvel</span>
+                    <select
+                      value={form.imovelId}
+                      onChange={(event) => setForm((current) => ({ ...current, imovelId: event.target.value }))}
+                      required
+                    >
+                      <option value="">Selecione</option>
+                      {imoveis.map((imovel) => (
+                        <option key={imovel.id} value={imovel.id}>
+                          {imovel.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Início</span>
+                    <input
+                      type="date"
+                      value={form.inicio}
+                      onChange={(event) => setForm((current) => ({ ...current, inicio: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Fim</span>
+                    <input
+                      type="date"
+                      value={form.fim}
+                      onChange={(event) => setForm((current) => ({ ...current, fim: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label className="form-field span-2">
+                    <span>Tipo</span>
+                    <select value={form.tipo} onChange={(event) => setForm((current) => ({ ...current, tipo: Number(event.target.value) }))}>
+                      {tipoOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field span-2">
+                    <span>Motivo</span>
+                    <textarea
+                      value={form.motivo}
+                      onChange={(event) => setForm((current) => ({ ...current, motivo: event.target.value }))}
+                      placeholder="Ex.: manutenção preventiva, bloqueio do sócio"
+                      required
+                    />
+                  </label>
+                </div>
+                <button className="primary-action full" type="submit" disabled={saving || imoveis.length === 0}>
+                  <Save size={18} />
+                  {saving ? 'Salvando...' : 'Salvar bloqueio'}
+                </button>
+              </form>
+
+              <article className="calendar-availability-list">
+                <strong>Imóveis livres no período</strong>
+                {selection.inicio && selection.fim ? (
+                  availableProperties.length > 0 ? (
+                    <div>
+                      {availableProperties.slice(0, 8).map((imovel) => (
+                        <button
+                          key={imovel.id}
+                          type="button"
+                          onClick={() => setSelection((current) => ({ ...current, imovelId: String(imovel.id) }))}
+                        >
+                          {imovel.nome}
+                          <span>{imovel.quantidadeHospedes || 0} hóspedes</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Nenhum imóvel livre nesse intervalo.</p>
+                  )
+                ) : (
+                  <p>Selecione check-in e check-out para consultar disponibilidade.</p>
+                )}
+              </article>
+
+              <div className="calendar-legend">
+                <span className="reserva">Reserva</span>
+                <span className="bloqueio">Bloqueio</span>
+                <span className="limpeza">Limpeza</span>
+                <span className="manutencao">Manutenção</span>
+              </div>
+            </>
+          )}
         </aside>
       </section>
     </div>

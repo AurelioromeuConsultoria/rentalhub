@@ -18,6 +18,8 @@ namespace RentalHub.API.Controllers;
 [Route("api/[controller]")]
 public sealed class TenantsController : ControllerBase
 {
+    private static readonly string[] AllowedSubscriptionStatuses = ["trial", "ativa", "inadimplente", "suspensa", "cancelada"];
+    private static readonly string[] AllowedBillingCycles = ["mensal", "anual"];
     private readonly RentalHubDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
@@ -110,15 +112,25 @@ public sealed class TenantsController : ControllerBase
             .GroupBy(c => c.TenantId)
             .Select(g => new { TenantId = g.Key, Total = g.Count() })
             .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
+        var usageByTenant = await LoadUsageStatsAsync(tenantIds, cancellationToken);
 
         return Ok(tenants
-            .Select(t => ToResponse(
-                t,
-                usuariosPorTenant.GetValueOrDefault(t.Id),
-                imoveisPorTenant.GetValueOrDefault(t.Id),
-                reservasPorTenant.GetValueOrDefault(t.Id),
-                perfisPorTenant.GetValueOrDefault(t.Id),
-                categoriasPorTenant.GetValueOrDefault(t.Id)))
+            .Select(t =>
+            {
+                var usage = usageByTenant.GetValueOrDefault(t.Id) ?? TenantUsageStats.Empty;
+                return ToResponse(
+                    t,
+                    usuariosPorTenant.GetValueOrDefault(t.Id),
+                    imoveisPorTenant.GetValueOrDefault(t.Id),
+                    reservasPorTenant.GetValueOrDefault(t.Id),
+                    perfisPorTenant.GetValueOrDefault(t.Id),
+                    categoriasPorTenant.GetValueOrDefault(t.Id),
+                    usuariosAtivos: usage.UsuariosAtivos,
+                    reservasUltimos30Dias: usage.ReservasUltimos30Dias,
+                    ultimaAtividadeEm: usage.UltimaAtividadeEm,
+                    ultimoAcessoEm: usage.UltimoAcessoEm,
+                    chamadosAbertos: usage.ChamadosAbertos);
+            })
             .ToList());
     }
 
@@ -145,8 +157,20 @@ public sealed class TenantsController : ControllerBase
         var reservas = await _dbContext.Reservas.IgnoreQueryFilters().CountAsync(r => r.TenantId == id, cancellationToken);
         var perfis = await _dbContext.PerfisAcesso.IgnoreQueryFilters().CountAsync(p => p.TenantId == id, cancellationToken);
         var categorias = await _dbContext.CategoriasFinanceiras.IgnoreQueryFilters().CountAsync(c => c.TenantId == id, cancellationToken);
+        var usage = (await LoadUsageStatsAsync([id], cancellationToken)).GetValueOrDefault(id) ?? TenantUsageStats.Empty;
 
-        return Ok(ToResponse(tenant, usuarios, imoveis, reservas, perfis, categorias));
+        return Ok(ToResponse(
+            tenant,
+            usuarios,
+            imoveis,
+            reservas,
+            perfis,
+            categorias,
+            usuariosAtivos: usage.UsuariosAtivos,
+            reservasUltimos30Dias: usage.ReservasUltimos30Dias,
+            ultimaAtividadeEm: usage.UltimaAtividadeEm,
+            ultimoAcessoEm: usage.UltimoAcessoEm,
+            chamadosAbertos: usage.ChamadosAbertos));
     }
 
     [HttpPost]
@@ -207,6 +231,7 @@ public sealed class TenantsController : ControllerBase
                     Ativo = request.Ativo,
                     DataCriacao = DateTime.UtcNow
                 };
+                ApplyCommercialData(tenant, request);
 
                 _dbContext.Tenants.Add(tenant);
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -332,17 +357,121 @@ public sealed class TenantsController : ControllerBase
         tenant.NomeExibicao = request.NomeExibicao.Trim();
         tenant.Slug = slug;
         tenant.Ativo = request.Ativo;
+        ApplyCommercialData(tenant, request);
         ApplyDomains(tenant, domains);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _securityAudit.RecordAsync(
+            "DadosComerciaisAtualizados",
+            tenant.Id,
+            tenant.Id.ToString(),
+            userEmail: User.Identity?.Name,
+            cancellationToken: cancellationToken);
 
         var usuarios = await _dbContext.Usuarios.IgnoreQueryFilters().CountAsync(u => u.TenantId == id, cancellationToken);
         var imoveis = await _dbContext.Imoveis.IgnoreQueryFilters().CountAsync(i => i.TenantId == id, cancellationToken);
         var reservas = await _dbContext.Reservas.IgnoreQueryFilters().CountAsync(r => r.TenantId == id, cancellationToken);
         var perfis = await _dbContext.PerfisAcesso.IgnoreQueryFilters().CountAsync(p => p.TenantId == id, cancellationToken);
         var categorias = await _dbContext.CategoriasFinanceiras.IgnoreQueryFilters().CountAsync(c => c.TenantId == id, cancellationToken);
+        var usage = (await LoadUsageStatsAsync([id], cancellationToken)).GetValueOrDefault(id) ?? TenantUsageStats.Empty;
 
-        return Ok(ToResponse(tenant, usuarios, imoveis, reservas, perfis, categorias));
+        return Ok(ToResponse(
+            tenant,
+            usuarios,
+            imoveis,
+            reservas,
+            perfis,
+            categorias,
+            usuariosAtivos: usage.UsuariosAtivos,
+            reservasUltimos30Dias: usage.ReservasUltimos30Dias,
+            ultimaAtividadeEm: usage.UltimaAtividadeEm,
+            ultimoAcessoEm: usage.UltimoAcessoEm,
+            chamadosAbertos: usage.ChamadosAbertos));
+    }
+
+    [HttpPost("{id:int}/pagamento")]
+    public async Task<ActionResult<TenantResponse>> RecordPayment(
+        int id,
+        TenantPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsPlatformAdmin())
+        {
+            return Forbid();
+        }
+
+        if (request.Valor <= 0)
+        {
+            return BadRequest(new { message = "O valor do pagamento deve ser maior que zero." });
+        }
+
+        var tenant = await _dbContext.Tenants
+            .IgnoreQueryFilters()
+            .Include(t => t.Domains)
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (tenant is null)
+        {
+            return NotFound();
+        }
+
+        tenant.UltimoPagamentoValor = request.Valor;
+        tenant.UltimoPagamentoEm = NormalizeUtcDate(request.PagoEm ?? DateTime.UtcNow);
+        tenant.ProximoVencimentoEm = request.ProximoVencimentoEm.HasValue
+            ? NormalizeUtcDate(request.ProximoVencimentoEm.Value)
+            : tenant.ProximoVencimentoEm;
+        tenant.StatusAssinatura = "ativa";
+        tenant.Ativo = true;
+        tenant.CanceladoEm = null;
+        tenant.ComercialAtualizadoEm = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _securityAudit.RecordAsync(
+            "PagamentoRegistrado",
+            tenant.Id,
+            tenant.Id.ToString(),
+            cancellationToken: cancellationToken);
+
+        return Ok(await BuildTenantResponseAsync(tenant, cancellationToken));
+    }
+
+    [HttpPost("{id:int}/trial")]
+    public async Task<ActionResult<TenantResponse>> ExtendTrial(
+        int id,
+        TenantTrialRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsPlatformAdmin())
+        {
+            return Forbid();
+        }
+
+        var trialEnd = NormalizeUtcDate(request.ExpiraEm);
+        if (trialEnd < DateTime.UtcNow.Date)
+        {
+            return BadRequest(new { message = "A nova data do trial não pode estar no passado." });
+        }
+
+        var tenant = await _dbContext.Tenants
+            .IgnoreQueryFilters()
+            .Include(t => t.Domains)
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (tenant is null)
+        {
+            return NotFound();
+        }
+
+        tenant.TrialExpiraEm = trialEnd;
+        tenant.StatusAssinatura = "trial";
+        tenant.Ativo = true;
+        tenant.CanceladoEm = null;
+        tenant.ComercialAtualizadoEm = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _securityAudit.RecordAsync(
+            "TrialProrrogado",
+            tenant.Id,
+            tenant.Id.ToString(),
+            cancellationToken: cancellationToken);
+
+        return Ok(await BuildTenantResponseAsync(tenant, cancellationToken));
     }
 
     [HttpDelete("{id:int}")]
@@ -385,6 +514,12 @@ public sealed class TenantsController : ControllerBase
             return BadRequest(new { message = "Nome e nome de exibição são obrigatórios." });
         }
 
+        var commercialValidation = ValidateCommercialRequest(request);
+        if (commercialValidation is not null)
+        {
+            return commercialValidation;
+        }
+
         if (!validateAdmin || string.IsNullOrWhiteSpace(request.AdminEmail))
         {
             return null;
@@ -415,6 +550,71 @@ public sealed class TenantsController : ControllerBase
         }
 
         return null;
+    }
+
+    private ActionResult? ValidateCommercialRequest(TenantRequest request)
+    {
+        var status = NormalizeCommercialValue(request.StatusAssinatura, "trial");
+        if (!AllowedSubscriptionStatuses.Contains(status, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Status de assinatura inválido." });
+        }
+
+        var cycle = NormalizeCommercialValue(request.CicloCobranca, "mensal");
+        if (!AllowedBillingCycles.Contains(cycle, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Ciclo de cobrança inválido." });
+        }
+
+        if (request.ValorPlano < 0)
+        {
+            return BadRequest(new { message = "O valor do plano não pode ser negativo." });
+        }
+
+        if (request.DiaVencimento is < 1 or > 31)
+        {
+            return BadRequest(new { message = "O dia de vencimento deve ficar entre 1 e 31." });
+        }
+
+        if (request.LimiteImoveis <= 0 && request.LimiteImoveis.HasValue ||
+            request.LimiteUsuarios <= 0 && request.LimiteUsuarios.HasValue)
+        {
+            return BadRequest(new { message = "Limites devem ser maiores que zero ou deixados em branco." });
+        }
+
+        return null;
+    }
+
+    private static void ApplyCommercialData(Tenant tenant, TenantRequest request)
+    {
+        tenant.PlanoNome = NormalizeOptional(request.PlanoNome);
+        tenant.StatusAssinatura = tenant.IsRootTenant
+            ? "ativa"
+            : NormalizeCommercialValue(request.StatusAssinatura, "trial");
+        tenant.CicloCobranca = NormalizeCommercialValue(request.CicloCobranca, "mensal");
+        tenant.ValorPlano = request.ValorPlano;
+        tenant.DataInicioAssinatura = NormalizeNullableDate(request.DataInicioAssinatura);
+        tenant.TrialExpiraEm = NormalizeNullableDate(request.TrialExpiraEm);
+        tenant.DiaVencimento = request.DiaVencimento;
+        tenant.ProximoVencimentoEm = NormalizeNullableDate(request.ProximoVencimentoEm);
+        tenant.LimiteImoveis = request.LimiteImoveis;
+        tenant.LimiteUsuarios = request.LimiteUsuarios;
+        tenant.ResponsavelFinanceiro = NormalizeOptional(request.ResponsavelFinanceiro);
+        tenant.EmailFinanceiro = NormalizeOptional(request.EmailFinanceiro)?.ToLowerInvariant();
+        tenant.ObservacoesComerciais = NormalizeOptional(request.ObservacoesComerciais);
+        tenant.CanceladoEm = tenant.StatusAssinatura == "cancelada"
+            ? tenant.CanceladoEm ?? DateTime.UtcNow
+            : null;
+        tenant.ComercialAtualizadoEm = DateTime.UtcNow;
+
+        if (tenant.IsRootTenant || tenant.StatusAssinatura is "trial" or "ativa")
+        {
+            tenant.Ativo = true;
+        }
+        else if (tenant.StatusAssinatura is "suspensa" or "cancelada")
+        {
+            tenant.Ativo = false;
+        }
     }
 
     private static string NormalizeSlug(string? value)
@@ -522,6 +722,87 @@ public sealed class TenantsController : ControllerBase
         await _emailSender.SendAsync(usuario.Email, "Sua empresa foi ativada no RentalHub", html, text, cancellationToken);
     }
 
+    private async Task<Dictionary<int, TenantUsageStats>> LoadUsageStatsAsync(
+        IReadOnlyCollection<int> tenantIds,
+        CancellationToken cancellationToken)
+    {
+        if (tenantIds.Count == 0)
+        {
+            return [];
+        }
+
+        var since = DateTime.UtcNow.AddDays(-30);
+        var activeUsers = await _dbContext.Usuarios
+            .IgnoreQueryFilters()
+            .Where(user => tenantIds.Contains(user.TenantId) && user.Ativo)
+            .GroupBy(user => user.TenantId)
+            .Select(group => new { TenantId = group.Key, Total = group.Count() })
+            .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
+        var recentReservations = await _dbContext.Reservas
+            .IgnoreQueryFilters()
+            .Where(reservation => tenantIds.Contains(reservation.TenantId) && reservation.DataCriacao >= since)
+            .GroupBy(reservation => reservation.TenantId)
+            .Select(group => new { TenantId = group.Key, Total = group.Count() })
+            .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
+        var lastActivities = await _dbContext.AuditLogs
+            .IgnoreQueryFilters()
+            .Where(log => tenantIds.Contains(log.TenantId))
+            .GroupBy(log => log.TenantId)
+            .Select(group => new { TenantId = group.Key, LastAt = group.Max(log => log.CreatedAt) })
+            .ToDictionaryAsync(item => item.TenantId, item => (DateTime?)item.LastAt, cancellationToken);
+        var lastLogins = await _dbContext.AuditLogs
+            .IgnoreQueryFilters()
+            .Where(log =>
+                tenantIds.Contains(log.TenantId) &&
+                log.EntityName == "Seguranca" &&
+                log.Action == "LoginOk")
+            .GroupBy(log => log.TenantId)
+            .Select(group => new { TenantId = group.Key, LastAt = group.Max(log => log.CreatedAt) })
+            .ToDictionaryAsync(item => item.TenantId, item => (DateTime?)item.LastAt, cancellationToken);
+        var openTickets = await _dbContext.SupportTickets
+            .IgnoreQueryFilters()
+            .Where(ticket =>
+                tenantIds.Contains(ticket.TenantId) &&
+                ticket.Status != "resolvido" &&
+                ticket.Status != "cancelado")
+            .GroupBy(ticket => ticket.TenantId)
+            .Select(group => new { TenantId = group.Key, Total = group.Count() })
+            .ToDictionaryAsync(item => item.TenantId, item => item.Total, cancellationToken);
+
+        return tenantIds.ToDictionary(
+            tenantId => tenantId,
+            tenantId => new TenantUsageStats(
+                activeUsers.GetValueOrDefault(tenantId),
+                recentReservations.GetValueOrDefault(tenantId),
+                lastActivities.GetValueOrDefault(tenantId),
+                lastLogins.GetValueOrDefault(tenantId),
+                openTickets.GetValueOrDefault(tenantId)));
+    }
+
+    private async Task<TenantResponse> BuildTenantResponseAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        var id = tenant.Id;
+        var usuarios = await _dbContext.Usuarios.IgnoreQueryFilters().CountAsync(item => item.TenantId == id, cancellationToken);
+        var imoveis = await _dbContext.Imoveis.IgnoreQueryFilters().CountAsync(item => item.TenantId == id, cancellationToken);
+        var reservas = await _dbContext.Reservas.IgnoreQueryFilters().CountAsync(item => item.TenantId == id, cancellationToken);
+        var perfis = await _dbContext.PerfisAcesso.IgnoreQueryFilters().CountAsync(item => item.TenantId == id, cancellationToken);
+        var categorias = await _dbContext.CategoriasFinanceiras.IgnoreQueryFilters().CountAsync(item => item.TenantId == id, cancellationToken);
+        var usage = (await LoadUsageStatsAsync([id], cancellationToken)).GetValueOrDefault(id) ?? TenantUsageStats.Empty;
+
+        return ToResponse(
+            tenant,
+            usuarios,
+            imoveis,
+            reservas,
+            perfis,
+            categorias,
+            usuariosAtivos: usage.UsuariosAtivos,
+            reservasUltimos30Dias: usage.ReservasUltimos30Dias,
+            ultimaAtividadeEm: usage.UltimaAtividadeEm,
+            ultimoAcessoEm: usage.UltimoAcessoEm,
+            chamadosAbertos: usage.ChamadosAbertos);
+    }
+
     private static TenantResponse ToResponse(
         Tenant tenant,
         int usuarios,
@@ -529,9 +810,23 @@ public sealed class TenantsController : ControllerBase
         int reservas,
         int perfis,
         int categorias,
-        string? adminConviteUrl = null)
+        string? adminConviteUrl = null,
+        int usuariosAtivos = 0,
+        int reservasUltimos30Dias = 0,
+        DateTime? ultimaAtividadeEm = null,
+        DateTime? ultimoAcessoEm = null,
+        int chamadosAbertos = 0)
     {
         var checklist = BuildOnboardingChecklist(usuarios, imoveis, reservas, perfis, categorias);
+        var onboardingStatus = ResolveOnboardingStatus(usuarios, imoveis, reservas, perfis, categorias);
+        var health = ResolveClientHealth(
+            tenant,
+            onboardingStatus,
+            usuariosAtivos,
+            imoveis,
+            reservasUltimos30Dias,
+            ultimaAtividadeEm,
+            chamadosAbertos);
 
         return new TenantResponse(
             tenant.Id,
@@ -551,10 +846,145 @@ public sealed class TenantsController : ControllerBase
             reservas,
             perfis,
             categorias,
-            ResolveOnboardingStatus(usuarios, imoveis, reservas, perfis, categorias),
+            onboardingStatus,
             checklist,
             adminConviteUrl,
+            tenant.PlanoNome,
+            tenant.StatusAssinatura,
+            tenant.CicloCobranca,
+            tenant.ValorPlano,
+            tenant.DataInicioAssinatura,
+            tenant.TrialExpiraEm,
+            tenant.DiaVencimento,
+            tenant.ProximoVencimentoEm,
+            tenant.LimiteImoveis,
+            tenant.LimiteUsuarios,
+            tenant.ResponsavelFinanceiro,
+            tenant.EmailFinanceiro,
+            tenant.ObservacoesComerciais,
+            tenant.UltimoPagamentoEm,
+            tenant.UltimoPagamentoValor,
+            tenant.CanceladoEm,
+            usuariosAtivos,
+            reservasUltimos30Dias,
+            ultimaAtividadeEm,
+            ultimoAcessoEm,
+            chamadosAbertos,
+            health.Status,
+            health.Motivos,
             tenant.DataCriacao);
+    }
+
+    private static TenantHealth ResolveClientHealth(
+        Tenant tenant,
+        string onboardingStatus,
+        int activeUsers,
+        int properties,
+        int recentReservations,
+        DateTime? lastActivity,
+        int openTickets)
+    {
+        var reasons = new List<string>();
+        var critical = false;
+
+        if (tenant.StatusAssinatura is "suspensa" or "cancelada")
+        {
+            reasons.Add(tenant.StatusAssinatura == "suspensa" ? "Assinatura suspensa" : "Assinatura cancelada");
+            critical = true;
+        }
+        else if (tenant.StatusAssinatura == "inadimplente")
+        {
+            reasons.Add("Pagamento em atraso");
+        }
+
+        if (tenant.StatusAssinatura == "trial" &&
+            tenant.TrialExpiraEm.HasValue &&
+            tenant.TrialExpiraEm.Value <= DateTime.UtcNow.AddDays(7))
+        {
+            reasons.Add("Trial próximo do vencimento");
+        }
+
+        if (onboardingStatus != "operacional")
+        {
+            reasons.Add("Onboarding incompleto");
+        }
+
+        if (activeUsers == 0)
+        {
+            reasons.Add("Nenhum usuário ativo");
+            critical = true;
+        }
+
+        AddLimitReason(reasons, "imóveis", properties, tenant.LimiteImoveis, ref critical);
+        AddLimitReason(reasons, "usuários", activeUsers, tenant.LimiteUsuarios, ref critical);
+
+        if (lastActivity.HasValue && lastActivity.Value < DateTime.UtcNow.AddDays(-30))
+        {
+            reasons.Add("Sem atividade há mais de 30 dias");
+            critical = onboardingStatus == "operacional";
+        }
+        else if (lastActivity.HasValue && lastActivity.Value < DateTime.UtcNow.AddDays(-14))
+        {
+            reasons.Add("Pouca atividade recente");
+        }
+        else if (onboardingStatus == "operacional" && recentReservations == 0)
+        {
+            reasons.Add("Nenhuma reserva criada nos últimos 30 dias");
+        }
+
+        if (openTickets > 0)
+        {
+            reasons.Add($"{openTickets} chamado(s) em aberto");
+        }
+
+        var status = critical ? "critica" : reasons.Count > 0 ? "atencao" : "saudavel";
+        return new TenantHealth(status, reasons);
+    }
+
+    private static void AddLimitReason(
+        ICollection<string> reasons,
+        string label,
+        int usage,
+        int? limit,
+        ref bool critical)
+    {
+        if (!limit.HasValue)
+        {
+            return;
+        }
+
+        var percentage = usage / (double)limit.Value;
+        if (percentage >= 1)
+        {
+            reasons.Add($"Limite de {label} atingido");
+            critical = true;
+        }
+        else if (percentage >= 0.8)
+        {
+            reasons.Add($"Uso de {label} acima de 80%");
+        }
+    }
+
+    private static string NormalizeCommercialValue(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().ToLowerInvariant();
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static DateTime? NormalizeNullableDate(DateTime? value)
+    {
+        return value.HasValue ? NormalizeUtcDate(value.Value) : null;
+    }
+
+    private static DateTime NormalizeUtcDate(DateTime value)
+    {
+        return value.Kind == DateTimeKind.Utc
+            ? value
+            : DateTime.SpecifyKind(value, DateTimeKind.Utc);
     }
 
     private static IReadOnlyCollection<TenantOnboardingItemResponse> BuildOnboardingChecklist(
@@ -610,7 +1040,20 @@ public sealed record TenantRequest(
     string? AdminNome = null,
     string? AdminEmail = null,
     string? AdminSenha = null,
-    bool EnviarConviteAdmin = true);
+    bool EnviarConviteAdmin = true,
+    string? PlanoNome = null,
+    string? StatusAssinatura = "trial",
+    string? CicloCobranca = "mensal",
+    decimal? ValorPlano = null,
+    DateTime? DataInicioAssinatura = null,
+    DateTime? TrialExpiraEm = null,
+    int? DiaVencimento = null,
+    DateTime? ProximoVencimentoEm = null,
+    int? LimiteImoveis = null,
+    int? LimiteUsuarios = null,
+    string? ResponsavelFinanceiro = null,
+    string? EmailFinanceiro = null,
+    string? ObservacoesComerciais = null);
 
 public sealed record TenantResponse(
     int Id,
@@ -628,6 +1071,45 @@ public sealed record TenantResponse(
     string OnboardingStatus,
     IReadOnlyCollection<TenantOnboardingItemResponse> OnboardingChecklist,
     string? AdminConviteUrl,
+    string? PlanoNome,
+    string StatusAssinatura,
+    string CicloCobranca,
+    decimal? ValorPlano,
+    DateTime? DataInicioAssinatura,
+    DateTime? TrialExpiraEm,
+    int? DiaVencimento,
+    DateTime? ProximoVencimentoEm,
+    int? LimiteImoveis,
+    int? LimiteUsuarios,
+    string? ResponsavelFinanceiro,
+    string? EmailFinanceiro,
+    string? ObservacoesComerciais,
+    DateTime? UltimoPagamentoEm,
+    decimal? UltimoPagamentoValor,
+    DateTime? CanceladoEm,
+    int UsuariosAtivos,
+    int ReservasUltimos30Dias,
+    DateTime? UltimaAtividadeEm,
+    DateTime? UltimoAcessoEm,
+    int ChamadosAbertos,
+    string SaudeStatus,
+    IReadOnlyCollection<string> SaudeMotivos,
     DateTime DataCriacao);
 
 public sealed record TenantOnboardingItemResponse(string Key, string Label, bool Done);
+
+public sealed record TenantPaymentRequest(decimal Valor, DateTime? PagoEm, DateTime? ProximoVencimentoEm);
+
+public sealed record TenantTrialRequest(DateTime ExpiraEm);
+
+internal sealed record TenantUsageStats(
+    int UsuariosAtivos,
+    int ReservasUltimos30Dias,
+    DateTime? UltimaAtividadeEm,
+    DateTime? UltimoAcessoEm,
+    int ChamadosAbertos)
+{
+    public static TenantUsageStats Empty { get; } = new(0, 0, null, null, 0);
+}
+
+internal sealed record TenantHealth(string Status, IReadOnlyCollection<string> Motivos);

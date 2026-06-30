@@ -66,6 +66,10 @@ public sealed class ReservasController : ControllerBase
         {
             query = query.Where(r => r.Status == status.Value);
         }
+        else
+        {
+            query = query.Where(r => r.Status != ReservaStatus.Cancelada);
+        }
 
         var totalItems = await query.CountAsync(cancellationToken);
         var items = await query

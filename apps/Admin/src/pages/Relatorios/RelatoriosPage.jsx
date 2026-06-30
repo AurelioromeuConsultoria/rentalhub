@@ -11,7 +11,7 @@ const tabs = [
   { key: 'reservas', label: 'Reservas' },
   { key: 'financeiro', label: 'Financeiro' },
   { key: 'imoveis', label: 'Imóveis' },
-  { key: 'proprietarios', label: 'Proprietários' },
+  { key: 'proprietarios', label: 'Sócios' },
 ];
 
 const origemOptions = [
@@ -176,8 +176,8 @@ export function RelatoriosPage() {
       const reportRequest = relatoriosApi[activeTab](reportParams);
       const [reportResponse, imoveisResponse, proprietariosResponse, categoriasResponse] = await Promise.all([
         reportRequest,
-        imoveisApi.list({ pageSize: 100 }),
-        proprietariosApi.list({ pageSize: 100 }),
+        imoveisApi.list({ status: 1, pageSize: 100 }),
+        proprietariosApi.list({ ativo: true, pageSize: 100 }),
         categoriasFinanceirasApi.list({ ativo: true }),
       ]);
       setData(reportResponse.data);
@@ -382,7 +382,7 @@ export function RelatoriosPage() {
       { key: 'taxaOcupacao', label: 'Ocupação', render: (item) => percent(item.taxaOcupacao) },
     ],
     proprietarios: [
-      { key: 'proprietarioNome', label: 'Proprietário' },
+      { key: 'proprietarioNome', label: 'Sócio' },
       { key: 'totalImoveis', label: 'Imóveis' },
       { key: 'reservas', label: 'Reservas' },
       { key: 'receita', label: 'Receita', render: (item) => money(item.receita) },
@@ -397,7 +397,7 @@ export function RelatoriosPage() {
         <div>
           <span className="eyebrow">Camada analítica</span>
           <h1>Relatórios</h1>
-          <p>Reservas, financeiro, imóveis e proprietários com totalizadores por período e exportação profissional.</p>
+          <p>Reservas, financeiro, imóveis e sócios com totalizadores por período e exportação profissional.</p>
         </div>
         <div className="resource-actions">
           <button className="icon-button bordered" type="button" aria-label="Atualizar" onClick={load}>
@@ -438,7 +438,7 @@ export function RelatoriosPage() {
         </label>
         {activeTab === 'proprietarios' ? (
           <label className="form-field">
-            <span>Proprietário</span>
+            <span>Sócio</span>
             <select value={filters.proprietarioId} onChange={(event) => setFilters((current) => ({ ...current, proprietarioId: event.target.value }))}>
               <option value="">Todos</option>
               {proprietarios.map((proprietario) => (

@@ -32,6 +32,7 @@ const emptyProprietario = {
   telefone: '',
   email: '',
   dadosBancarios: '',
+  chavePix: '',
   observacoes: '',
   ativo: true,
 };
@@ -61,6 +62,7 @@ const emptyImovel = {
   quantidadeHospedes: 1,
   quantidadeQuartos: 1,
   quantidadeBanheiros: 1,
+  percentualRepasseSocio: '',
   status: 1,
   comodidadesTexto: '',
   fotos: [],
@@ -329,7 +331,7 @@ export function ProprietariosPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await proprietariosApi.list({ search });
+      const response = await proprietariosApi.list({ search, ativo: true });
       setItems(extractItems(response));
     } catch (loadError) {
       setError(getErrorMessage(loadError));
@@ -361,6 +363,7 @@ export function ProprietariosPage() {
       telefone: item.telefone || '',
       email: item.email || '',
       dadosBancarios: item.dadosBancarios || '',
+      chavePix: item.chavePix || '',
       observacoes: item.observacoes || '',
       ativo: item.ativo,
     });
@@ -379,6 +382,7 @@ export function ProprietariosPage() {
       telefone: normalizeText(form.telefone),
       email: normalizeText(form.email),
       dadosBancarios: normalizeText(form.dadosBancarios),
+      chavePix: normalizeText(form.chavePix),
       observacoes: normalizeText(form.observacoes),
     };
 
@@ -390,7 +394,7 @@ export function ProprietariosPage() {
         await proprietariosApi.create(payload);
       }
       startCreate();
-      setSuccess(wasEditing ? 'Proprietário atualizado.' : 'Proprietário cadastrado.');
+      setSuccess(wasEditing ? 'Sócio atualizado.' : 'Sócio cadastrado.');
       await load();
     } catch (saveError) {
       setError(getErrorMessage(saveError));
@@ -401,7 +405,7 @@ export function ProprietariosPage() {
 
   const deactivate = async (item) => {
     const confirmed = confirmAction(
-      'Inativar este proprietário?',
+      'Inativar este sócio?',
       `${item.nome} deixará de aparecer como opção ativa para novos imóveis e repasses.`,
     );
 
@@ -413,7 +417,7 @@ export function ProprietariosPage() {
     setSuccess('');
     try {
       await proprietariosApi.deactivate(item.id);
-      setSuccess('Proprietário inativado.');
+      setSuccess('Sócio inativado.');
       await load();
     } catch (deactivateError) {
       setError(getErrorMessage(deactivateError));
@@ -424,8 +428,8 @@ export function ProprietariosPage() {
     <div className="resource-page">
       <ResourceHeader
         eyebrow="Cadastros"
-        title="Proprietários"
-        description="Donos dos imóveis, dados bancários e informações usadas para calcular repasses."
+        title="Sócios"
+        description="Investidores vinculados aos imóveis, dados bancários e informações usadas para calcular repasses."
         onCreate={startCreate}
         onRefresh={load}
       />
@@ -439,13 +443,13 @@ export function ProprietariosPage() {
           {error && <div className="form-alert">{error}</div>}
           {success && <div className="form-success">{success}</div>}
           {loading ? (
-            <div className="loading-line">Carregando proprietários...</div>
+            <div className="loading-line">Carregando sócios...</div>
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Users size={26} />}
-              title="Nenhum proprietário cadastrado"
-              description="Cadastre o primeiro proprietário para liberar o cadastro de imóveis."
-              actions={[{ label: 'Novo proprietário', onClick: () => scrollToForm('proprietario-form'), icon: <Plus size={17} /> }]}
+              title="Nenhum sócio cadastrado"
+              description="Cadastre o primeiro sócio para liberar o cadastro de imóveis."
+              actions={[{ label: 'Novo sócio', onClick: () => scrollToForm('proprietario-form'), icon: <Plus size={17} /> }]}
             />
           ) : (
             <div className="data-table-wrap">
@@ -492,7 +496,7 @@ export function ProprietariosPage() {
         <form className="resource-form" id="proprietario-form" onSubmit={save}>
           <div className="form-title">
             <Plus size={18} />
-            <strong>{editingId ? 'Editar proprietário' : 'Novo proprietário'}</strong>
+            <strong>{editingId ? 'Editar sócio' : 'Novo sócio'}</strong>
           </div>
           <div className="form-grid">
             <TextField label="Nome" value={form.nome} onChange={(nome) => setForm((current) => ({ ...current, nome }))} required />
@@ -509,16 +513,22 @@ export function ProprietariosPage() {
               value={form.dadosBancarios}
               onChange={(dadosBancarios) => setForm((current) => ({ ...current, dadosBancarios }))}
             />
+            <TextField
+              label="PIX do sócio"
+              value={form.chavePix}
+              onChange={(chavePix) => setForm((current) => ({ ...current, chavePix }))}
+              placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+            />
             <TextAreaField
               label="Observações"
               value={form.observacoes}
               onChange={(observacoes) => setForm((current) => ({ ...current, observacoes }))}
             />
-            <CheckboxField label="Proprietário ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
+            <CheckboxField label="Sócio ativo" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
           </div>
           <button className="primary-action full" type="submit" disabled={saving}>
             <Save size={18} />
-            {saving ? 'Salvando...' : 'Salvar proprietário'}
+            {saving ? 'Salvando...' : 'Salvar sócio'}
           </button>
         </form>
       </section>
@@ -540,7 +550,7 @@ export function HospedesPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await hospedesApi.list({ search });
+      const response = await hospedesApi.list({ search, ativo: true });
       setItems(extractItems(response));
     } catch (loadError) {
       setError(getErrorMessage(loadError));
@@ -756,7 +766,7 @@ export function ImoveisPage() {
     setError('');
     try {
       const [imoveisResponse, proprietariosResponse] = await Promise.all([
-        imoveisApi.list({ search }),
+        imoveisApi.list({ search, status: 1 }),
         proprietariosApi.list({ ativo: true, pageSize: 100 }),
       ]);
       setItems(extractItems(imoveisResponse));
@@ -882,10 +892,7 @@ export function ImoveisPage() {
     setEditingId(null);
     setError('');
     setSuccess('');
-    setForm({
-      ...emptyImovel,
-      proprietarioId: proprietarioOptions[0]?.id ? String(proprietarioOptions[0].id) : '',
-    });
+    setForm(emptyImovel);
   };
 
   const startEdit = (item) => {
@@ -895,7 +902,7 @@ export function ImoveisPage() {
     setError('');
     setSuccess('');
     setForm({
-      proprietarioId: String(item.proprietarioId),
+      proprietarioId: item.proprietarioId ? String(item.proprietarioId) : '',
       nome: item.nome || '',
       codigoInterno: item.codigoInterno || '',
       descricao: item.descricao || '',
@@ -906,6 +913,7 @@ export function ImoveisPage() {
       quantidadeHospedes: item.quantidadeHospedes || 1,
       quantidadeQuartos: item.quantidadeQuartos || 0,
       quantidadeBanheiros: item.quantidadeBanheiros || 0,
+      percentualRepasseSocio: item.percentualRepasseSocio ?? '',
       status: item.status || 1,
       comodidadesTexto: (item.comodidades || []).join(', '),
       fotos: normalizeFotos(item.fotos || []),
@@ -952,7 +960,7 @@ export function ImoveisPage() {
     setSuccess('');
 
     const payload = {
-      proprietarioId: Number(form.proprietarioId),
+      proprietarioId: form.proprietarioId ? Number(form.proprietarioId) : null,
       nome: normalizeText(form.nome),
       codigoInterno: normalizeText(form.codigoInterno),
       descricao: normalizeText(form.descricao),
@@ -963,6 +971,7 @@ export function ImoveisPage() {
       quantidadeHospedes: Number(form.quantidadeHospedes),
       quantidadeQuartos: Number(form.quantidadeQuartos),
       quantidadeBanheiros: Number(form.quantidadeBanheiros),
+      percentualRepasseSocio: form.proprietarioId && form.percentualRepasseSocio !== '' ? Number(form.percentualRepasseSocio) : null,
       status: Number(form.status),
       comodidades: form.comodidadesTexto
         .split(',')
@@ -1019,7 +1028,7 @@ export function ImoveisPage() {
       <ResourceHeader
         eyebrow="Cadastros"
         title="Imóveis"
-        description="Imóveis disponíveis para locação, com proprietário, endereço, capacidade, comodidades e fotos."
+        description="Imóveis disponíveis para locação, com ou sem sócio investidor, endereço, capacidade, comodidades e fotos."
         onCreate={startCreate}
         onRefresh={load}
       />
@@ -1038,7 +1047,7 @@ export function ImoveisPage() {
             <EmptyState
               icon={<Building2 size={26} />}
               title="Nenhum imóvel cadastrado"
-              description="Cadastre proprietários e depois os imóveis vinculados a eles."
+              description="Cadastre imóveis e, quando houver investimento externo, vincule um sócio."
               actions={[{ label: 'Novo imóvel', onClick: () => scrollToForm('imovel-form'), icon: <Plus size={17} /> }]}
             />
           ) : (
@@ -1047,7 +1056,8 @@ export function ImoveisPage() {
                 <thead>
                   <tr>
                     <th>Imóvel</th>
-                    <th>Proprietário</th>
+                    <th>Sócio</th>
+                    <th>% sócio</th>
                     <th>Cidade</th>
                     <th>Capacidade</th>
                     <th>Status</th>
@@ -1073,7 +1083,8 @@ export function ImoveisPage() {
                             </div>
                           </div>
                         </td>
-                        <td>{item.proprietarioNome}</td>
+                        <td>{item.proprietarioNome || 'Sem sócio'}</td>
+                        <td>{item.proprietarioId ? `${Number(item.percentualRepasseSocio ?? 100).toLocaleString('pt-BR')}%` : '-'}</td>
                         <td>{[item.cidade, item.estado].filter(Boolean).join(' / ') || '-'}</td>
                         <td>{item.quantidadeHospedes} hóspedes</td>
                         <td>
@@ -1103,13 +1114,16 @@ export function ImoveisPage() {
           </div>
           <div className="form-grid">
             <label className="form-field span-2">
-              <span>Proprietário</span>
+              <span>Sócio investidor</span>
               <select
                 value={form.proprietarioId}
-                onChange={(event) => setForm((current) => ({ ...current, proprietarioId: event.target.value }))}
-                required
+                onChange={(event) => setForm((current) => ({
+                  ...current,
+                  proprietarioId: event.target.value,
+                  percentualRepasseSocio: event.target.value ? (current.percentualRepasseSocio || 100) : '',
+                }))}
               >
-                <option value="">Selecione</option>
+                <option value="">Sem sócio</option>
                 {proprietarioOptions.map((proprietario) => (
                   <option key={proprietario.id} value={proprietario.id}>
                     {proprietario.nome}
@@ -1203,6 +1217,15 @@ export function ImoveisPage() {
               value={form.quantidadeBanheiros}
               onChange={(quantidadeBanheiros) => setForm((current) => ({ ...current, quantidadeBanheiros }))}
             />
+            <TextField
+              label="% do lucro para o sócio"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.percentualRepasseSocio}
+              onChange={(percentualRepasseSocio) => setForm((current) => ({ ...current, percentualRepasseSocio }))}
+              placeholder="Ex.: 50"
+            />
             <label className="form-field">
               <span>Status</span>
               <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: Number(event.target.value) }))}>
@@ -1227,7 +1250,7 @@ export function ImoveisPage() {
               onChange={(fotos) => setForm((current) => ({ ...current, fotos: normalizeFotos(fotos) }))}
             />
           </div>
-          <button className="primary-action full" type="submit" disabled={saving || proprietarioOptions.length === 0}>
+          <button className="primary-action full" type="submit" disabled={saving}>
             <Save size={18} />
             {saving ? 'Salvando...' : 'Salvar imóvel'}
           </button>

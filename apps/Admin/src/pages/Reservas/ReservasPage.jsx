@@ -1,9 +1,10 @@
-import { CalendarDays, Edit3, Plus, RotateCcw, Save, Search, XCircle } from 'lucide-react';
+import { CalendarDays, Edit3, Link2, Plus, RotateCcw, Save, Search, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { configuracoesApi } from '@/api/administracao';
 import { calendarioApi } from '@/api/calendario';
 import { hospedesApi, imoveisApi } from '@/api/cadastros';
+import { preCheckinsApi } from '@/api/preCheckins';
 import { reservasApi } from '@/api/reservas';
 import { EmptyState } from '@/components/EmptyState';
 import { MoneyField } from '@/components/Form/MoneyField';
@@ -208,6 +209,7 @@ export function ReservasPage() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [linkLoadingId, setLinkLoadingId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [availability, setAvailability] = useState(initialAvailability);
@@ -479,6 +481,28 @@ export function ReservasPage() {
     }
   };
 
+  const generatePreCheckinLink = async (reserva) => {
+    setLinkLoadingId(reserva.id);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await preCheckinsApi.generateLink(reserva.id);
+      const link = response.data?.link;
+      if (link && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+        setSuccess('Link de pré-check-in gerado e copiado.');
+      } else if (link) {
+        setSuccess(`Link de pré-check-in gerado: ${link}`);
+      } else {
+        setSuccess('Link de pré-check-in gerado.');
+      }
+    } catch (linkError) {
+      setError(getErrorMessage(linkError));
+    } finally {
+      setLinkLoadingId(null);
+    }
+  };
+
   return (
     <div className="resource-page">
       <section className="page-heading">
@@ -536,8 +560,8 @@ export function ReservasPage() {
                     <th>Hóspedes</th>
                     <th>Bruto</th>
                     <th>Líquido</th>
-                    <th>Status</th>
-                    <th />
+                    <th className="reservation-status-column">Status</th>
+                    <th className="reservation-actions-column" />
                   </tr>
                 </thead>
                 <tbody>
@@ -554,10 +578,18 @@ export function ReservasPage() {
                       <td>{reserva.numeroHospedes}</td>
                       <td>{money(calculateTotalReserva(reserva))}</td>
                       <td>{money(reserva.valorLiquido)}</td>
-                      <td>
+                      <td className="reservation-status-column">
                         <StatusPill status={reserva.status} />
                       </td>
                       <td className="table-actions">
+                        <button
+                          type="button"
+                          aria-label="Gerar link de pré-check-in"
+                          disabled={linkLoadingId === reserva.id}
+                          onClick={() => generatePreCheckinLink(reserva)}
+                        >
+                          <Link2 size={16} />
+                        </button>
                         <button type="button" aria-label="Editar" onClick={() => startEdit(reserva)}>
                           <Edit3 size={16} />
                         </button>

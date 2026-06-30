@@ -17,6 +17,7 @@ public sealed class RepasseProprietario : ITenantEntity
     public decimal TaxasPlataforma { get; set; }
     public decimal CustosVinculados { get; set; }
     public decimal ComissaoAdministradora { get; set; }
+    public decimal PercentualSocio { get; set; } = 100;
     public decimal ValorRepassar { get; set; }
     public decimal ValorPago { get; set; }
     public RepasseStatus Status { get; set; } = RepasseStatus.Pendente;

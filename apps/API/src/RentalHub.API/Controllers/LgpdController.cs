@@ -317,11 +317,12 @@ public sealed class LgpdController : ControllerBase
             return false;
         }
 
-        proprietario.Nome = $"Proprietário anonimizado #{proprietario.Id}";
+        proprietario.Nome = $"Sócio anonimizado #{proprietario.Id}";
         proprietario.Documento = $"anon-{proprietario.Id}";
         proprietario.Telefone = null;
         proprietario.Email = null;
         proprietario.DadosBancarios = null;
+        proprietario.ChavePix = null;
         proprietario.Observacoes = "Dados pessoais anonimizados por solicitação LGPD.";
         proprietario.Ativo = false;
         proprietario.DataAtualizacao = now;

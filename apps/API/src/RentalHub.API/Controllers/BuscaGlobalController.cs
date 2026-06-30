@@ -99,7 +99,7 @@ public sealed class BuscaGlobalController : ControllerBase
                 .Take(4)
                 .Select(p => new BuscaGlobalItemResponse(
                     $"proprietario-{p.Id}",
-                    "Proprietário",
+                    "Sócio",
                     p.Nome,
                     p.Documento,
                     "/proprietarios"))

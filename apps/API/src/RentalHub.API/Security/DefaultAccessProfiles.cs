@@ -49,8 +49,8 @@ public static class DefaultAccessProfiles
             CanEdit: true,
             CanDelete: false),
         new(
-            "Proprietário",
-            "Acesso restrito ao portal do proprietário.",
+            "Sócio",
+            "Acesso restrito ao portal do sócio.",
             [Resources.PortalProprietario],
             CanEdit: false,
             CanDelete: false)

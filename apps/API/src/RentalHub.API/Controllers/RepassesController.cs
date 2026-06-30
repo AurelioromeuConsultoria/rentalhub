@@ -98,25 +98,29 @@ public sealed class RepassesController : ControllerBase
             return BadRequest(new { message = "Período final deve ser maior ou igual ao período inicial." });
         }
 
-        var proprietario = await _dbContext.Proprietarios
+        var socio = await _dbContext.Proprietarios
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == request.ProprietarioId && p.Ativo, cancellationToken);
 
-        if (proprietario is null)
+        if (socio is null)
         {
-            return BadRequest(new { message = "Proprietário ativo não encontrado." });
+            return BadRequest(new { message = "Sócio ativo não encontrado." });
         }
 
-        if (request.ImovelId.HasValue)
+        if (!request.ImovelId.HasValue)
         {
-            var imovelValido = await _dbContext.Imoveis.AnyAsync(
+            return BadRequest(new { message = "Selecione o imóvel para calcular o percentual de repasse do sócio." });
+        }
+
+        var imovel = await _dbContext.Imoveis
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
                 i => i.Id == request.ImovelId.Value && i.ProprietarioId == request.ProprietarioId,
                 cancellationToken);
 
-            if (!imovelValido)
-            {
-                return BadRequest(new { message = "Imóvel não encontrado para este proprietário." });
-            }
+        if (imovel is null)
+        {
+            return BadRequest(new { message = "Imóvel não encontrado para este sócio." });
         }
 
         var alreadyExists = await _dbContext.RepassesProprietarios.AnyAsync(
@@ -128,7 +132,7 @@ public sealed class RepassesController : ControllerBase
 
         if (alreadyExists)
         {
-            return Conflict(new { message = "Já existe repasse gerado para este proprietário, imóvel e período." });
+            return Conflict(new { message = "Já existe repasse gerado para este sócio, imóvel e período." });
         }
 
         var reservasQuery = _dbContext.Reservas
@@ -139,20 +143,14 @@ public sealed class RepassesController : ControllerBase
                 r.CheckOut >= inicio &&
                 r.CheckOut <= fim &&
                 r.Imovel != null &&
-                r.Imovel.ProprietarioId == request.ProprietarioId);
-
-        if (request.ImovelId.HasValue)
-        {
-            reservasQuery = reservasQuery.Where(r => r.ImovelId == request.ImovelId.Value);
-        }
+                r.Imovel.ProprietarioId == request.ProprietarioId &&
+                r.ImovelId == request.ImovelId.Value);
 
         var reservas = await reservasQuery
             .OrderBy(r => r.CheckOut)
             .ToListAsync(cancellationToken);
 
         var reservaIds = reservas.Select(r => r.Id).ToArray();
-        var imovelIds = reservas.Select(r => r.ImovelId).Distinct().ToArray();
-
         var custosPorReserva = reservaIds.Length == 0
             ? new Dictionary<int, decimal>()
             : await _dbContext.MovimentacoesFinanceiras
@@ -173,50 +171,50 @@ public sealed class RepassesController : ControllerBase
                 m.ReservaId == null &&
                 m.Data >= inicio &&
                 m.Data <= fim &&
-                (m.ProprietarioId == request.ProprietarioId ||
-                 (m.ImovelId.HasValue && imovelIds.Contains(m.ImovelId.Value))));
+                m.ImovelId == request.ImovelId.Value);
 
-        if (request.ImovelId.HasValue)
-        {
-            custosOperacionaisQuery = custosOperacionaisQuery.Where(m => m.ImovelId == request.ImovelId.Value);
-        }
+        custosOperacionaisQuery = custosOperacionaisQuery.Where(m => m.ImovelId == request.ImovelId.Value);
 
         var custosOperacionais = await custosOperacionaisQuery
             .OrderBy(m => m.Data)
             .ToListAsync(cancellationToken);
 
         var itens = new List<RepasseItem>();
+        var percentualSocio = imovel.PercentualRepasseSocio ?? 100;
         foreach (var reserva in reservas)
         {
             var receita = reserva.ValorHospedagem + reserva.TaxaLimpeza;
             var custos = custosPorReserva.TryGetValue(reserva.Id, out var totalCustos) ? totalCustos : 0;
-            var valorLiquido = receita - reserva.TaxaPlataforma - custos - reserva.ComissaoAdministradora;
+            var lucroLiquido = receita - reserva.TaxaPlataforma - custos - reserva.ComissaoAdministradora;
+            var valorSocio = CalculateSocioShare(lucroLiquido, percentualSocio);
 
             itens.Add(new RepasseItem
             {
                 TenantId = _dbContext.CurrentTenantId,
                 ReservaId = reserva.Id,
-                Descricao = $"Reserva #{reserva.Id} - {reserva.Imovel?.Nome ?? "Imóvel"}",
+                Descricao = $"Reserva #{reserva.Id} - {reserva.Imovel?.Nome ?? "Imóvel"} ({percentualSocio:0.##}% do lucro)",
                 Receita = receita,
                 Taxas = reserva.TaxaPlataforma,
                 Custos = custos,
                 Comissao = reserva.ComissaoAdministradora,
-                ValorLiquido = valorLiquido
+                ValorLiquido = valorSocio
             });
         }
 
         foreach (var custo in custosOperacionais)
         {
+            var valorSocio = CalculateSocioShare(-custo.Valor, percentualSocio);
+
             itens.Add(new RepasseItem
             {
                 TenantId = _dbContext.CurrentTenantId,
                 MovimentacaoFinanceiraId = custo.Id,
-                Descricao = $"Custo operacional - {custo.Descricao}",
+                Descricao = $"Custo operacional - {custo.Descricao} ({percentualSocio:0.##}% do lucro)",
                 Receita = 0,
                 Taxas = 0,
                 Custos = custo.Valor,
                 Comissao = 0,
-                ValorLiquido = -custo.Valor
+                ValorLiquido = valorSocio
             });
         }
 
@@ -236,6 +234,7 @@ public sealed class RepassesController : ControllerBase
             TaxasPlataforma = itens.Sum(i => i.Taxas),
             CustosVinculados = itens.Sum(i => i.Custos),
             ComissaoAdministradora = itens.Sum(i => i.Comissao),
+            PercentualSocio = percentualSocio,
             ValorRepassar = itens.Sum(i => i.ValorLiquido),
             ValorPago = 0,
             Status = RepasseStatus.Pendente,
@@ -327,6 +326,11 @@ public sealed class RepassesController : ControllerBase
         return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
     }
 
+    private static decimal CalculateSocioShare(decimal lucroLiquido, decimal percentualSocio)
+    {
+        return Math.Round(lucroLiquido * percentualSocio / 100, 2, MidpointRounding.AwayFromZero);
+    }
+
     private static RepasseProprietarioResponse ToResponse(RepasseProprietario repasse)
     {
         return new RepasseProprietarioResponse(
@@ -341,6 +345,7 @@ public sealed class RepassesController : ControllerBase
             repasse.TaxasPlataforma,
             repasse.CustosVinculados,
             repasse.ComissaoAdministradora,
+            repasse.PercentualSocio,
             repasse.ValorRepassar,
             repasse.ValorPago,
             repasse.ValorRepassar - repasse.ValorPago,
@@ -395,6 +400,7 @@ public sealed record RepasseProprietarioResponse(
     decimal TaxasPlataforma,
     decimal CustosVinculados,
     decimal ComissaoAdministradora,
+    decimal PercentualSocio,
     decimal ValorRepassar,
     decimal ValorPago,
     decimal SaldoPendente,

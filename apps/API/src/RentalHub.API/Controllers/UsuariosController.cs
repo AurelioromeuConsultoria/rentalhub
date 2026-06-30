@@ -352,7 +352,7 @@ public sealed class UsuariosController : ControllerBase
         {
             if (!request.ProprietarioId.HasValue)
             {
-                return BadRequest(new { message = "Usuário proprietário deve estar vinculado a um proprietário." });
+                return BadRequest(new { message = "Usuário sócio deve estar vinculado a um sócio." });
             }
 
             var proprietarioExists = await _dbContext.Proprietarios
@@ -360,7 +360,7 @@ public sealed class UsuariosController : ControllerBase
 
             if (!proprietarioExists)
             {
-                return BadRequest(new { message = "Proprietário inválido." });
+                return BadRequest(new { message = "Sócio inválido." });
             }
         }
 

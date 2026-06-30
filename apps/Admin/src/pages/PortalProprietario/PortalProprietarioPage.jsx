@@ -124,7 +124,7 @@ function statusClass(value) {
 }
 
 function getErrorMessage(error) {
-  return error.response?.data?.message || 'Não foi possível carregar o portal do proprietário.';
+  return error.response?.data?.message || 'Não foi possível carregar o portal do sócio.';
 }
 
 function saveBlob(response, fallbackName) {
@@ -246,7 +246,7 @@ function PortalHero({ data, nextReservation, pendingTransfers, periodLabel }) {
   return (
     <section className="portal-owner-hero">
       <div>
-        <span className="eyebrow">Portal do proprietário</span>
+        <span className="eyebrow">Portal do sócio</span>
         <h1>{data.proprietarioNome || 'Meus imóveis'}</h1>
         <p>Acompanhe reservas, desempenho dos imóveis, demonstrativos e valores a receber em um só lugar.</p>
       </div>
@@ -306,7 +306,7 @@ function PortalCalendar({ events, month, onMonthChange, onReservationClick, onTr
           <span key={type}><i className={type} />{label}</span>
         ))}
       </div>
-      <div className="portal-calendar-grid" aria-label="Calendário do proprietário">
+      <div className="portal-calendar-grid" aria-label="Calendário do sócio">
         {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
           <strong className="portal-calendar-weekday" key={day}>{day}</strong>
         ))}
@@ -613,7 +613,7 @@ function DocumentsPanel({ data, downloadingPdfType, onDownloadPdf }) {
     {
       key: 'movimentacoes',
       title: 'Receitas e custos',
-      description: 'Movimentações financeiras vinculadas aos imóveis do proprietário.',
+      description: 'Movimentações financeiras vinculadas aos imóveis do sócio.',
       meta: `${data.movimentacoes?.length || 0} lançamentos`,
     },
     {
@@ -947,7 +947,7 @@ export function PortalProprietarioPage() {
           <strong>{ocupacaoEstimada}%</strong>
           <small className="metric-note">Diárias reservadas no filtro.</small>
         </article>
-        <article className="metric-card" title="Quantidade de imóveis vinculados ao proprietário.">
+        <article className="metric-card" title="Quantidade de imóveis vinculados ao sócio.">
           <div className="metric-icon blue">
             <Building2 size={19} />
           </div>
@@ -1068,7 +1068,7 @@ export function PortalProprietarioPage() {
           <div className="resource-panel-heading">
             <div>
               <strong>Meus imóveis</strong>
-              <small>Unidades vinculadas ao proprietário.</small>
+              <small>Unidades vinculadas ao sócio.</small>
             </div>
             <span>{data.imoveis?.length || 0} imóveis</span>
           </div>

@@ -34,12 +34,16 @@ public sealed class RentalHubDbContext : DbContext
     public DbSet<LgpdConsent> LgpdConsents => Set<LgpdConsent>();
     public DbSet<EmailNotificationLog> EmailNotificationLogs => Set<EmailNotificationLog>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportAccessSession> SupportAccessSessions => Set<SupportAccessSession>();
     public DbSet<Proprietario> Proprietarios => Set<Proprietario>();
     public DbSet<Imovel> Imoveis => Set<Imovel>();
     public DbSet<ImovelComodidade> ImovelComodidades => Set<ImovelComodidade>();
     public DbSet<ImovelFoto> ImovelFotos => Set<ImovelFoto>();
     public DbSet<Hospede> Hospedes => Set<Hospede>();
     public DbSet<Reserva> Reservas => Set<Reserva>();
+    public DbSet<ReservaPreCheckin> ReservaPreCheckins => Set<ReservaPreCheckin>();
+    public DbSet<ReservaHospedeCadastro> ReservaHospedesCadastro => Set<ReservaHospedeCadastro>();
+    public DbSet<ReservaVeiculoCadastro> ReservaVeiculosCadastro => Set<ReservaVeiculoCadastro>();
     public DbSet<BloqueioCalendario> BloqueiosCalendario => Set<BloqueioCalendario>();
     public DbSet<CategoriaFinanceira> CategoriasFinanceiras => Set<CategoriaFinanceira>();
     public DbSet<MovimentacaoFinanceira> MovimentacoesFinanceiras => Set<MovimentacaoFinanceira>();
@@ -84,6 +88,14 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.AvisoAtualizacaoMensagem).HasMaxLength(1200);
             entity.Property(e => e.AvisoAtualizacaoVersao).HasMaxLength(40);
             entity.Property(e => e.AvisoAtualizacaoAtivo).IsRequired();
+            entity.Property(e => e.PlanoNome).HasMaxLength(80);
+            entity.Property(e => e.StatusAssinatura).IsRequired().HasMaxLength(30);
+            entity.Property(e => e.CicloCobranca).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.ValorPlano).HasPrecision(12, 2);
+            entity.Property(e => e.ResponsavelFinanceiro).HasMaxLength(150);
+            entity.Property(e => e.EmailFinanceiro).HasMaxLength(180);
+            entity.Property(e => e.ObservacoesComerciais).HasMaxLength(1200);
+            entity.Property(e => e.UltimoPagamentoValor).HasPrecision(12, 2);
             entity.Property(e => e.IsRootTenant).IsRequired();
             entity.Property(e => e.Ativo).IsRequired();
             entity.Property(e => e.DataCriacao).IsRequired();
@@ -95,6 +107,8 @@ public sealed class RentalHubDbContext : DbContext
                 Nome = Tenant.InitialTenantName,
                 NomeExibicao = Tenant.InitialTenantName,
                 Slug = Tenant.InitialTenantSlug,
+                StatusAssinatura = "ativa",
+                CicloCobranca = "mensal",
                 IsRootTenant = true,
                 Ativo = true,
                 DataCriacao = new DateTime(2026, 5, 29, 0, 0, 0, DateTimeKind.Utc)
@@ -235,6 +249,22 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasOne(e => e.CreatedByUsuario).WithMany().HasForeignKey(e => e.CreatedByUsuarioId).OnDelete(DeleteBehavior.SetNull);
         });
 
+        modelBuilder.Entity<SupportAccessSession>(entity =>
+        {
+            entity.ToTable("SupportAccessSessions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.UsuarioId).IsRequired();
+            entity.Property(e => e.TokenHash).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Motivo).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.ExpiraEm).IsRequired();
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.UsuarioId, e.ExpiraEm });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Usuario).WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<Proprietario>(entity =>
         {
             entity.ToTable("Proprietarios");
@@ -245,6 +275,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.Telefone).HasMaxLength(40);
             entity.Property(e => e.Email).HasMaxLength(180);
             entity.Property(e => e.DadosBancarios).HasMaxLength(500);
+            entity.Property(e => e.ChavePix).HasMaxLength(180);
             entity.Property(e => e.Observacoes).HasMaxLength(1000);
             entity.Property(e => e.Ativo).IsRequired();
             entity.Property(e => e.DataCriacao).IsRequired();
@@ -258,7 +289,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.ToTable("Imoveis");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.TenantId).IsRequired();
-            entity.Property(e => e.ProprietarioId).IsRequired();
+            entity.Property(e => e.ProprietarioId);
             entity.Property(e => e.Nome).IsRequired().HasMaxLength(180);
             entity.Property(e => e.CodigoInterno).IsRequired().HasMaxLength(60);
             entity.Property(e => e.Descricao).HasMaxLength(2000);
@@ -269,6 +300,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.QuantidadeHospedes).IsRequired();
             entity.Property(e => e.QuantidadeQuartos).IsRequired();
             entity.Property(e => e.QuantidadeBanheiros).IsRequired();
+            entity.Property(e => e.PercentualRepasseSocio).HasPrecision(8, 2);
             entity.Property(e => e.Status).IsRequired();
             entity.Property(e => e.DataCriacao).IsRequired();
             entity.HasIndex(e => new { e.TenantId, e.CodigoInterno }).IsUnique();
@@ -277,7 +309,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasOne(e => e.Proprietario)
                 .WithMany(p => p.Imoveis)
                 .HasForeignKey(e => e.ProprietarioId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ImovelComodidade>(entity =>
@@ -355,6 +387,71 @@ public sealed class RentalHubDbContext : DbContext
             entity.HasOne(e => e.Hospede).WithMany().HasForeignKey(e => e.HospedeId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<ReservaPreCheckin>(entity =>
+        {
+            entity.ToTable("ReservaPreCheckins");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ReservaId).IsRequired();
+            entity.Property(e => e.TokenHash).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.ExpiraEm).IsRequired();
+            entity.Property(e => e.MotivoReprovacao).HasMaxLength(1000);
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.ReservaId });
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.Status, e.ExpiraEm });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Reserva).WithMany().HasForeignKey(e => e.ReservaId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.AprovadoPorUsuario).WithMany().HasForeignKey(e => e.AprovadoPorUsuarioId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ReservaHospedeCadastro>(entity =>
+        {
+            entity.ToTable("ReservaHospedesCadastro");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ReservaPreCheckinId).IsRequired();
+            entity.Property(e => e.Nome).IsRequired().HasMaxLength(180);
+            entity.Property(e => e.Cpf).IsRequired().HasMaxLength(14);
+            entity.Property(e => e.Telefone).HasMaxLength(40);
+            entity.Property(e => e.Email).HasMaxLength(180);
+            entity.Property(e => e.FotoDocumentoUrl).HasMaxLength(800);
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.ObservacoesAnalise).HasMaxLength(1000);
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.ReservaPreCheckinId });
+            entity.HasIndex(e => new { e.TenantId, e.Cpf });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.ReservaPreCheckin)
+                .WithMany(p => p.Hospedes)
+                .HasForeignKey(e => e.ReservaPreCheckinId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReservaVeiculoCadastro>(entity =>
+        {
+            entity.ToTable("ReservaVeiculosCadastro");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TenantId).IsRequired();
+            entity.Property(e => e.ReservaPreCheckinId).IsRequired();
+            entity.Property(e => e.Placa).IsRequired().HasMaxLength(12);
+            entity.Property(e => e.Marca).HasMaxLength(80);
+            entity.Property(e => e.Modelo).HasMaxLength(80);
+            entity.Property(e => e.Cor).HasMaxLength(40);
+            entity.Property(e => e.Observacoes).HasMaxLength(1000);
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.DataCriacao).IsRequired();
+            entity.HasIndex(e => new { e.TenantId, e.ReservaPreCheckinId });
+            entity.HasIndex(e => new { e.TenantId, e.Placa });
+            entity.HasOne(e => e.Tenant).WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.ReservaPreCheckin)
+                .WithMany(p => p.Veiculos)
+                .HasForeignKey(e => e.ReservaPreCheckinId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<BloqueioCalendario>(entity =>
         {
             entity.ToTable("BloqueiosCalendario");
@@ -421,6 +518,7 @@ public sealed class RentalHubDbContext : DbContext
             entity.Property(e => e.TaxasPlataforma).HasPrecision(12, 2).IsRequired();
             entity.Property(e => e.CustosVinculados).HasPrecision(12, 2).IsRequired();
             entity.Property(e => e.ComissaoAdministradora).HasPrecision(12, 2).IsRequired();
+            entity.Property(e => e.PercentualSocio).HasPrecision(8, 2).IsRequired();
             entity.Property(e => e.ValorRepassar).HasPrecision(12, 2).IsRequired();
             entity.Property(e => e.ValorPago).HasPrecision(12, 2).IsRequired();
             entity.Property(e => e.Status).IsRequired();

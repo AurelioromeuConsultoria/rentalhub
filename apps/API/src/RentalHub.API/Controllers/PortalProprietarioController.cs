@@ -88,7 +88,7 @@ public sealed class PortalProprietarioController : ControllerBase
         var imovelIds = imoveis.Select(i => i.Id).ToArray();
         if (imovelId.HasValue && !imovelIds.Contains(imovelId.Value))
         {
-            return BadRequest(new { message = "Imóvel não pertence ao proprietário autenticado." });
+            return BadRequest(new { message = "Imóvel não pertence ao sócio autenticado." });
         }
 
         var selectedImovelIds = imovelId.HasValue ? [imovelId.Value] : imovelIds;
@@ -540,7 +540,7 @@ public sealed class PortalProprietarioController : ControllerBase
         var imovelIds = imoveis.Select(i => i.Id).ToArray();
         if (imovelId.HasValue && !imovelIds.Contains(imovelId.Value))
         {
-            return PortalDataResult.Invalid("Imóvel não pertence ao proprietário autenticado.");
+            return PortalDataResult.Invalid("Imóvel não pertence ao sócio autenticado.");
         }
 
         var selectedImovelIds = imovelId.HasValue ? [imovelId.Value] : imovelIds;

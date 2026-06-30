@@ -42,13 +42,13 @@ const tipoUsuarioOptions = [
   { value: 1, label: 'Administrador' },
   { value: 2, label: 'Financeiro' },
   { value: 3, label: 'Operacional' },
-  { value: 4, label: 'Proprietário' },
+  { value: 4, label: 'Sócio' },
 ];
 
 const recursoLabels = {
   dashboard: 'Dashboard',
   imoveis: 'Imóveis',
-  proprietarios: 'Proprietários',
+  proprietarios: 'Sócios',
   hospedes: 'Hóspedes',
   reservas: 'Reservas',
   calendario: 'Calendário',
@@ -57,7 +57,7 @@ const recursoLabels = {
   limpezas: 'Limpeza',
   manutencoes: 'Manutenção',
   relatorios: 'Relatórios',
-  'portal-proprietario': 'Portal do proprietário',
+  'portal-proprietario': 'Portal do sócio',
   usuarios: 'Usuários',
   'perfis-acesso': 'Perfis de acesso',
   tenants: 'Empresas',
@@ -94,6 +94,19 @@ const emptyTenant = {
   adminEmail: '',
   adminSenha: '',
   enviarConviteAdmin: true,
+  planoNome: '',
+  statusAssinatura: 'trial',
+  cicloCobranca: 'mensal',
+  valorPlano: '',
+  dataInicioAssinatura: '',
+  trialExpiraEm: '',
+  diaVencimento: '',
+  proximoVencimentoEm: '',
+  limiteImoveis: '',
+  limiteUsuarios: '',
+  responsavelFinanceiro: '',
+  emailFinanceiro: '',
+  observacoesComerciais: '',
 };
 
 function extractItems(response) {
@@ -139,6 +152,48 @@ function onboardingClass(status) {
 function onboardingProgress(checklist = []) {
   const done = checklist.filter((item) => item.done).length;
   return `${done}/${checklist.length || 0}`;
+}
+
+function commercialStatusLabel(status) {
+  return {
+    trial: 'Trial',
+    ativa: 'Ativa',
+    inadimplente: 'Inadimplente',
+    suspensa: 'Suspensa',
+    cancelada: 'Cancelada',
+  }[status] || status || 'Sem status';
+}
+
+function commercialStatusClass(status) {
+  if (status === 'ativa') return 'active';
+  if (status === 'trial' || status === 'inadimplente') return 'pending';
+  return 'inactive';
+}
+
+function clientHealthLabel(status) {
+  return {
+    saudavel: 'Saudável',
+    atencao: 'Atenção',
+    critica: 'Crítica',
+  }[status] || 'Não calculada';
+}
+
+function clientHealthClass(status) {
+  if (status === 'saudavel') return 'active';
+  if (status === 'atencao') return 'pending';
+  return 'inactive';
+}
+
+function formatCommercialMoney(value) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+}
+
+function toDateInput(value) {
+  return value ? String(value).slice(0, 10) : '';
+}
+
+function formatCommercialDate(value) {
+  return value ? new Intl.DateTimeFormat('pt-BR').format(new Date(value)) : 'Não definido';
 }
 
 function translateHealthStatus(status) {
@@ -434,7 +489,7 @@ export function UsuariosPage() {
       <PageHeader
         eyebrow="Administração"
         title="Usuários"
-        description="Controle de usuários, perfis de acesso e vínculo com proprietários."
+        description="Controle de usuários, perfis de acesso e vínculo com sócios."
         onRefresh={load}
       />
 
@@ -446,7 +501,7 @@ export function UsuariosPage() {
           <div className="resource-panel-heading">
             <label className="search-field">
               <Search size={18} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, e-mail ou proprietário" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, e-mail ou sócio" />
             </label>
             <span>{usuarios.length} usuários</span>
           </div>
@@ -457,7 +512,7 @@ export function UsuariosPage() {
             <div className="inline-empty">
               <Users size={34} />
               <strong>Nenhum usuário encontrado</strong>
-              <span>Crie acessos para equipe financeira, operacional ou proprietários.</span>
+              <span>Crie acessos para equipe financeira, operacional ou sócios.</span>
             </div>
           ) : (
             <div className="data-table-wrap">
@@ -566,7 +621,7 @@ export function UsuariosPage() {
             </SelectField>
             {Number(form.tipoUsuario) === 4 && (
               <SelectField
-                label="Proprietário"
+                label="Sócio"
                 value={form.proprietarioId}
                 onChange={(proprietarioId) => setForm((current) => ({ ...current, proprietarioId }))}
                 required
@@ -857,8 +912,23 @@ export function EmpresasPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [adminAccessLink, setAdminAccessLink] = useState('');
+  const [paymentForm, setPaymentForm] = useState({ valor: '', pagoEm: toDateInput(new Date()), proximoVencimentoEm: '' });
+  const [commercialAction, setCommercialAction] = useState('');
 
   const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
+  const commercialSummary = useMemo(() => {
+    const billable = empresas.filter((empresa) => ['ativa', 'inadimplente'].includes(empresa.statusAssinatura));
+    return {
+      active: empresas.filter((empresa) => empresa.statusAssinatura === 'ativa').length,
+      trials: empresas.filter((empresa) => empresa.statusAssinatura === 'trial').length,
+      overdue: empresas.filter((empresa) => empresa.statusAssinatura === 'inadimplente').length,
+      attention: empresas.filter((empresa) => empresa.saudeStatus !== 'saudavel').length,
+      mrr: billable.reduce((total, empresa) => {
+        const value = Number(empresa.valorPlano || 0);
+        return total + (empresa.cicloCobranca === 'anual' ? value / 12 : value);
+      }, 0),
+    };
+  }, [empresas]);
 
   const load = async () => {
     setLoading(true);
@@ -882,6 +952,7 @@ export function EmpresasPage() {
     setEditingId(null);
     setForm(emptyTenant);
     setAdminAccessLink('');
+    setPaymentForm({ valor: '', pagoEm: toDateInput(new Date()), proximoVencimentoEm: '' });
     setError('');
     setSuccess('');
   };
@@ -901,6 +972,24 @@ export function EmpresasPage() {
       adminEmail: '',
       adminSenha: '',
       enviarConviteAdmin: true,
+      planoNome: empresa.planoNome || '',
+      statusAssinatura: empresa.statusAssinatura || 'trial',
+      cicloCobranca: empresa.cicloCobranca || 'mensal',
+      valorPlano: empresa.valorPlano ?? '',
+      dataInicioAssinatura: toDateInput(empresa.dataInicioAssinatura),
+      trialExpiraEm: toDateInput(empresa.trialExpiraEm),
+      diaVencimento: empresa.diaVencimento ?? '',
+      proximoVencimentoEm: toDateInput(empresa.proximoVencimentoEm),
+      limiteImoveis: empresa.limiteImoveis ?? '',
+      limiteUsuarios: empresa.limiteUsuarios ?? '',
+      responsavelFinanceiro: empresa.responsavelFinanceiro || '',
+      emailFinanceiro: empresa.emailFinanceiro || '',
+      observacoesComerciais: empresa.observacoesComerciais || '',
+    });
+    setPaymentForm({
+      valor: empresa.valorPlano ?? '',
+      pagoEm: toDateInput(new Date()),
+      proximoVencimentoEm: toDateInput(empresa.proximoVencimentoEm),
     });
   };
 
@@ -932,6 +1021,19 @@ export function EmpresasPage() {
       adminEmail: editingId ? null : form.adminEmail.trim() || null,
       adminSenha: editingId ? null : form.adminSenha.trim() || null,
       enviarConviteAdmin: editingId ? true : form.enviarConviteAdmin,
+      planoNome: form.planoNome.trim() || null,
+      statusAssinatura: form.statusAssinatura,
+      cicloCobranca: form.cicloCobranca,
+      valorPlano: form.valorPlano === '' ? null : Number(form.valorPlano),
+      dataInicioAssinatura: form.dataInicioAssinatura || null,
+      trialExpiraEm: form.trialExpiraEm || null,
+      diaVencimento: form.diaVencimento === '' ? null : Number(form.diaVencimento),
+      proximoVencimentoEm: form.proximoVencimentoEm || null,
+      limiteImoveis: form.limiteImoveis === '' ? null : Number(form.limiteImoveis),
+      limiteUsuarios: form.limiteUsuarios === '' ? null : Number(form.limiteUsuarios),
+      responsavelFinanceiro: form.responsavelFinanceiro.trim() || null,
+      emailFinanceiro: form.emailFinanceiro.trim() || null,
+      observacoesComerciais: form.observacoesComerciais.trim() || null,
     };
 
     try {
@@ -952,6 +1054,42 @@ export function EmpresasPage() {
       setError(getErrorMessage(saveError));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const recordPayment = async () => {
+    if (!editingId) return;
+    setCommercialAction('payment');
+    setError('');
+    setSuccess('');
+    try {
+      await tenantsApi.recordPayment(editingId, {
+        valor: Number(paymentForm.valor),
+        pagoEm: paymentForm.pagoEm || null,
+        proximoVencimentoEm: paymentForm.proximoVencimentoEm || null,
+      });
+      setSuccess('Pagamento registrado e assinatura marcada como ativa.');
+      await load();
+    } catch (actionError) {
+      setError(getErrorMessage(actionError));
+    } finally {
+      setCommercialAction('');
+    }
+  };
+
+  const extendTrial = async () => {
+    if (!editingId || !form.trialExpiraEm) return;
+    setCommercialAction('trial');
+    setError('');
+    setSuccess('');
+    try {
+      await tenantsApi.extendTrial(editingId, { expiraEm: form.trialExpiraEm });
+      setSuccess('Trial prorrogado.');
+      await load();
+    } catch (actionError) {
+      setError(getErrorMessage(actionError));
+    } finally {
+      setCommercialAction('');
     }
   };
 
@@ -993,7 +1131,30 @@ export function EmpresasPage() {
       {error && <div className="form-alert">{error}</div>}
       {success && <div className="form-success">{success}</div>}
 
-      <div className="resource-layout">
+      <div className="tenant-commercial-kpis">
+        <article>
+          <span>Clientes ativos</span>
+          <strong>{commercialSummary.active}</strong>
+          <small>{commercialSummary.trials} em trial</small>
+        </article>
+        <article>
+          <span>MRR estimado</span>
+          <strong>{formatCommercialMoney(commercialSummary.mrr)}</strong>
+          <small>Planos ativos e inadimplentes</small>
+        </article>
+        <article>
+          <span>Inadimplentes</span>
+          <strong>{commercialSummary.overdue}</strong>
+          <small>Exigem acompanhamento</small>
+        </article>
+        <article>
+          <span>Saúde da carteira</span>
+          <strong>{commercialSummary.attention}</strong>
+          <small>Clientes em atenção ou situação crítica</small>
+        </article>
+      </div>
+
+      <div className="resource-layout tenant-platform-layout">
         <section className="resource-panel">
           <div className="resource-panel-heading">
             <div>
@@ -1013,12 +1174,13 @@ export function EmpresasPage() {
             </div>
           ) : (
             <div className="data-table-wrap">
-              <table className="data-table">
+              <table className="data-table tenant-commercial-table">
                 <thead>
                   <tr>
                     <th>Empresa</th>
+                    <th>Plano</th>
                     <th>Uso</th>
-                    <th>Status</th>
+                    <th>Saúde</th>
                     <th />
                   </tr>
                 </thead>
@@ -1031,17 +1193,26 @@ export function EmpresasPage() {
                         {(empresa.domains || []).map((domain) => <small key={domain}>{domain}</small>)}
                       </td>
                       <td>
-                        <strong>{empresa.usuarios} usuários</strong>
-                        <small>{empresa.imoveis} imóveis · {empresa.reservas} reservas</small>
+                        <strong>{empresa.planoNome || 'Sem plano'}</strong>
+                        <small>{formatCommercialMoney(empresa.valorPlano)} / {empresa.cicloCobranca || 'mensal'}</small>
+                        <span className={`status-pill ${commercialStatusClass(empresa.statusAssinatura)}`}>
+                          {commercialStatusLabel(empresa.statusAssinatura)}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{empresa.usuariosAtivos}/{empresa.usuarios} usuários ativos</strong>
+                        <small>{empresa.imoveis}{empresa.limiteImoveis ? `/${empresa.limiteImoveis}` : ''} imóveis · {empresa.reservasUltimos30Dias} reservas em 30 dias</small>
                         <small>Implantação {onboardingProgress(empresa.onboardingChecklist)}</small>
+                        <small>Último acesso: {formatCommercialDate(empresa.ultimoAcessoEm)}</small>
                       </td>
                       <td>
                         <div className="tenant-status-stack">
-                          <StatusPill active={empresa.ativo} label={empresa.ativo ? 'Ativa' : 'Inativa'} />
-                          <span className={`status-pill ${onboardingClass(empresa.onboardingStatus)}`}>
-                            {onboardingLabel(empresa.onboardingStatus)}
+                          <span className={`status-pill ${clientHealthClass(empresa.saudeStatus)}`}>
+                            {clientHealthLabel(empresa.saudeStatus)}
                           </span>
+                          <span className={`status-pill ${onboardingClass(empresa.onboardingStatus)}`}>{onboardingLabel(empresa.onboardingStatus)}</span>
                         </div>
+                        {(empresa.saudeMotivos || []).slice(0, 2).map((reason) => <small key={reason}>{reason}</small>)}
                       </td>
                       <td>
                         <div className="table-actions">
@@ -1124,8 +1295,55 @@ export function EmpresasPage() {
                 )}
               </>
             )}
+            <div className="form-section-title span-2">
+              <DollarSign size={17} />
+              <strong>Comercial e assinatura</strong>
+            </div>
+            <TextField label="Plano" value={form.planoNome} onChange={(planoNome) => setForm((current) => ({ ...current, planoNome }))} placeholder="Ex.: Essencial" />
+            <SelectField label="Status da assinatura" value={form.statusAssinatura} onChange={(statusAssinatura) => setForm((current) => ({ ...current, statusAssinatura }))}>
+              <option value="trial">Trial</option>
+              <option value="ativa">Ativa</option>
+              <option value="inadimplente">Inadimplente</option>
+              <option value="suspensa">Suspensa</option>
+              <option value="cancelada">Cancelada</option>
+            </SelectField>
+            <SelectField label="Ciclo de cobrança" value={form.cicloCobranca} onChange={(cicloCobranca) => setForm((current) => ({ ...current, cicloCobranca }))}>
+              <option value="mensal">Mensal</option>
+              <option value="anual">Anual</option>
+            </SelectField>
+            <TextField label="Valor do plano" type="number" value={form.valorPlano} onChange={(valorPlano) => setForm((current) => ({ ...current, valorPlano }))} />
+            <TextField label="Início da assinatura" type="date" value={form.dataInicioAssinatura} onChange={(dataInicioAssinatura) => setForm((current) => ({ ...current, dataInicioAssinatura }))} />
+            <TextField label="Fim do trial" type="date" value={form.trialExpiraEm} onChange={(trialExpiraEm) => setForm((current) => ({ ...current, trialExpiraEm }))} />
+            <TextField label="Dia de vencimento" type="number" value={form.diaVencimento} onChange={(diaVencimento) => setForm((current) => ({ ...current, diaVencimento }))} />
+            <TextField label="Próximo vencimento" type="date" value={form.proximoVencimentoEm} onChange={(proximoVencimentoEm) => setForm((current) => ({ ...current, proximoVencimentoEm }))} />
+            <TextField label="Limite de imóveis" type="number" value={form.limiteImoveis} onChange={(limiteImoveis) => setForm((current) => ({ ...current, limiteImoveis }))} />
+            <TextField label="Limite de usuários" type="number" value={form.limiteUsuarios} onChange={(limiteUsuarios) => setForm((current) => ({ ...current, limiteUsuarios }))} />
+            <TextField label="Responsável financeiro" value={form.responsavelFinanceiro} onChange={(responsavelFinanceiro) => setForm((current) => ({ ...current, responsavelFinanceiro }))} />
+            <TextField label="E-mail financeiro" type="email" value={form.emailFinanceiro} onChange={(emailFinanceiro) => setForm((current) => ({ ...current, emailFinanceiro }))} />
+            <TextAreaField label="Observações comerciais" value={form.observacoesComerciais} onChange={(observacoesComerciais) => setForm((current) => ({ ...current, observacoesComerciais }))} rows={3} />
             <CheckboxField label="Empresa ativa" checked={form.ativo} onChange={(ativo) => setForm((current) => ({ ...current, ativo }))} />
           </div>
+          {editingId && (
+            <div className="tenant-commercial-actions">
+              <div>
+                <strong>Registrar pagamento</strong>
+                <small>Atualiza o último pagamento e reativa a assinatura.</small>
+              </div>
+              <div className="tenant-action-fields">
+                <TextField label="Valor pago" type="number" value={paymentForm.valor} onChange={(valor) => setPaymentForm((current) => ({ ...current, valor }))} />
+                <TextField label="Pago em" type="date" value={paymentForm.pagoEm} onChange={(pagoEm) => setPaymentForm((current) => ({ ...current, pagoEm }))} />
+                <TextField label="Próximo vencimento" type="date" value={paymentForm.proximoVencimentoEm} onChange={(proximoVencimentoEm) => setPaymentForm((current) => ({ ...current, proximoVencimentoEm }))} />
+                <button className="secondary-action" type="button" disabled={commercialAction === 'payment' || !paymentForm.valor} onClick={recordPayment}>
+                  <DollarSign size={16} />
+                  {commercialAction === 'payment' ? 'Registrando...' : 'Registrar'}
+                </button>
+              </div>
+              <button className="secondary-action" type="button" disabled={commercialAction === 'trial' || !form.trialExpiraEm} onClick={extendTrial}>
+                <Activity size={16} />
+                {commercialAction === 'trial' ? 'Prorrogando...' : 'Prorrogar trial até a data informada'}
+              </button>
+            </div>
+          )}
           <button className="primary-action full" type="submit" disabled={saving}>
             <Save size={18} />
             {saving ? 'Salvando...' : 'Salvar empresa'}
@@ -1515,7 +1733,7 @@ export function ConfiguracoesPage() {
                 onChange={(tipo) => setPrivacyForm((current) => ({ ...current, tipo }))}
               >
                 <option value="hospede">Hóspede</option>
-                <option value="proprietario">Proprietário</option>
+                <option value="proprietario">Sócio</option>
                 <option value="usuario">Usuário</option>
               </SelectField>
               <TextField
@@ -1692,7 +1910,7 @@ export function ConfiguracoesPage() {
               </div>
               <div className="status-board">
                 <div>
-                  <small>Proprietários</small>
+                  <small>Sócios</small>
                   <strong><Users size={16} /> {resumo.proprietarios || 0}</strong>
                 </div>
                 <div>

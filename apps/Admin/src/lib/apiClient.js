@@ -4,6 +4,8 @@ import {
   REFRESH_TOKEN_KEY,
   SELECTED_TENANT_ID_KEY,
   SELECTED_TENANT_SLUG_KEY,
+  SUPPORT_ACCESS_EXPIRES_KEY,
+  SUPPORT_ACCESS_TOKEN_KEY,
   TOKEN_KEY,
   USER_KEY,
 } from './authStorage';
@@ -27,6 +29,8 @@ api.interceptors.request.use((config) => {
   const usuario = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
   const selectedTenantId = localStorage.getItem(SELECTED_TENANT_ID_KEY);
   const selectedTenantSlug = localStorage.getItem(SELECTED_TENANT_SLUG_KEY);
+  const supportAccessToken = localStorage.getItem(SUPPORT_ACCESS_TOKEN_KEY);
+  const supportAccessExpires = localStorage.getItem(SUPPORT_ACCESS_EXPIRES_KEY);
   const requestUrl = String(config.url || '').toLowerCase();
   const isAuthRequest =
     requestUrl.includes('/auth/login') ||
@@ -41,6 +45,10 @@ api.interceptors.request.use((config) => {
     config.headers['X-Tenant-Id'] = selectedTenantId;
     if (selectedTenantSlug) {
       config.headers['X-Tenant-Slug'] = selectedTenantSlug;
+    }
+
+    if (supportAccessToken && (!supportAccessExpires || new Date(supportAccessExpires) > new Date())) {
+      config.headers['X-Support-Access-Token'] = supportAccessToken;
     }
   }
 

@@ -27,6 +27,8 @@ export const tenantsApi = {
   create: (payload) => api.post('/tenants', payload),
   update: (id, payload) => api.put(`/tenants/${id}`, payload),
   deactivate: (id) => api.delete(`/tenants/${id}`),
+  recordPayment: (id, payload) => api.post(`/tenants/${id}/pagamento`, payload),
+  extendTrial: (id, payload) => api.post(`/tenants/${id}/trial`, payload),
 };
 
 export const auditoriaApi = {

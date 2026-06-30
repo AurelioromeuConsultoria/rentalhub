@@ -10,6 +10,7 @@ public sealed class Proprietario : ITenantEntity
     public string? Telefone { get; set; }
     public string? Email { get; set; }
     public string? DadosBancarios { get; set; }
+    public string? ChavePix { get; set; }
     public string? Observacoes { get; set; }
     public bool Ativo { get; set; } = true;
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;

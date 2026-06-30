@@ -60,6 +60,10 @@ public sealed class LimpezasController : ControllerBase
         {
             query = query.Where(l => l.Status == status.Value);
         }
+        else
+        {
+            query = query.Where(l => l.Status != LimpezaStatus.Cancelada);
+        }
 
         var totalItems = await query.CountAsync(cancellationToken);
         var items = await query
